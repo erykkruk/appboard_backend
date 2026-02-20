@@ -2,11 +2,13 @@ import cors from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 import config from "@/config";
+import { aiController } from "@/modules/ai";
 import { appsController } from "@/modules/apps";
 import { assetsController } from "@/modules/assets";
 import { historyController } from "@/modules/history";
 import { listingsController } from "@/modules/listings";
 import { reviewsController } from "@/modules/reviews";
+import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
 import { bootstrap, systemController } from "@/modules/system";
 import { errorHandler } from "@/utils/errors/errorHandler";
@@ -32,7 +34,9 @@ const app = new Elysia()
 			.use(listingsController)
 			.use(historyController)
 			.use(assetsController)
-			.use(reviewsController),
+			.use(reviewsController)
+			.use(aiController)
+			.use(settingsController),
 	)
 	.listen(port);
 
