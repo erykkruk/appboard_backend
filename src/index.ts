@@ -2,6 +2,8 @@ import cors from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 import config from "@/config";
+import { appsController } from "@/modules/apps";
+import { storesController } from "@/modules/stores";
 import { bootstrap, systemController } from "@/modules/system";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import { createLogger } from "@/utils/logger";
@@ -18,7 +20,9 @@ const app = new Elysia()
 	)
 	.use(openapi())
 	.use(errorHandler)
-	.group("/api", (app) => app.use(systemController))
+	.group("/api", (app) =>
+		app.use(systemController).use(storesController).use(appsController),
+	)
 	.listen(port);
 
 export type App = typeof app;
