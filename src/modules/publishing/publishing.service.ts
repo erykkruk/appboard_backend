@@ -251,6 +251,119 @@ export class PublishingService {
 		};
 	}
 
+	static async getVersionScreenshots(appId: string, versionId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Screenshots are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		if (!credentials.keyId) {
+			buildError("badRequest", { info: "Missing App Store credentials" });
+			throw new Error("unreachable");
+		}
+
+		const { readAll } = await createAppStoreClient(credentials);
+
+		const { data: versionLocs } = await readAll(
+			`appStoreVersions/${versionId}/appStoreVersionLocalizations`,
+		);
+
+		if (!versionLocs?.length) {
+			return { screenshots: [] };
+		}
+
+		const IPHONE_DISPLAY_TYPES = new Set([
+			"APP_IPHONE_35",
+			"APP_IPHONE_40",
+			"APP_IPHONE_47",
+			"APP_IPHONE_55",
+			"APP_IPHONE_58",
+			"APP_IPHONE_61",
+			"APP_IPHONE_65",
+			"APP_IPHONE_67",
+		]);
+
+		const DISPLAY_TYPE_LABELS: Record<string, string> = {
+			APP_IPHONE_35: "iPhone 3.5\"",
+			APP_IPHONE_40: "iPhone 4.0\"",
+			APP_IPHONE_47: "iPhone 4.7\"",
+			APP_IPHONE_55: "iPhone 5.5\"",
+			APP_IPHONE_58: "iPhone 5.8\"",
+			APP_IPHONE_61: "iPhone 6.1\"",
+			APP_IPHONE_65: "iPhone 6.5\"",
+			APP_IPHONE_67: "iPhone 6.7\"",
+		};
+
+		const screenshots: {
+			deviceType: string;
+			displayType: string;
+			height: number | null;
+			language: string;
+			url: string;
+			width: number | null;
+		}[] = [];
+
+		for (const loc of (versionLocs as ApiResource[])) {
+			const locale = loc.attributes.locale as string;
+
+			const { data: screenshotSets } = await readAll(
+				`appStoreVersionLocalizations/${loc.id}/appScreenshotSets`,
+			);
+
+			for (const set of (screenshotSets ?? []) as ApiResource[]) {
+				const displayType =
+					(set.attributes.screenshotDisplayType as string) ?? "";
+
+				if (!IPHONE_DISPLAY_TYPES.has(displayType)) continue;
+
+				const { data: items } = await readAll(
+					`appScreenshotSets/${set.id}/appScreenshots`,
+				);
+
+				for (const item of (items ?? []) as ApiResource[]) {
+					const attrs = item.attributes;
+					const imageAsset = attrs.imageAsset as
+						| Record<string, unknown>
+						| undefined;
+
+					let url = (imageAsset?.templateUrl as string) ?? "";
+					const width = (imageAsset?.width as number) ?? null;
+					const height = (imageAsset?.height as number) ?? null;
+
+					// Replace template placeholders with actual dimensions
+					if (url && width && height) {
+						url = url
+							.replace("{w}", String(width))
+							.replace("{h}", String(height))
+							.replace("{f}", "png");
+					}
+
+					screenshots.push({
+						deviceType:
+							DISPLAY_TYPE_LABELS[displayType] ?? displayType,
+						displayType,
+						height,
+						language: locale,
+						url,
+						width,
+					});
+				}
+			}
+		}
+
+		log.info(
+			{ appId, count: screenshots.length, versionId },
+			"Fetched version screenshots",
+		);
+
+		return { screenshots };
+	}
+
 	static async publishAll(
 		appId: string,
 		options?: { submitForReview?: boolean },

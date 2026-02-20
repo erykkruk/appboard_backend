@@ -73,6 +73,26 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.get(
+		"/:appId/publishing/versions/:versionId/screenshots",
+		async ({ params }) => {
+			return PublishingService.getVersionScreenshots(
+				params.appId,
+				params.versionId,
+			);
+		},
+		{
+			detail: {
+				description:
+					"Get iPhone screenshots for a specific App Store version",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.get(
 		"/:appId/publishing/version",
 		async ({ params }) => {
 			const version = await PublishingService.getVersionInfo(params.appId);
