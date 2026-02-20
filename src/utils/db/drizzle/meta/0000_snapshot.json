@@ -1,0 +1,242 @@
+{
+	"_meta": {
+		"columns": {},
+		"schemas": {},
+		"tables": {}
+	},
+	"dialect": "postgresql",
+	"enums": {},
+	"id": "bc558e65-f0e8-4614-b14b-3c57660e842f",
+	"policies": {},
+	"prevId": "00000000-0000-0000-0000-000000000000",
+	"roles": {},
+	"schemas": {},
+	"sequences": {},
+	"tables": {
+		"public.apps": {
+			"checkConstraints": {},
+			"columns": {
+				"bundle_id": {
+					"name": "bundle_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"external_id": {
+					"name": "external_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"icon_url": {
+					"name": "icon_url",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(1024)"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"last_synced_at": {
+					"name": "last_synced_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"name": {
+					"name": "name",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"platform": {
+					"name": "platform",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"raw_data": {
+					"name": "raw_data",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
+				"status": {
+					"default": "'active'",
+					"name": "status",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"store_id": {
+					"name": "store_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"apps_store_id_stores_id_fk": {
+					"columnsFrom": ["store_id"],
+					"columnsTo": ["id"],
+					"name": "apps_store_id_stores_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "apps",
+					"tableTo": "stores"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "apps",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		},
+		"public.settings": {
+			"checkConstraints": {},
+			"columns": {
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"is_encrypted": {
+					"default": false,
+					"name": "is_encrypted",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "boolean"
+				},
+				"key": {
+					"name": "key",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"value": {
+					"name": "value",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "settings",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {
+				"settings_key_unique": {
+					"columns": ["key"],
+					"name": "settings_key_unique",
+					"nullsNotDistinct": false
+				}
+			}
+		},
+		"public.stores": {
+			"checkConstraints": {},
+			"columns": {
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"credentials": {
+					"name": "credentials",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"last_synced_at": {
+					"name": "last_synced_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"name": {
+					"name": "name",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"status": {
+					"default": "'disconnected'",
+					"name": "status",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"type": {
+					"name": "type",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "stores",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		}
+	},
+	"version": "7",
+	"views": {}
+}
