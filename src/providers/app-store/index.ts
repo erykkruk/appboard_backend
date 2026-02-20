@@ -21,7 +21,7 @@ const log = createLogger("app-store");
 export class AppStoreProvider implements StoreProvider {
 	private readonly isMock: boolean;
 
-	constructor(private readonly credentials: AppStoreCredentials) {
+	constructor(readonly credentials: AppStoreCredentials) {
 		this.isMock = isMockCredentials(credentials);
 		if (this.isMock) {
 			log.info("App Store provider initialized in mock mode");
@@ -49,7 +49,7 @@ export class AppStoreProvider implements StoreProvider {
 	async updateListing(
 		appId: string,
 		language: string,
-		data: ListingUpdateData,
+		_data: ListingUpdateData,
 	): Promise<void> {
 		if (this.isMock) {
 			log.info({ appId, language }, "Mock: listing updated");
@@ -73,8 +73,8 @@ export class AppStoreProvider implements StoreProvider {
 	}
 
 	async uploadAsset(
-		appId: string,
-		language: string,
+		_appId: string,
+		_language: string,
 		_file: Buffer,
 		metadata: AssetMetadata,
 	): Promise<AssetData> {
@@ -106,7 +106,7 @@ export class AppStoreProvider implements StoreProvider {
 	async replyToReview(
 		appId: string,
 		reviewId: string,
-		text: string,
+		_text: string,
 	): Promise<void> {
 		if (this.isMock) {
 			log.info({ appId, reviewId }, "Mock: review reply sent");

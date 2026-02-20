@@ -81,8 +81,8 @@ export function getMockListings(appExternalId: string): ListingData[] {
 	return buildListings(app?.name ?? "Demo App");
 }
 
-const ASSET_TYPES = ["screenshot", "featureGraphic", "icon"] as const;
-const DEVICE_TYPES = ["phone", "tablet"] as const;
+const _ASSET_TYPES = ["screenshot", "featureGraphic", "icon"] as const;
+const _DEVICE_TYPES = ["phone", "tablet"] as const;
 
 export function getMockAssets(
 	appExternalId: string,

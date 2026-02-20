@@ -21,7 +21,7 @@ const log = createLogger("google-play");
 export class GooglePlayProvider implements StoreProvider {
 	private readonly isMock: boolean;
 
-	constructor(private readonly credentials: GooglePlayCredentials) {
+	constructor(readonly credentials: GooglePlayCredentials) {
 		this.isMock = isMockCredentials(credentials);
 		if (this.isMock) {
 			log.info("Google Play provider initialized in mock mode");
@@ -50,7 +50,7 @@ export class GooglePlayProvider implements StoreProvider {
 	async updateListing(
 		appId: string,
 		language: string,
-		data: ListingUpdateData,
+		_data: ListingUpdateData,
 	): Promise<void> {
 		if (this.isMock) {
 			log.info({ appId, language }, "Mock: listing updated");
@@ -74,8 +74,8 @@ export class GooglePlayProvider implements StoreProvider {
 	}
 
 	async uploadAsset(
-		appId: string,
-		language: string,
+		_appId: string,
+		_language: string,
 		_file: Buffer,
 		metadata: AssetMetadata,
 	): Promise<AssetData> {
@@ -107,7 +107,7 @@ export class GooglePlayProvider implements StoreProvider {
 	async replyToReview(
 		appId: string,
 		reviewId: string,
-		text: string,
+		_text: string,
 	): Promise<void> {
 		if (this.isMock) {
 			log.info({ appId, reviewId }, "Mock: review reply sent");

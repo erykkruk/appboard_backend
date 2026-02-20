@@ -1,754 +1,724 @@
 {
-  "id": "30f5beea-01c1-477b-9785-920d9f90f300",
-  "prevId": "bc558e65-f0e8-4614-b14b-3c57660e842f",
-  "version": "7",
-  "dialect": "postgresql",
-  "tables": {
-    "public.apps": {
-      "name": "apps",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "bundle_id": {
-          "name": "bundle_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "icon_url": {
-          "name": "icon_url",
-          "type": "varchar(1024)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_synced_at": {
-          "name": "last_synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "platform": {
-          "name": "platform",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "raw_data": {
-          "name": "raw_data",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "status": {
-          "name": "status",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'active'"
-        },
-        "store_id": {
-          "name": "store_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "apps_store_id_stores_id_fk": {
-          "name": "apps_store_id_stores_id_fk",
-          "tableFrom": "apps",
-          "tableTo": "stores",
-          "columnsFrom": [
-            "store_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.assets": {
-      "name": "assets",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "asset_type": {
-          "name": "asset_type",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "device_type": {
-          "name": "device_type",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "file_size": {
-          "name": "file_size",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "height": {
-          "name": "height",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "language": {
-          "name": "language",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "sort_order": {
-          "name": "sort_order",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "synced_at": {
-          "name": "synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "url": {
-          "name": "url",
-          "type": "varchar(2048)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "width": {
-          "name": "width",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "assets_app_id_apps_id_fk": {
-          "name": "assets_app_id_apps_id_fk",
-          "tableFrom": "assets",
-          "tableTo": "apps",
-          "columnsFrom": [
-            "app_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.listing_history": {
-      "name": "listing_history",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "field": {
-          "name": "field",
-          "type": "varchar(100)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "language": {
-          "name": "language",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "listing_id": {
-          "name": "listing_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_value": {
-          "name": "new_value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "old_value": {
-          "name": "old_value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "published_at": {
-          "name": "published_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "listing_history_app_id_apps_id_fk": {
-          "name": "listing_history_app_id_apps_id_fk",
-          "tableFrom": "listing_history",
-          "tableTo": "apps",
-          "columnsFrom": [
-            "app_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "listing_history_listing_id_listings_id_fk": {
-          "name": "listing_history_listing_id_listings_id_fk",
-          "tableFrom": "listing_history",
-          "tableTo": "listings",
-          "columnsFrom": [
-            "listing_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.listings": {
-      "name": "listings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "full_desc": {
-          "name": "full_desc",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "is_dirty": {
-          "name": "is_dirty",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "keywords": {
-          "name": "keywords",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "language": {
-          "name": "language",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "marketing_url": {
-          "name": "marketing_url",
-          "type": "varchar(1024)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "privacy_url": {
-          "name": "privacy_url",
-          "type": "varchar(1024)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "promo_text": {
-          "name": "promo_text",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "short_desc": {
-          "name": "short_desc",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "source": {
-          "name": "source",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'remote'"
-        },
-        "support_url": {
-          "name": "support_url",
-          "type": "varchar(1024)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "synced_at": {
-          "name": "synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "title": {
-          "name": "title",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "whats_new": {
-          "name": "whats_new",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "listings_app_id_apps_id_fk": {
-          "name": "listings_app_id_apps_id_fk",
-          "tableFrom": "listings",
-          "tableTo": "apps",
-          "columnsFrom": [
-            "app_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "listings_appId_language_source_unique": {
-          "name": "listings_appId_language_source_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "app_id",
-            "language",
-            "source"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.reviews": {
-      "name": "reviews",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "app_id": {
-          "name": "app_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "app_version": {
-          "name": "app_version",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "author_name": {
-          "name": "author_name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "body": {
-          "name": "body",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "device": {
-          "name": "device",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "external_id": {
-          "name": "external_id",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "language": {
-          "name": "language",
-          "type": "varchar(20)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "os_version": {
-          "name": "os_version",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "rating": {
-          "name": "rating",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "replied_at": {
-          "name": "replied_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "reply_text": {
-          "name": "reply_text",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "review_date": {
-          "name": "review_date",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "store_type": {
-          "name": "store_type",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "synced_at": {
-          "name": "synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "territory": {
-          "name": "territory",
-          "type": "varchar(10)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "title": {
-          "name": "title",
-          "type": "varchar(500)",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {
-        "reviews_app_id_apps_id_fk": {
-          "name": "reviews_app_id_apps_id_fk",
-          "tableFrom": "reviews",
-          "tableTo": "apps",
-          "columnsFrom": [
-            "app_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.settings": {
-      "name": "settings",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "is_encrypted": {
-          "name": "is_encrypted",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "key": {
-          "name": "key",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "value": {
-          "name": "value",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "settings_key_unique": {
-          "name": "settings_key_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "key"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.stores": {
-      "name": "stores",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updated_at": {
-          "name": "updated_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "credentials": {
-          "name": "credentials",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "last_synced_at": {
-          "name": "last_synced_at",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'disconnected'"
-        },
-        "type": {
-          "name": "type",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    }
-  },
-  "enums": {},
-  "schemas": {},
-  "sequences": {},
-  "roles": {},
-  "policies": {},
-  "views": {},
-  "_meta": {
-    "columns": {},
-    "schemas": {},
-    "tables": {}
-  }
+	"_meta": {
+		"columns": {},
+		"schemas": {},
+		"tables": {}
+	},
+	"dialect": "postgresql",
+	"enums": {},
+	"id": "30f5beea-01c1-477b-9785-920d9f90f300",
+	"policies": {},
+	"prevId": "bc558e65-f0e8-4614-b14b-3c57660e842f",
+	"roles": {},
+	"schemas": {},
+	"sequences": {},
+	"tables": {
+		"public.apps": {
+			"checkConstraints": {},
+			"columns": {
+				"bundle_id": {
+					"name": "bundle_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"external_id": {
+					"name": "external_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"icon_url": {
+					"name": "icon_url",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(1024)"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"last_synced_at": {
+					"name": "last_synced_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"name": {
+					"name": "name",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"platform": {
+					"name": "platform",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"raw_data": {
+					"name": "raw_data",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
+				"status": {
+					"default": "'active'",
+					"name": "status",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"store_id": {
+					"name": "store_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"apps_store_id_stores_id_fk": {
+					"columnsFrom": ["store_id"],
+					"columnsTo": ["id"],
+					"name": "apps_store_id_stores_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "apps",
+					"tableTo": "stores"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "apps",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		},
+		"public.assets": {
+			"checkConstraints": {},
+			"columns": {
+				"app_id": {
+					"name": "app_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"asset_type": {
+					"name": "asset_type",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"device_type": {
+					"name": "device_type",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"external_id": {
+					"name": "external_id",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"file_size": {
+					"name": "file_size",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "integer"
+				},
+				"height": {
+					"name": "height",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "integer"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"language": {
+					"name": "language",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(20)"
+				},
+				"sort_order": {
+					"default": 0,
+					"name": "sort_order",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "integer"
+				},
+				"synced_at": {
+					"name": "synced_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"url": {
+					"name": "url",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(2048)"
+				},
+				"width": {
+					"name": "width",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "integer"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"assets_app_id_apps_id_fk": {
+					"columnsFrom": ["app_id"],
+					"columnsTo": ["id"],
+					"name": "assets_app_id_apps_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "assets",
+					"tableTo": "apps"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "assets",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		},
+		"public.listing_history": {
+			"checkConstraints": {},
+			"columns": {
+				"app_id": {
+					"name": "app_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"field": {
+					"name": "field",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(100)"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"language": {
+					"name": "language",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(20)"
+				},
+				"listing_id": {
+					"name": "listing_id",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"new_value": {
+					"name": "new_value",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				},
+				"old_value": {
+					"name": "old_value",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				},
+				"published_at": {
+					"name": "published_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"listing_history_app_id_apps_id_fk": {
+					"columnsFrom": ["app_id"],
+					"columnsTo": ["id"],
+					"name": "listing_history_app_id_apps_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "listing_history",
+					"tableTo": "apps"
+				},
+				"listing_history_listing_id_listings_id_fk": {
+					"columnsFrom": ["listing_id"],
+					"columnsTo": ["id"],
+					"name": "listing_history_listing_id_listings_id_fk",
+					"onDelete": "set null",
+					"onUpdate": "no action",
+					"tableFrom": "listing_history",
+					"tableTo": "listings"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "listing_history",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		},
+		"public.listings": {
+			"checkConstraints": {},
+			"columns": {
+				"app_id": {
+					"name": "app_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"full_desc": {
+					"name": "full_desc",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"is_dirty": {
+					"default": false,
+					"name": "is_dirty",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "boolean"
+				},
+				"keywords": {
+					"name": "keywords",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"language": {
+					"name": "language",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(20)"
+				},
+				"marketing_url": {
+					"name": "marketing_url",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(1024)"
+				},
+				"privacy_url": {
+					"name": "privacy_url",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(1024)"
+				},
+				"promo_text": {
+					"name": "promo_text",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"short_desc": {
+					"name": "short_desc",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"source": {
+					"default": "'remote'",
+					"name": "source",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(20)"
+				},
+				"support_url": {
+					"name": "support_url",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(1024)"
+				},
+				"synced_at": {
+					"name": "synced_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"title": {
+					"name": "title",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"whats_new": {
+					"name": "whats_new",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"listings_app_id_apps_id_fk": {
+					"columnsFrom": ["app_id"],
+					"columnsTo": ["id"],
+					"name": "listings_app_id_apps_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "listings",
+					"tableTo": "apps"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "listings",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {
+				"listings_appId_language_source_unique": {
+					"columns": ["app_id", "language", "source"],
+					"name": "listings_appId_language_source_unique",
+					"nullsNotDistinct": false
+				}
+			}
+		},
+		"public.reviews": {
+			"checkConstraints": {},
+			"columns": {
+				"app_id": {
+					"name": "app_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"app_version": {
+					"name": "app_version",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"author_name": {
+					"name": "author_name",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"body": {
+					"name": "body",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"device": {
+					"name": "device",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"external_id": {
+					"name": "external_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"language": {
+					"name": "language",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(20)"
+				},
+				"os_version": {
+					"name": "os_version",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"rating": {
+					"name": "rating",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "integer"
+				},
+				"replied_at": {
+					"name": "replied_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"reply_text": {
+					"name": "reply_text",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				},
+				"review_date": {
+					"name": "review_date",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"store_type": {
+					"name": "store_type",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"synced_at": {
+					"name": "synced_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"territory": {
+					"name": "territory",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(10)"
+				},
+				"title": {
+					"name": "title",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(500)"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"reviews_app_id_apps_id_fk": {
+					"columnsFrom": ["app_id"],
+					"columnsTo": ["id"],
+					"name": "reviews_app_id_apps_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "reviews",
+					"tableTo": "apps"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "reviews",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		},
+		"public.settings": {
+			"checkConstraints": {},
+			"columns": {
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"is_encrypted": {
+					"default": false,
+					"name": "is_encrypted",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "boolean"
+				},
+				"key": {
+					"name": "key",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"value": {
+					"name": "value",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "settings",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {
+				"settings_key_unique": {
+					"columns": ["key"],
+					"name": "settings_key_unique",
+					"nullsNotDistinct": false
+				}
+			}
+		},
+		"public.stores": {
+			"checkConstraints": {},
+			"columns": {
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"credentials": {
+					"name": "credentials",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "text"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"last_synced_at": {
+					"name": "last_synced_at",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"name": {
+					"name": "name",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"status": {
+					"default": "'disconnected'",
+					"name": "status",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"type": {
+					"name": "type",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "stores",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		}
+	},
+	"version": "7",
+	"views": {}
 }
