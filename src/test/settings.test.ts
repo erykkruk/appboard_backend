@@ -71,7 +71,7 @@ describe("Settings module", () => {
 			.then((res) => res.json());
 
 		const apiKeySetting = listRes.settings.find(
-			(s: any) => s.key === "OPENROUTER_API_KEY",
+			(s: { key: string }) => s.key === "OPENROUTER_API_KEY",
 		);
 		expect(apiKeySetting).toBeDefined();
 		expect(apiKeySetting.value).toBe("********");

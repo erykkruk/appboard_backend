@@ -35,7 +35,9 @@ describe("Stores module", () => {
 
 		expect(response.stores).toBeArray();
 		expect(response.stores.length).toBeGreaterThanOrEqual(1);
-		const store = response.stores.find((s: any) => s.id === createdStoreId);
+		const store = response.stores.find(
+			(s: { id: string }) => s.id === createdStoreId,
+		);
 		expect(store).toBeDefined();
 		expect(store.name).toBe("Test Google Play");
 	});
