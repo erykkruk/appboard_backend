@@ -3,6 +3,7 @@ import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 import config from "@/config";
 import { appsController } from "@/modules/apps";
+import { assetsController } from "@/modules/assets";
 import { historyController } from "@/modules/history";
 import { listingsController } from "@/modules/listings";
 import { storesController } from "@/modules/stores";
@@ -28,7 +29,8 @@ const app = new Elysia()
 			.use(storesController)
 			.use(appsController)
 			.use(listingsController)
-			.use(historyController),
+			.use(historyController)
+			.use(assetsController),
 	)
 	.listen(port);
 
