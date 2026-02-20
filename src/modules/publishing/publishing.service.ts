@@ -165,6 +165,92 @@ export class PublishingService {
 		}
 	}
 
+	static async getVersionLocalizations(appId: string, versionId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Version localizations are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		if (!credentials.keyId) {
+			buildError("badRequest", { info: "Missing App Store credentials" });
+			throw new Error("unreachable");
+		}
+
+		const { readAll } = await createAppStoreClient(credentials);
+
+		// Fetch version info
+		const { data: versions } = await readAll(
+			`apps/${app.externalId}/appStoreVersions`,
+		);
+		const version = (versions as ApiResource[])?.find(
+			(v) => v.id === versionId,
+		);
+		if (!version) {
+			buildError("notFound", { info: "Version not found" });
+			throw new Error("unreachable");
+		}
+
+		const state = (version.attributes.appStoreState as string) ?? "";
+		const versionString =
+			(version.attributes.versionString as string) ?? "";
+
+		// Fetch version localizations (description, keywords, whatsNew, promoText, etc.)
+		const { data: versionLocs } = await readAll(
+			`appStoreVersions/${versionId}/appStoreVersionLocalizations`,
+		);
+
+		// Also fetch appInfo localizations for title/subtitle
+		const { data: appInfos } = await readAll(
+			`apps/${app.externalId}/appInfos`,
+		);
+		let infoLocByLang = new Map<string, ApiResource>();
+		if (appInfos?.length) {
+			const latestInfo = appInfos[0] as ApiResource;
+			const { data: infoLocs } = await readAll(
+				`appInfos/${latestInfo.id}/appInfoLocalizations`,
+			);
+			infoLocByLang = new Map(
+				((infoLocs ?? []) as ApiResource[]).map((l) => [
+					l.attributes.locale as string,
+					l,
+				]),
+			);
+		}
+
+		const localizations = ((versionLocs ?? []) as ApiResource[]).map(
+			(loc) => {
+				const attrs = loc.attributes;
+				const locale = attrs.locale as string;
+				const infoLoc = infoLocByLang.get(locale);
+
+				return {
+					description: (attrs.description as string) ?? "",
+					keywords: (attrs.keywords as string) ?? "",
+					language: locale,
+					marketingUrl: (attrs.marketingUrl as string) ?? undefined,
+					promotionalText:
+						(attrs.promotionalText as string) ?? undefined,
+					subtitle: (infoLoc?.attributes?.subtitle as string) ?? "",
+					supportUrl: (attrs.supportUrl as string) ?? undefined,
+					title: (infoLoc?.attributes?.name as string) ?? "",
+					whatsNew: (attrs.whatsNew as string) ?? undefined,
+				};
+			},
+		);
+
+		return {
+			localizations,
+			state,
+			versionId,
+			versionString,
+		};
+	}
+
 	static async publishAll(
 		appId: string,
 		options?: { submitForReview?: boolean },
