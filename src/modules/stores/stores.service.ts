@@ -75,15 +75,12 @@ export class StoresService {
 		const fetchedApps = await provider.fetchApps();
 
 		for (const appData of fetchedApps) {
+			// Look up by externalId globally (not scoped to storeId) to handle
+			// reconnects where the store row was recreated with a new UUID.
 			const existing = await db
 				.select()
 				.from(apps)
-				.where(
-					and(
-						eq(apps.externalId, appData.externalId),
-						eq(apps.storeId, storeId),
-					),
-				)
+				.where(eq(apps.externalId, appData.externalId))
 				.limit(1);
 
 			if (existing.length > 0) {
@@ -95,6 +92,7 @@ export class StoresService {
 						lastSyncedAt: new Date(),
 						name: appData.name,
 						platform: appData.platform,
+						storeId,
 					})
 					.where(eq(apps.id, existing[0].id));
 			} else {
