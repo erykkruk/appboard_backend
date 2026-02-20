@@ -22,5 +22,6 @@ export const reorderBody = t.Object({
 export const uploadAssetBody = t.Object({
 	assetType: t.String({ minLength: 1 }),
 	deviceType: t.String({ minLength: 1 }),
+	file: t.File({ type: "image" }),
 	language: t.String({ minLength: 2 }),
 });

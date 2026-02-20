@@ -194,18 +194,23 @@ export class ListingsService {
 				)
 				.limit(1);
 
-			// Push to store
-			await provider.updateListing(app.externalId, draft.language, {
-				fullDesc: draft.fullDesc ?? undefined,
-				keywords: draft.keywords ?? undefined,
-				marketingUrl: draft.marketingUrl ?? undefined,
-				privacyUrl: draft.privacyUrl ?? undefined,
-				promoText: draft.promoText ?? undefined,
-				shortDesc: draft.shortDesc ?? undefined,
-				supportUrl: draft.supportUrl ?? undefined,
-				title: draft.title ?? undefined,
-				whatsNew: draft.whatsNew ?? undefined,
-			});
+			// Only send fields that actually changed compared to remote
+			const changedFields: Record<string, string | undefined> = {};
+			for (const field of LISTING_FIELDS) {
+				const draftVal = draft[field] ?? null;
+				const remoteVal = remote?.[field] ?? null;
+				if (draftVal !== remoteVal && draftVal !== null) {
+					changedFields[field] = draftVal;
+				}
+			}
+
+			if (Object.keys(changedFields).length > 0) {
+				await provider.updateListing(
+					app.externalId,
+					draft.language,
+					changedFields,
+				);
+			}
 
 			// Record history for changed fields
 			for (const field of LISTING_FIELDS) {

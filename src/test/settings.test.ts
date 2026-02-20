@@ -1,9 +1,21 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { settingsController } from "@/modules/settings";
+import { cleanupSettings } from "./setup";
+
+const TEST_KEYS = [
+	"APP_THEME",
+	"FEATURE_FLAG_A",
+	"FEATURE_FLAG_B",
+	"OPENROUTER_API_KEY",
+];
 
 describe("Settings module", () => {
 	const app = new Elysia().group("/api", (app) => app.use(settingsController));
+
+	afterAll(async () => {
+		await cleanupSettings(TEST_KEYS);
+	});
 
 	it("PUT /api/settings/:key sets a setting", async () => {
 		const response = await app

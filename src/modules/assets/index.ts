@@ -31,12 +31,14 @@ export const assetsController = new Elysia({ prefix: "/apps" })
 	.post(
 		"/:appId/assets/upload",
 		async ({ body, params }) => {
+			const fileBuffer = Buffer.from(await body.file.arrayBuffer());
 			const asset = await AssetsService.upload(
 				params.appId,
 				body.language,
 				body.assetType,
 				body.deviceType,
-				Buffer.from([]),
+				fileBuffer,
+				body.file.name,
 			);
 			return { asset };
 		},
@@ -44,6 +46,7 @@ export const assetsController = new Elysia({ prefix: "/apps" })
 			body: uploadAssetBody,
 			detail: { description: "Upload a new asset", tags: ["Assets"] },
 			params: assetParams,
+			type: "multipart",
 		},
 	)
 	.delete(

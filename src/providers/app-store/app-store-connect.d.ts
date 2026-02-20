@@ -47,8 +47,16 @@ declare module "node-app-store-connect-api" {
 		version?: number;
 	}
 
+	interface ApiResourceWithLinks extends ApiResource {
+		links?: Record<string, string>;
+	}
+
+	interface CreateResponse {
+		data: ApiResourceWithLinks;
+	}
+
 	interface ApiClient {
-		create(options: CreateOptions): Promise<ApiResource>;
+		create(options: CreateOptions): Promise<CreateResponse>;
 		read(url: string, options?: Record<string, unknown>): Promise<ReadResponse>;
 		readAll(
 			url: string,
@@ -62,6 +70,18 @@ declare module "node-app-store-connect-api" {
 			data: { id: string; type: string },
 			options: UpdateOptions,
 		): Promise<ApiResource>;
+		uploadAsset(
+			assetData: CreateResponse,
+			buffer: Buffer,
+			maxTriesPerPart?: number,
+			version?: number,
+		): Promise<void>;
+		pollForUploadSuccess(
+			assetUrl: string,
+			logHeader?: string,
+			delayInMilliseconds?: number,
+			maxTries?: number,
+		): Promise<void>;
 	}
 
 	export function api(options: ApiOptions): Promise<ApiClient>;

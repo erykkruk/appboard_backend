@@ -1,3 +1,4 @@
+import type { ApiResource } from "node-app-store-connect-api";
 import {
 	getMockAssets,
 	getMockListings,
@@ -12,9 +13,9 @@ import type {
 	ListingUpdateData,
 	ReviewData,
 	StoreProvider,
+	VersionData,
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
-import type { ApiResource } from "node-app-store-connect-api";
 import { createAppStoreClient } from "./client";
 import { type AppStoreCredentials, isMockCredentials } from "./types";
 
@@ -23,10 +24,10 @@ const log = createLogger("app-store");
 const SCREENSHOT_DISPLAY_TYPE_TO_DEVICE: Record<string, string> = {
 	APP_APPLE_TV: "appleTV",
 	APP_DESKTOP: "desktop",
-	APP_IPAD_105: "iPad10.5",
 	APP_IPAD_97: "iPad9.7",
-	APP_IPAD_PRO_129: "iPadPro12.9",
+	APP_IPAD_105: "iPad10.5",
 	APP_IPAD_PRO_3RD_GEN_129: "iPadPro12.9-3rdGen",
+	APP_IPAD_PRO_129: "iPadPro12.9",
 	APP_IPHONE_35: "iPhone3.5",
 	APP_IPHONE_40: "iPhone4.0",
 	APP_IPHONE_47: "iPhone4.7",
@@ -41,6 +42,25 @@ const SCREENSHOT_DISPLAY_TYPE_TO_DEVICE: Record<string, string> = {
 	APP_WATCH_ULTRA: "watchUltra",
 };
 
+const DEVICE_TO_SCREENSHOT_DISPLAY_TYPE: Record<string, string> =
+	Object.fromEntries(
+		Object.entries(SCREENSHOT_DISPLAY_TYPE_TO_DEVICE).map(([k, v]) => [v, k]),
+	);
+
+const EDITABLE_STATES = [
+	"PREPARE_FOR_SUBMISSION",
+	"DEVELOPER_REJECTED",
+	"REJECTED",
+];
+
+function findEditableVersion(versions: ApiResource[]): ApiResource | null {
+	return (
+		versions.find((v) =>
+			EDITABLE_STATES.includes(v.attributes.appStoreState as string),
+		) ?? null
+	);
+}
+
 export class AppStoreProvider implements StoreProvider {
 	private readonly isMock: boolean;
 
@@ -49,6 +69,57 @@ export class AppStoreProvider implements StoreProvider {
 		if (this.isMock) {
 			log.info("App Store provider initialized in mock mode");
 		}
+	}
+
+	async createVersion(
+		appId: string,
+		versionString: string,
+	): Promise<{ state: string; versionString: string }> {
+		if (this.isMock) {
+			return { state: "PREPARE_FOR_SUBMISSION", versionString };
+		}
+
+		const { create } = await createAppStoreClient(this.credentials);
+
+		const result = await create({
+			attributes: { platform: "IOS", versionString },
+			relationships: {
+				app: { data: { id: appId, type: "apps" } },
+			},
+			type: "appStoreVersions",
+		});
+
+		const state =
+			(result.data.attributes?.appStoreState as string) ??
+			"PREPARE_FOR_SUBMISSION";
+
+		log.info({ appId, state, versionString }, "Created new App Store version");
+
+		return { state, versionString };
+	}
+
+	async getLatestVersion(appId: string): Promise<VersionData | null> {
+		if (this.isMock) {
+			return {
+				isEditable: true,
+				state: "PREPARE_FOR_SUBMISSION",
+				versionString: "1.0.0",
+			};
+		}
+
+		const { readAll } = await createAppStoreClient(this.credentials);
+		const { data: versions } = await readAll(`apps/${appId}/appStoreVersions`);
+
+		if (!versions?.length) return null;
+
+		const latest = versions[0] as ApiResource;
+		const state = (latest.attributes.appStoreState as string) ?? "";
+
+		return {
+			isEditable: EDITABLE_STATES.includes(state),
+			state,
+			versionString: (latest.attributes.versionString as string) ?? "",
+		};
 	}
 
 	async validateCredentials(): Promise<boolean> {
@@ -95,7 +166,10 @@ export class AppStoreProvider implements StoreProvider {
 						app.iconUrl = json.results[0].artworkUrl512;
 					}
 				} catch (err) {
-					log.warn({ bundleId: app.bundleId, err }, "Failed to fetch icon from iTunes");
+					log.warn(
+						{ bundleId: app.bundleId, err },
+						"Failed to fetch icon from iTunes",
+					);
 				}
 			}
 		}
@@ -110,9 +184,7 @@ export class AppStoreProvider implements StoreProvider {
 		try {
 			const { readAll } = await createAppStoreClient(this.credentials);
 
-			const { data: appInfos } = await readAll(
-				`apps/${appId}/appInfos`,
-			);
+			const { data: appInfos } = await readAll(`apps/${appId}/appInfos`);
 
 			if (!appInfos?.length) {
 				log.warn({ appId }, "No appInfos found for app");
@@ -157,17 +229,14 @@ export class AppStoreProvider implements StoreProvider {
 					language: locale,
 					marketingUrl:
 						(versionLoc?.attributes?.marketingUrl as string) ?? undefined,
-					privacyUrl:
-						(attrs.privacyPolicyUrl as string) ?? undefined,
+					privacyUrl: (attrs.privacyPolicyUrl as string) ?? undefined,
 					promoText:
 						(versionLoc?.attributes?.promotionalText as string) ?? undefined,
-					shortDesc:
-						(attrs.subtitle as string) ?? "",
+					shortDesc: (attrs.subtitle as string) ?? "",
 					supportUrl:
 						(versionLoc?.attributes?.supportUrl as string) ?? undefined,
 					title: (attrs.name as string) ?? "",
-					whatsNew:
-						(versionLoc?.attributes?.whatsNew as string) ?? undefined,
+					whatsNew: (versionLoc?.attributes?.whatsNew as string) ?? undefined,
 				};
 			});
 
@@ -177,7 +246,10 @@ export class AppStoreProvider implements StoreProvider {
 			);
 			return listings;
 		} catch (err) {
-			log.error({ appId, err }, "Failed to fetch listings from App Store Connect");
+			log.error(
+				{ appId, err },
+				"Failed to fetch listings from App Store Connect",
+			);
 			throw err;
 		}
 	}
@@ -193,14 +265,10 @@ export class AppStoreProvider implements StoreProvider {
 		}
 
 		try {
-			const { readAll, update } = await createAppStoreClient(
-				this.credentials,
-			);
+			const { readAll, update } = await createAppStoreClient(this.credentials);
 
 			// Find the appInfoLocalization for the given language
-			const { data: appInfos } = await readAll(
-				`apps/${appId}/appInfos`,
-			);
+			const { data: appInfos } = await readAll(`apps/${appId}/appInfos`);
 
 			if (!appInfos?.length) {
 				throw new Error(`No appInfos found for app ${appId}`);
@@ -230,17 +298,24 @@ export class AppStoreProvider implements StoreProvider {
 				infoAttributes.privacyPolicyUrl = data.privacyUrl;
 
 			if (Object.keys(infoAttributes).length > 0) {
-				await update(
-					{
-						id: targetLoc.id,
-						type: "appInfoLocalizations",
-					},
-					{ attributes: infoAttributes },
-				);
-				log.info(
-					{ appId, language, fields: Object.keys(infoAttributes) },
-					"Updated appInfoLocalization",
-				);
+				try {
+					await update(
+						{
+							id: targetLoc.id,
+							type: "appInfoLocalizations",
+						},
+						{ attributes: infoAttributes },
+					);
+					log.info(
+						{ appId, fields: Object.keys(infoAttributes), language },
+						"Updated appInfoLocalization",
+					);
+				} catch (infoErr) {
+					log.warn(
+						{ appId, fields: Object.keys(infoAttributes), language },
+						"Could not update appInfoLocalization (name/subtitle/privacyUrl) - app may not have an editable version. Continuing with version-level fields.",
+					);
+				}
 			}
 
 			// Update appStoreVersionLocalization (description, keywords, whatsNew, promoText, marketingUrl, supportUrl)
@@ -259,21 +334,18 @@ export class AppStoreProvider implements StoreProvider {
 				versionAttributes.supportUrl = data.supportUrl;
 
 			if (Object.keys(versionAttributes).length > 0) {
-				const { data: versions } = await readAll(
-					`apps/${appId}/appStoreVersions`,
-				);
+				const editableVersion = await this.getEditableVersion(appId);
 
-				if (!versions?.length) {
+				if (!editableVersion) {
 					log.warn(
 						{ appId },
-						"No app store versions found; cannot update version-level fields",
+						"No editable app store version found; cannot update version-level fields. Create a new version first.",
 					);
 					return;
 				}
 
-				const latestVersion = versions[0] as ApiResource;
 				const { data: versionLocs } = await readAll(
-					`appStoreVersions/${latestVersion.id}/appStoreVersionLocalizations`,
+					`appStoreVersions/${editableVersion.id}/appStoreVersionLocalizations`,
 				);
 
 				const targetVersionLoc = (versionLocs as ApiResource[])?.find(
@@ -288,17 +360,24 @@ export class AppStoreProvider implements StoreProvider {
 					return;
 				}
 
-				await update(
-					{
-						id: targetVersionLoc.id,
-						type: "appStoreVersionLocalizations",
-					},
-					{ attributes: versionAttributes },
-				);
-				log.info(
-					{ appId, language, fields: Object.keys(versionAttributes) },
-					"Updated appStoreVersionLocalization",
-				);
+				try {
+					await update(
+						{
+							id: targetVersionLoc.id,
+							type: "appStoreVersionLocalizations",
+						},
+						{ attributes: versionAttributes },
+					);
+					log.info(
+						{ appId, fields: Object.keys(versionAttributes), language },
+						"Updated appStoreVersionLocalization",
+					);
+				} catch (versionErr) {
+					log.warn(
+						{ appId, fields: Object.keys(versionAttributes), language },
+						"Could not update appStoreVersionLocalization - version may not be editable.",
+					);
+				}
 			}
 		} catch (err) {
 			log.error(
@@ -373,7 +452,9 @@ export class AppStoreProvider implements StoreProvider {
 
 				for (const screenshot of (screenshots ?? []) as ApiResource[]) {
 					const attrs = screenshot.attributes;
-					const imageAsset = attrs.imageAsset as Record<string, unknown> | undefined;
+					const imageAsset = attrs.imageAsset as
+						| Record<string, unknown>
+						| undefined;
 					assets.push({
 						assetType: "screenshot",
 						deviceType,
@@ -401,10 +482,10 @@ export class AppStoreProvider implements StoreProvider {
 	}
 
 	async uploadAsset(
-		_appId: string,
-		_language: string,
-		_file: Buffer,
-		metadata: AssetMetadata,
+		appId: string,
+		language: string,
+		file: Buffer,
+		metadata: AssetMetadata & { fileName?: string },
 	): Promise<AssetData> {
 		if (this.isMock) {
 			return {
@@ -415,17 +496,104 @@ export class AppStoreProvider implements StoreProvider {
 			};
 		}
 
-		// Full upload requires multi-step reservation + upload operations.
-		// For now, return a placeholder and log a warning.
-		log.warn(
-			"Asset upload via API requires multi-step reservation flow; not yet fully implemented",
-		);
-		return {
-			assetType: metadata.assetType,
-			deviceType: metadata.deviceType,
-			externalId: `pending-${Date.now()}`,
-			url: "https://placehold.co/1080x1920?text=pending-upload",
-		};
+		try {
+			const { create, readAll, uploadAsset, pollForUploadSuccess } =
+				await createAppStoreClient(this.credentials);
+
+			// Get an editable version (must be in PREPARE_FOR_SUBMISSION or similar state)
+			const editableVersion = await this.getEditableVersion(appId);
+			if (!editableVersion) {
+				throw new Error(
+					`No editable app store version found for app ${appId}. Create a new version first.`,
+				);
+			}
+			const latestVersion = editableVersion;
+
+			// Find localization for the language
+			const { data: versionLocalizations } = await readAll(
+				`appStoreVersions/${latestVersion.id}/appStoreVersionLocalizations`,
+			);
+			const targetLoc = (versionLocalizations as ApiResource[])?.find(
+				(loc) => loc.attributes.locale === language,
+			);
+			if (!targetLoc) {
+				throw new Error(
+					`No version localization found for language ${language}`,
+				);
+			}
+
+			// Reverse lookup: device type → screenshot display type
+			const displayType =
+				DEVICE_TO_SCREENSHOT_DISPLAY_TYPE[metadata.deviceType];
+			if (!displayType) {
+				throw new Error(
+					`Unknown device type: ${metadata.deviceType}. Cannot map to screenshot display type.`,
+				);
+			}
+
+			// Find or create the screenshot set for this device type
+			const { data: screenshotSets } = await readAll(
+				`appStoreVersionLocalizations/${targetLoc.id}/appScreenshotSets`,
+			);
+			let screenshotSet = (screenshotSets as ApiResource[])?.find(
+				(set) => set.attributes.screenshotDisplayType === displayType,
+			);
+
+			if (!screenshotSet) {
+				const created = await create({
+					attributes: { screenshotDisplayType: displayType },
+					relationships: {
+						appStoreVersionLocalization: targetLoc,
+					},
+					type: "appScreenshotSets",
+				});
+				screenshotSet = created.data;
+			}
+
+			// Reserve a screenshot slot
+			const fileName = metadata.fileName ?? "screenshot.png";
+			const reservation = await create({
+				attributes: { fileName, fileSize: file.length },
+				relationships: {
+					appScreenshotSet: screenshotSet,
+				},
+				type: "appScreenshots",
+			});
+
+			// Upload the file binary
+			await uploadAsset(reservation, file);
+
+			// Poll until the upload is processed
+			const selfUrl =
+				reservation.data.links?.self ?? `appScreenshots/${reservation.data.id}`;
+			await pollForUploadSuccess(selfUrl);
+
+			const screenshotId = reservation.data.id;
+			const imageAsset = reservation.data.attributes?.imageAsset as
+				| Record<string, unknown>
+				| undefined;
+
+			log.info(
+				{ appId, language, screenshotId },
+				"Screenshot uploaded to App Store Connect",
+			);
+
+			return {
+				assetType: "screenshot",
+				deviceType: metadata.deviceType,
+				externalId: screenshotId,
+				fileSize: file.length,
+				height: (imageAsset?.height as number) ?? undefined,
+				url: (imageAsset?.templateUrl as string) ?? "",
+				width: (imageAsset?.width as number) ?? undefined,
+			};
+		} catch (err) {
+			log.error(
+				{ appId, err, language },
+				"Failed to upload asset to App Store Connect",
+			);
+			throw err;
+		}
 	}
 
 	async deleteAsset(appId: string, assetId: string): Promise<void> {
@@ -437,10 +605,7 @@ export class AppStoreProvider implements StoreProvider {
 		try {
 			const { remove } = await createAppStoreClient(this.credentials);
 			await remove({ id: assetId, type: "appScreenshots" });
-			log.info(
-				{ appId, assetId },
-				"Deleted screenshot from App Store Connect",
-			);
+			log.info({ appId, assetId }, "Deleted screenshot from App Store Connect");
 		} catch (err) {
 			log.error(
 				{ appId, assetId, err },
@@ -454,29 +619,47 @@ export class AppStoreProvider implements StoreProvider {
 		if (this.isMock) return getMockReviews(appId, "app_store");
 
 		try {
-			const { readAll } = await createAppStoreClient(this.credentials);
+			const { read, readAll } = await createAppStoreClient(this.credentials);
 
 			const { data: reviewsData } = await readAll(
 				`apps/${appId}/customerReviews`,
 			);
 
-			const reviews: ReviewData[] = (
-				(reviewsData ?? []) as ApiResource[]
-			).map((raw) => {
+			const reviews: ReviewData[] = [];
+			for (const raw of (reviewsData ?? []) as ApiResource[]) {
 				const attrs = raw.attributes;
-				return {
+
+				// Fetch the developer response for this review
+				let replyText: string | undefined;
+				let repliedAt: Date | undefined;
+				try {
+					const { data: responseData } = await read(
+						`customerReviews/${raw.id}/response`,
+					);
+					const response = responseData as ApiResource | undefined;
+					if (response?.attributes?.responseBody) {
+						replyText = response.attributes.responseBody as string;
+						repliedAt = response.attributes.lastModifiedDate
+							? new Date(response.attributes.lastModifiedDate as string)
+							: undefined;
+					}
+				} catch {
+					// Response endpoint may 404 if no response exists
+				}
+
+				reviews.push({
 					authorName: (attrs.reviewerNickname as string) ?? "Anonymous",
 					body: (attrs.body as string) ?? "",
 					externalId: raw.id,
 					language: (attrs.territory as string) ?? undefined,
 					rating: (attrs.rating as number) ?? 0,
-					reviewDate: new Date(
-						(attrs.createdDate as string) ?? Date.now(),
-					),
+					repliedAt,
+					replyText,
+					reviewDate: new Date((attrs.createdDate as string) ?? Date.now()),
 					territory: (attrs.territory as string) ?? undefined,
 					title: (attrs.title as string) ?? undefined,
-				};
-			});
+				});
+			}
 
 			log.info(
 				{ appId, count: reviews.length },
@@ -515,10 +698,7 @@ export class AppStoreProvider implements StoreProvider {
 				type: "customerReviewResponses",
 			});
 
-			log.info(
-				{ appId, reviewId },
-				"Posted review reply to App Store Connect",
-			);
+			log.info({ appId, reviewId }, "Posted review reply to App Store Connect");
 		} catch (err) {
 			log.error(
 				{ appId, err, reviewId },
@@ -526,5 +706,14 @@ export class AppStoreProvider implements StoreProvider {
 			);
 			throw err;
 		}
+	}
+
+	private async getEditableVersion(appId: string): Promise<ApiResource | null> {
+		const { readAll } = await createAppStoreClient(this.credentials);
+		const { data: versions } = await readAll(`apps/${appId}/appStoreVersions`);
+
+		if (!versions?.length) return null;
+
+		return findEditableVersion(versions as ApiResource[]);
 	}
 }

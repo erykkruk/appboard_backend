@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
 import { createProvider } from "@/providers";
 import type { StoreProvider } from "@/providers/store-provider";
@@ -78,7 +78,12 @@ export class StoresService {
 			const existing = await db
 				.select()
 				.from(apps)
-				.where(eq(apps.externalId, appData.externalId))
+				.where(
+					and(
+						eq(apps.externalId, appData.externalId),
+						eq(apps.storeId, storeId),
+					),
+				)
 				.limit(1);
 
 			if (existing.length > 0) {

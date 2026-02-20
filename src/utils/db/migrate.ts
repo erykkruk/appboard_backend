@@ -89,15 +89,27 @@ export async function runMigrations() {
 			"asset_type" varchar(50) NOT NULL,
 			"device_type" varchar(50) NOT NULL,
 			"external_id" varchar(255),
+			"file_name" varchar(255),
 			"file_size" integer,
 			"height" integer,
+			"is_dirty" boolean DEFAULT false NOT NULL,
 			"language" varchar(20) NOT NULL,
 			"sort_order" integer DEFAULT 0 NOT NULL,
+			"source" varchar(20) DEFAULT 'remote' NOT NULL,
 			"synced_at" timestamp,
 			"url" varchar(2048),
 			"width" integer
 		)
 	`);
+	await db.execute(
+		sql`ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "file_name" varchar(255)`,
+	);
+	await db.execute(
+		sql`ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "is_dirty" boolean DEFAULT false NOT NULL`,
+	);
+	await db.execute(
+		sql`ALTER TABLE "assets" ADD COLUMN IF NOT EXISTS "source" varchar(20) DEFAULT 'remote' NOT NULL`,
+	);
 	await db.execute(sql`
 		CREATE TABLE IF NOT EXISTS "reviews" (
 			"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,

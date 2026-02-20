@@ -1,14 +1,19 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { appsController } from "@/modules/apps";
 import { storesController } from "@/modules/stores";
+import { cleanupStores } from "./setup";
 
 describe("Apps module", () => {
 	const app = new Elysia().group("/api", (app) =>
 		app.use(storesController).use(appsController),
 	);
 
-	let _storeId: string;
+	let storeId: string;
+
+	afterAll(async () => {
+		if (storeId) await cleanupStores([storeId]);
+	});
 
 	it("sets up mock store with apps", async () => {
 		const response = await app
@@ -25,7 +30,7 @@ describe("Apps module", () => {
 			)
 			.then((res) => res.json());
 
-		_storeId = response.store.id;
+		storeId = response.store.id;
 	});
 
 	it("GET /api/apps lists apps from connected store", async () => {

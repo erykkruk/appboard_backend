@@ -1,5 +1,5 @@
-import { google } from "googleapis";
 import type { androidpublisher_v3 } from "googleapis";
+import { google } from "googleapis";
 import { createLogger } from "@/utils/logger";
 import type { GooglePlayCredentials } from "./types";
 
@@ -37,7 +37,10 @@ export async function createGooglePlayClient(
 	const packageNames = credentials.package_names ?? [];
 
 	log.info(
-		{ clientEmail: credentials.client_email, packageCount: packageNames.length },
+		{
+			clientEmail: credentials.client_email,
+			packageCount: packageNames.length,
+		},
 		"Google Play API client created",
 	);
 

@@ -1,4 +1,4 @@
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
 import { createProvider } from "@/providers";
 import { decrypt } from "@/utils/crypto";
@@ -21,20 +21,29 @@ export class ReviewsService {
 			const existing = await db
 				.select()
 				.from(reviews)
-				.where(eq(reviews.externalId, review.externalId))
+				.where(
+					and(
+						eq(reviews.externalId, review.externalId),
+						eq(reviews.appId, appId),
+					),
+				)
 				.limit(1);
 
 			if (existing.length > 0) {
+				const updateData: Record<string, unknown> = {
+					body: review.body,
+					rating: review.rating,
+					syncedAt: new Date(),
+					title: review.title,
+				};
+				// Only overwrite reply fields if provider returned them
+				if (review.replyText !== undefined) {
+					updateData.replyText = review.replyText;
+					updateData.repliedAt = review.repliedAt;
+				}
 				await db
 					.update(reviews)
-					.set({
-						body: review.body,
-						rating: review.rating,
-						repliedAt: review.repliedAt,
-						replyText: review.replyText,
-						syncedAt: new Date(),
-						title: review.title,
-					})
+					.set(updateData)
 					.where(eq(reviews.id, existing[0].id));
 			} else {
 				await db.insert(reviews).values({
@@ -92,7 +101,7 @@ export class ReviewsService {
 			.select()
 			.from(reviews)
 			.where(and(...conditions))
-			.orderBy(reviews.reviewDate);
+			.orderBy(desc(reviews.reviewDate));
 	}
 
 	static async reply(appId: string, reviewId: string, text: string) {

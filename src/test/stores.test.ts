@@ -1,10 +1,15 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { storesController } from "@/modules/stores";
+import { cleanupStores } from "./setup";
 
 describe("Stores module", () => {
 	const app = new Elysia().group("/api", (app) => app.use(storesController));
 	let createdStoreId: string;
+
+	afterAll(async () => {
+		if (createdStoreId) await cleanupStores([createdStoreId]);
+	});
 
 	it("POST /api/stores/connect creates a mock store", async () => {
 		const response = await app
@@ -64,6 +69,8 @@ describe("Stores module", () => {
 			.then((res) => res.json());
 
 		expect(response.success).toBe(true);
+		// Store already deleted by the test, prevent double-delete in afterAll
+		createdStoreId = "";
 	});
 
 	it("DELETE /api/stores/:storeId returns 404 for non-existent store", async () => {

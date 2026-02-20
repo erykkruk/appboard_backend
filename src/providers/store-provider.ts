@@ -1,3 +1,9 @@
+export interface VersionData {
+	isEditable: boolean;
+	state: string;
+	versionString: string;
+}
+
 export interface StoreProvider {
 	validateCredentials(): Promise<boolean>;
 	fetchApps(): Promise<AppData[]>;
@@ -18,6 +24,11 @@ export interface StoreProvider {
 	deleteAsset(appId: string, assetId: string): Promise<void>;
 	fetchReviews(appId: string): Promise<ReviewData[]>;
 	replyToReview(appId: string, reviewId: string, text: string): Promise<void>;
+	createVersion(
+		appId: string,
+		versionString: string,
+	): Promise<{ state: string; versionString: string }>;
+	getLatestVersion(appId: string): Promise<VersionData | null>;
 }
 
 export interface AppData {
@@ -66,6 +77,7 @@ export interface AssetData {
 export interface AssetMetadata {
 	assetType: string;
 	deviceType: string;
+	fileName?: string;
 }
 
 export interface ReviewData {

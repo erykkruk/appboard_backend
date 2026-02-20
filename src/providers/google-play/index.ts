@@ -12,6 +12,7 @@ import type {
 	ListingUpdateData,
 	ReviewData,
 	StoreProvider,
+	VersionData,
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
 import {
@@ -24,10 +25,10 @@ import {
 import {
 	DEVICE_TO_IMAGE_TYPE,
 	GOOGLE_PLAY_IMAGE_TYPES,
-	IMAGE_TYPE_TO_ASSET,
-	IMAGE_TYPE_TO_DEVICE,
 	type GooglePlayCredentials,
 	type GooglePlayImageType,
+	IMAGE_TYPE_TO_ASSET,
+	IMAGE_TYPE_TO_DEVICE,
 	isMockCredentials,
 } from "./types";
 
@@ -44,6 +45,19 @@ export class GooglePlayProvider implements StoreProvider {
 		}
 	}
 
+	async createVersion(
+		_appId: string,
+		_versionString: string,
+	): Promise<{ state: string; versionString: string }> {
+		// Google Play does not require manual version creation
+		return { state: "inProgress", versionString: _versionString };
+	}
+
+	async getLatestVersion(_appId: string): Promise<VersionData | null> {
+		// Google Play does not have a version concept like App Store
+		return null;
+	}
+
 	async validateCredentials(): Promise<boolean> {
 		if (this.isMock) return true;
 
@@ -51,7 +65,9 @@ export class GooglePlayProvider implements StoreProvider {
 			const client = await this.getClient();
 
 			if (client.packageNames.length === 0) {
-				log.warn("No package names configured — credentials accepted but no apps to verify");
+				log.warn(
+					"No package names configured — credentials accepted but no apps to verify",
+				);
 				return true;
 			}
 
@@ -94,10 +110,12 @@ export class GooglePlayProvider implements StoreProvider {
 					// Try to get the default listing for the app name
 					let appName = packageName;
 					try {
-						const { data: listingsData } = await client.api.edits.listings.list({
-							editId,
-							packageName,
-						});
+						const { data: listingsData } = await client.api.edits.listings.list(
+							{
+								editId,
+								packageName,
+							},
+						);
 
 						const defaultListing =
 							listingsData.listings?.find((l) => l.language === "en-US") ??
@@ -111,23 +129,23 @@ export class GooglePlayProvider implements StoreProvider {
 					}
 
 					// Try to fetch app icon
-				let iconUrl: string | undefined;
-				try {
-					const { data: images } = await client.api.edits.images.list({
-						editId,
-						imageType: "icon",
-						language: "en-US",
-						packageName,
-					});
-					const icon = images.images?.[0];
-					if (icon?.url) {
-						iconUrl = icon.url;
+					let iconUrl: string | undefined;
+					try {
+						const { data: images } = await client.api.edits.images.list({
+							editId,
+							imageType: "icon",
+							language: "en-US",
+							packageName,
+						});
+						const icon = images.images?.[0];
+						if (icon?.url) {
+							iconUrl = icon.url;
+						}
+					} catch {
+						log.warn({ packageName }, "Could not fetch icon image");
 					}
-				} catch {
-					log.warn({ packageName }, "Could not fetch icon image");
-				}
 
-				apps.push({
+					apps.push({
 						bundleId: packageName,
 						externalId: packageName,
 						iconUrl,
@@ -205,7 +223,10 @@ export class GooglePlayProvider implements StoreProvider {
 				});
 				existingListing = current;
 			} catch {
-				log.info({ appId, language }, "No existing listing found, creating new");
+				log.info(
+					{ appId, language },
+					"No existing listing found, creating new",
+				);
 			}
 
 			await client.api.edits.listings.update({
@@ -382,10 +403,7 @@ export class GooglePlayProvider implements StoreProvider {
 						packageName: appId,
 					});
 					deleted = true;
-					log.info(
-						{ appId, assetId, imageType },
-						"Asset deleted",
-					);
+					log.info({ appId, assetId, imageType }, "Asset deleted");
 				} catch {
 					// Not found for this image type, try next
 				}

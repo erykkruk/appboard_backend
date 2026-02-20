@@ -97,6 +97,7 @@ export class AssetsService {
 		assetType: string,
 		deviceType: string,
 		file: Buffer,
+		fileName?: string,
 	) {
 		const app = await AssetsService.getAppWithStore(appId);
 		const credentials = JSON.parse(decrypt(app.store.credentials!));
@@ -105,6 +106,7 @@ export class AssetsService {
 		const result = await provider.uploadAsset(app.externalId, language, file, {
 			assetType,
 			deviceType,
+			fileName,
 		});
 
 		const [asset] = await db
@@ -114,10 +116,13 @@ export class AssetsService {
 				assetType: result.assetType,
 				deviceType: result.deviceType,
 				externalId: result.externalId,
+				fileName,
 				fileSize: result.fileSize,
 				height: result.height,
+				isDirty: true,
 				language,
 				sortOrder: 0,
+				source: "draft",
 				url: result.url,
 				width: result.width,
 			})
@@ -138,6 +143,13 @@ export class AssetsService {
 			throw new Error("unreachable");
 		}
 
+		// Draft assets without externalId can be deleted directly
+		if (asset.source === "draft" && !asset.externalId) {
+			await db.delete(assets).where(eq(assets.id, assetId));
+			return { success: true };
+		}
+
+		// Remote or uploaded assets — delete from store first
 		if (asset.externalId) {
 			const app = await AssetsService.getAppWithStore(appId);
 			const credentials = JSON.parse(decrypt(app.store.credentials!));
@@ -147,6 +159,40 @@ export class AssetsService {
 
 		await db.delete(assets).where(eq(assets.id, assetId));
 		return { success: true };
+	}
+
+	static async publishAssets(appId: string) {
+		const dirtyAssets = await db
+			.select()
+			.from(assets)
+			.where(and(eq(assets.appId, appId), eq(assets.isDirty, true)));
+
+		if (dirtyAssets.length === 0) {
+			return { published: 0 };
+		}
+
+		for (const asset of dirtyAssets) {
+			// Mark as clean after successful upload (assets are already uploaded at upload time)
+			await db
+				.update(assets)
+				.set({ isDirty: false, source: "remote" })
+				.where(eq(assets.id, asset.id));
+		}
+
+		log.info({ appId, count: dirtyAssets.length }, "Assets published");
+		return { published: dirtyAssets.length };
+	}
+
+	static async getDirtyCount(appId: string) {
+		const dirty = await db
+			.select()
+			.from(assets)
+			.where(and(eq(assets.appId, appId), eq(assets.isDirty, true)));
+		return {
+			added: dirty.filter((a) => a.source === "draft").length,
+			count: dirty.length,
+			removed: 0,
+		};
 	}
 
 	static async reorder(items: { id: string; sortOrder: number }[]) {

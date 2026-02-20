@@ -14,6 +14,13 @@
 			"tag": "0001_flashy_sleepwalker",
 			"version": "7",
 			"when": 1771592736885
+		},
+		{
+			"breakpoints": true,
+			"idx": 2,
+			"tag": "0002_dry_hawkeye",
+			"version": "7",
+			"when": 1771602938416
 		}
 	],
 	"version": "7"
