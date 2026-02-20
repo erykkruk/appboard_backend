@@ -127,6 +127,44 @@ export class PublishingService {
 		};
 	}
 
+	static async listVersions(appId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			return { versions: [] };
+		}
+
+		try {
+			const credentials = JSON.parse(decrypt(app.store.credentials));
+			if (!credentials.keyId) return { versions: [] };
+
+			const { readAll } = await createAppStoreClient(credentials);
+			const { data: versions } = await readAll(
+				`apps/${app.externalId}/appStoreVersions`,
+			);
+
+			if (!versions?.length) return { versions: [] };
+
+			return {
+				versions: (versions as ApiResource[]).map((v) => {
+					const state =
+						(v.attributes.appStoreState as string) ?? "";
+					const versionString =
+						(v.attributes.versionString as string) ?? "";
+					return {
+						id: v.id,
+						isEditable: EDITABLE_STATES.includes(state),
+						state,
+						versionString,
+					};
+				}),
+			};
+		} catch (err) {
+			log.warn({ appId, err }, "Could not fetch versions");
+			return { versions: [] };
+		}
+	}
+
 	static async publishAll(
 		appId: string,
 		options?: { submitForReview?: boolean },

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CompatibleVersion</key>
+	<integer>1</integer>
+	<key>RawQuery</key>
+	<string>(kMDItemLastUsedDate = "*") &amp;&amp; ((kMDItemContentTypeTree = public.content) || (kMDItemContentTypeTree = "com.microsoft.*"cdw) || (kMDItemContentTypeTree = public.archive))</string>
+	<key>RawQueryDict</key>
+	<dict>
+		<key>FinderFilesOnly</key>
+		<true/>
+		<key>RawQuery</key>
+		<string>(kMDItemLastUsedDate = "*") &amp;&amp; ((kMDItemContentTypeTree = public.content) || (kMDItemContentTypeTree = "com.microsoft.*"cdw) || (kMDItemContentTypeTree = public.archive))</string>
+		<key>SearchScopes</key>
+		<array>
+	 	<string>kMDQueryScopeMyFiles</string>
+		</array>
+		<key>UserFilesOnly</key>
+		<true/>
+	</dict>
+	<key>SearchCriteria</key>
+	<dict>
+		<key>AnyAttributeContains</key>
+		<string></string>
+		<key>CurrentFolderPath</key>
+		<array>
+			<string>/Users</string>
+		</array>
+		<key>FXCriteriaSlices</key>
+		<array>
+			<dict>
+				<key>criteria</key>
+				<array>
+					<string>com_apple_RawQueryAttribute</string>
+					<integer>104</integer>
+				</array>
+				<key>displayValues</key>
+				<array>
+					<string>Raw query</string>
+					<string>(kMDItemLastUsedDate = "*") &amp;&amp; ((kMDItemContentTypeTree = public.content) || (kMDItemContentTypeTree = "com.microsoft.*"cdw) || (kMDItemContentTypeTree = public.archive))</string>
+				</array>
+				<key>rowType</key>
+				<integer>0</integer>
+				<key>subrows</key>
+				<array/>
+			</dict>
+		</array>
+		<key>FXScope</key>
+		<integer>1396925814</integer>
+		<key>FXScopeArrayOfPaths</key>
+		<array>
+		  <string>kMDQueryScopeMyFiles</string>
+		</array>
+	</dict>
+</dict>
+</plist>

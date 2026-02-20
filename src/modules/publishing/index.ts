@@ -40,6 +40,19 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.get(
+		"/:appId/publishing/versions",
+		async ({ params }) => {
+			return PublishingService.listVersions(params.appId);
+		},
+		{
+			detail: {
+				description: "List all App Store versions",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.get(
 		"/:appId/publishing/version",
 		async ({ params }) => {
 			const version = await PublishingService.getVersionInfo(params.appId);
