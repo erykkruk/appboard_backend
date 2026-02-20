@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: AppBoardPostgres
+    command: postgres -c max_connections=200
+    environment:
+      POSTGRES_DB: appboard
+      POSTGRES_USER: appboard
+      POSTGRES_PASSWORD: appboard
+      PGDATA: /var/lib/postgresql/18/docker
+    ports:
+      - "5441:5432"
+    volumes:
+      - appboard-db-data:/var/lib/postgresql/18/docker
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appboard"]
+      interval: 1s
+      timeout: 1s
+      retries: 5
+
+volumes:
+  appboard-db-data:

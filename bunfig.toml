@@ -1,0 +1,7 @@
+[install]
+peer = false
+
+[telemetry]
+enabled = false
+
+smol = true

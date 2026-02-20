@@ -1,0 +1,16 @@
+{
+	"compilerOptions": {
+		"baseUrl": "./",
+		"declaration": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"lib": ["dom", "esnext"],
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"paths": { "@/*": ["src/*"] },
+		"skipLibCheck": true,
+		"strict": true,
+		"target": "esnext",
+		"types": ["bun-types"]
+	}
+}
