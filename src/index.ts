@@ -6,6 +6,7 @@ import { appsController } from "@/modules/apps";
 import { assetsController } from "@/modules/assets";
 import { historyController } from "@/modules/history";
 import { listingsController } from "@/modules/listings";
+import { reviewsController } from "@/modules/reviews";
 import { storesController } from "@/modules/stores";
 import { bootstrap, systemController } from "@/modules/system";
 import { errorHandler } from "@/utils/errors/errorHandler";
@@ -30,7 +31,8 @@ const app = new Elysia()
 			.use(appsController)
 			.use(listingsController)
 			.use(historyController)
-			.use(assetsController),
+			.use(assetsController)
+			.use(reviewsController),
 	)
 	.listen(port);
 
