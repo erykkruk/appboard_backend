@@ -5,16 +5,63 @@ declare module "node-app-store-connect-api" {
 		privateKey: string;
 	}
 
-	interface ApiResponse<T = unknown> {
-		data: T[];
+	interface ApiResource {
+		attributes: Record<string, unknown>;
+		id: string;
+		relationships?: Record<
+			string,
+			{
+				data:
+					| { id: string; type: string }
+					| Array<{ id: string; type: string }>;
+				links?: { related: string; self: string };
+			}
+		>;
+		type: string;
+	}
+
+	interface ReadResponse {
+		data: ApiResource[];
+		included?: Record<string, Record<string, ApiResource>>;
+		links?: Record<string, string>;
+		meta?: Record<string, unknown>;
+	}
+
+	interface ReadAllResponse {
+		data: ApiResource[];
+		included?: Record<string, Record<string, ApiResource>>;
+	}
+
+	interface CreateOptions {
+		attributes?: Record<string, unknown>;
+		included?: Array<Record<string, unknown>>;
+		relationships?: Record<string, unknown>;
+		type: string;
+		version?: number;
+	}
+
+	interface UpdateOptions {
+		attributes?: Record<string, unknown>;
+		included?: Array<Record<string, unknown>>;
+		relationships?: Record<string, unknown>;
+		version?: number;
 	}
 
 	interface ApiClient {
-		create(type: string, attributes: Record<string, unknown>, relationships?: Record<string, unknown>): Promise<ApiResponse>;
-		modify(type: string, id: string, attributes: Record<string, unknown>): Promise<ApiResponse>;
-		read(url: string, params?: Record<string, unknown>): Promise<ApiResponse>;
-		readAll(type: string, params?: Record<string, unknown>): Promise<ApiResponse>;
-		remove(type: string, id: string): Promise<void>;
+		create(options: CreateOptions): Promise<ApiResource>;
+		read(url: string, options?: Record<string, unknown>): Promise<ReadResponse>;
+		readAll(
+			url: string,
+			options?: Record<string, unknown>,
+		): Promise<ReadAllResponse>;
+		remove(
+			data: { id: string; type: string },
+			options?: Record<string, unknown>,
+		): Promise<void>;
+		update(
+			data: { id: string; type: string },
+			options: UpdateOptions,
+		): Promise<ApiResource>;
 	}
 
 	export function api(options: ApiOptions): Promise<ApiClient>;
