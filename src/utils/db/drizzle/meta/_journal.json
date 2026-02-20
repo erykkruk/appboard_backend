@@ -1,13 +1,20 @@
 {
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"breakpoints": true,
-			"idx": 0,
-			"tag": "0000_stiff_sugar_man",
-			"version": "7",
-			"when": 1771591762366
-		}
-	],
-	"version": "7"
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "breakpoints": true,
+      "idx": 0,
+      "tag": "0000_stiff_sugar_man",
+      "version": "7",
+      "when": 1771591762366
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1771592736885,
+      "tag": "0001_flashy_sleepwalker",
+      "breakpoints": true
+    }
+  ],
+  "version": "7"
 }
