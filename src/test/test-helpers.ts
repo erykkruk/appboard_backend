@@ -10,15 +10,7 @@ import { storesController } from "@/modules/stores";
 import { systemController } from "@/modules/system";
 import { encrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
-import {
-	apps,
-	assets,
-	listingHistory,
-	listings,
-	reviews,
-	settings,
-	stores,
-} from "@/utils/db/schema";
+import { apps, stores } from "@/utils/db/schema";
 import { errorHandler } from "@/utils/errors/errorHandler";
 
 export function createTestApp() {
@@ -65,16 +57,6 @@ export async function seedTestApp(storeId: string) {
 		})
 		.returning();
 	return app;
-}
-
-export async function cleanupTestData() {
-	await db.delete(listingHistory);
-	await db.delete(listings);
-	await db.delete(assets);
-	await db.delete(reviews);
-	await db.delete(settings);
-	await db.delete(apps);
-	await db.delete(stores);
 }
 
 export async function request(

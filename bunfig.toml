@@ -4,4 +4,3 @@ peer = false
 smol = true
 
 [test]
-preload = ["./src/test/cleanup.ts"]
