@@ -14,6 +14,7 @@ import type {
 	StoreProvider,
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
+import { createAppStoreClient } from "./client";
 import { type AppStoreCredentials, isMockCredentials } from "./types";
 
 const log = createLogger("app-store");
@@ -21,7 +22,7 @@ const log = createLogger("app-store");
 export class AppStoreProvider implements StoreProvider {
 	private readonly isMock: boolean;
 
-	constructor(readonly credentials: AppStoreCredentials) {
+	constructor(private readonly credentials: AppStoreCredentials) {
 		this.isMock = isMockCredentials(credentials);
 		if (this.isMock) {
 			log.info("App Store provider initialized in mock mode");
@@ -29,17 +30,42 @@ export class AppStoreProvider implements StoreProvider {
 	}
 
 	async validateCredentials(): Promise<boolean> {
-		if (!this.isMock) {
-			log.warn("Real App Store API not yet implemented — using demo data");
+		if (this.isMock) return true;
+		try {
+			const { readAll } = await createAppStoreClient(this.credentials);
+			const { data } = await readAll("apps", { params: { limit: 1 } });
+			log.info({ appCount: data?.length ?? 0 }, "Credentials validated");
+			return true;
+		} catch (err) {
+			log.error({ err }, "App Store credentials validation failed");
+			return false;
 		}
-		return true;
 	}
 
 	async fetchApps(): Promise<AppData[]> {
-		return MOCK_IOS_APPS;
+		if (this.isMock) return MOCK_IOS_APPS;
+
+		const { readAll } = await createAppStoreClient(this.credentials);
+		const { data: appsData } = await readAll("apps");
+
+		const apps: AppData[] = (appsData ?? []).map((raw) => {
+			const app = raw as { attributes: { bundleId: string; name: string }; id: string };
+			return {
+				bundleId: app.attributes.bundleId,
+				externalId: app.id,
+				name: app.attributes.name,
+				platform: "ios" as const,
+			};
+		});
+
+		log.info({ count: apps.length }, "Fetched apps from App Store Connect");
+		return apps;
 	}
 
 	async fetchListings(appId: string): Promise<ListingData[]> {
+		if (this.isMock) return getMockListings(appId);
+		// TODO: implement via appInfoLocalizations
+		log.warn("Real App Store fetchListings not yet implemented — using mock");
 		return getMockListings(appId);
 	}
 
@@ -56,6 +82,8 @@ export class AppStoreProvider implements StoreProvider {
 	}
 
 	async fetchAssets(appId: string, language: string): Promise<AssetData[]> {
+		if (this.isMock) return getMockAssets(appId, language);
+		log.warn("Real App Store fetchAssets not yet implemented — using mock");
 		return getMockAssets(appId, language);
 	}
 
@@ -78,6 +106,8 @@ export class AppStoreProvider implements StoreProvider {
 	}
 
 	async fetchReviews(appId: string): Promise<ReviewData[]> {
+		if (this.isMock) return getMockReviews(appId, "app_store");
+		log.warn("Real App Store fetchReviews not yet implemented — using mock");
 		return getMockReviews(appId, "app_store");
 	}
 
