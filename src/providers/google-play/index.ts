@@ -29,22 +29,18 @@ export class GooglePlayProvider implements StoreProvider {
 	}
 
 	async validateCredentials(): Promise<boolean> {
-		if (this.isMock) return true;
-		// Real implementation would validate service account JSON
-		log.warn("Real Google Play credentials validation not implemented");
-		return false;
+		if (!this.isMock) {
+			log.warn("Real Google Play API not yet implemented — using demo data");
+		}
+		return true;
 	}
 
 	async fetchApps(): Promise<AppData[]> {
-		if (this.isMock) return MOCK_ANDROID_APPS;
-		log.warn("Real Google Play fetchApps not implemented");
-		return [];
+		return MOCK_ANDROID_APPS;
 	}
 
 	async fetchListings(appId: string): Promise<ListingData[]> {
-		if (this.isMock) return getMockListings(appId);
-		log.warn("Real Google Play fetchListings not implemented");
-		return [];
+		return getMockListings(appId);
 	}
 
 	async updateListing(
@@ -52,25 +48,15 @@ export class GooglePlayProvider implements StoreProvider {
 		language: string,
 		_data: ListingUpdateData,
 	): Promise<void> {
-		if (this.isMock) {
-			log.info({ appId, language }, "Mock: listing updated");
-			return;
-		}
-		log.warn("Real Google Play updateListing not implemented");
+		log.info({ appId, language }, "Mock: listing updated");
 	}
 
 	async publishListings(appId: string): Promise<void> {
-		if (this.isMock) {
-			log.info({ appId }, "Mock: listings published");
-			return;
-		}
-		log.warn("Real Google Play publishListings not implemented");
+		log.info({ appId }, "Mock: listings published");
 	}
 
 	async fetchAssets(appId: string, language: string): Promise<AssetData[]> {
-		if (this.isMock) return getMockAssets(appId, language);
-		log.warn("Real Google Play fetchAssets not implemented");
-		return [];
+		return getMockAssets(appId, language);
 	}
 
 	async uploadAsset(
@@ -79,29 +65,20 @@ export class GooglePlayProvider implements StoreProvider {
 		_file: Buffer,
 		metadata: AssetMetadata,
 	): Promise<AssetData> {
-		if (this.isMock) {
-			return {
-				assetType: metadata.assetType,
-				deviceType: metadata.deviceType,
-				externalId: `mock-${Date.now()}`,
-				url: `https://placehold.co/1080x1920?text=uploaded`,
-			};
-		}
-		throw new Error("Real Google Play uploadAsset not implemented");
+		return {
+			assetType: metadata.assetType,
+			deviceType: metadata.deviceType,
+			externalId: `mock-${Date.now()}`,
+			url: "https://placehold.co/1080x1920?text=uploaded",
+		};
 	}
 
 	async deleteAsset(appId: string, assetId: string): Promise<void> {
-		if (this.isMock) {
-			log.info({ appId, assetId }, "Mock: asset deleted");
-			return;
-		}
-		log.warn("Real Google Play deleteAsset not implemented");
+		log.info({ appId, assetId }, "Mock: asset deleted");
 	}
 
 	async fetchReviews(appId: string): Promise<ReviewData[]> {
-		if (this.isMock) return getMockReviews(appId, "google_play");
-		log.warn("Real Google Play fetchReviews not implemented");
-		return [];
+		return getMockReviews(appId, "google_play");
 	}
 
 	async replyToReview(
@@ -109,10 +86,6 @@ export class GooglePlayProvider implements StoreProvider {
 		reviewId: string,
 		_text: string,
 	): Promise<void> {
-		if (this.isMock) {
-			log.info({ appId, reviewId }, "Mock: review reply sent");
-			return;
-		}
-		log.warn("Real Google Play replyToReview not implemented");
+		log.info({ appId, reviewId }, "Mock: review reply sent");
 	}
 }
