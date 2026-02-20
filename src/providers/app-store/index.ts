@@ -79,6 +79,27 @@ export class AppStoreProvider implements StoreProvider {
 			};
 		});
 
+		// Fetch icon URLs from iTunes Lookup API (try multiple countries)
+		const countries = ["US", "PL", "GB", "DE"];
+		for (const app of apps) {
+			for (const country of countries) {
+				if (app.iconUrl) break;
+				try {
+					const res = await fetch(
+						`https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(app.bundleId)}&country=${country}`,
+					);
+					const json = (await res.json()) as {
+						results?: { artworkUrl512?: string }[];
+					};
+					if (json.results?.[0]?.artworkUrl512) {
+						app.iconUrl = json.results[0].artworkUrl512;
+					}
+				} catch (err) {
+					log.warn({ bundleId: app.bundleId, err }, "Failed to fetch icon from iTunes");
+				}
+			}
+		}
+
 		log.info({ count: apps.length }, "Fetched apps from App Store Connect");
 		return apps;
 	}

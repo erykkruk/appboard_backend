@@ -30,11 +30,11 @@ const app = new Elysia()
 		app
 			.use(systemController)
 			.use(storesController)
-			.use(appsController)
 			.use(listingsController)
 			.use(historyController)
 			.use(assetsController)
 			.use(reviewsController)
+			.use(appsController)
 			.use(aiController)
 			.use(settingsController),
 	)

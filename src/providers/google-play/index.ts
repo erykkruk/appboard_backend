@@ -110,10 +110,27 @@ export class GooglePlayProvider implements StoreProvider {
 						log.warn({ packageName }, "Could not fetch listings for app name");
 					}
 
-					apps.push({
+					// Try to fetch app icon
+				let iconUrl: string | undefined;
+				try {
+					const { data: images } = await client.api.edits.images.list({
+						editId,
+						imageType: "icon",
+						language: "en-US",
+						packageName,
+					});
+					const icon = images.images?.[0];
+					if (icon?.url) {
+						iconUrl = icon.url;
+					}
+				} catch {
+					log.warn({ packageName }, "Could not fetch icon image");
+				}
+
+				apps.push({
 						bundleId: packageName,
 						externalId: packageName,
-						iconUrl: details.contactWebsite ?? undefined,
+						iconUrl,
 						name: appName,
 						platform: "android",
 					});

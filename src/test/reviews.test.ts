@@ -30,7 +30,11 @@ describe("Reviews module", () => {
 			.handle(new Request("http://localhost/api/apps"))
 			.then((res) => res.json());
 
-		appId = appsRes.apps[0].id;
+		// Find the mock TaskMaster app
+		const mockApp = appsRes.apps.find(
+			(a: { bundleId: string }) => a.bundleId === "com.example.taskmaster",
+		);
+		appId = mockApp.id;
 	});
 
 	it("POST /api/apps/:appId/reviews/sync syncs reviews from store", async () => {
@@ -59,8 +63,9 @@ describe("Reviews module", () => {
 			.handle(new Request(`http://localhost/api/apps/${appId}/reviews/stats`))
 			.then((res) => res.json());
 
-		expect(response.total).toBe(20);
-		expect(response.avgRating).toBeGreaterThan(0);
+		expect(response.totalReviews).toBe(20);
+		expect(response.averageRating).toBeGreaterThan(0);
+		expect(response.noReplyCount).toBeGreaterThanOrEqual(0);
 		expect(response.distribution).toBeDefined();
 		expect(response.distribution[1]).toBeGreaterThanOrEqual(0);
 		expect(response.distribution[5]).toBeGreaterThanOrEqual(0);

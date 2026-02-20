@@ -15,12 +15,9 @@ export const assetQuery = t.Object({
 	language: t.Optional(t.String()),
 });
 
-export const reorderBody = t.Array(
-	t.Object({
-		id: t.String({ format: "uuid" }),
-		sortOrder: t.Number({ minimum: 0 }),
-	}),
-);
+export const reorderBody = t.Object({
+	assetIds: t.Array(t.String({ format: "uuid" })),
+});
 
 export const uploadAssetBody = t.Object({
 	assetType: t.String({ minLength: 1 }),

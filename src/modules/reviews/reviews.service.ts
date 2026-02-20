@@ -132,10 +132,10 @@ export class ReviewsService {
 			.where(eq(reviews.appId, appId))
 			.groupBy(reviews.rating);
 
-		const total = result.reduce((sum, r) => sum + r.count, 0);
+		const totalReviews = result.reduce((sum, r) => sum + r.count, 0);
 		const avgRating =
-			total > 0
-				? result.reduce((sum, r) => sum + r.rating * r.count, 0) / total
+			totalReviews > 0
+				? result.reduce((sum, r) => sum + r.rating * r.count, 0) / totalReviews
 				: 0;
 
 		const distribution: Record<number, number> = {
@@ -149,10 +149,17 @@ export class ReviewsService {
 			distribution[r.rating] = r.count;
 		}
 
+		// Count reviews without a reply
+		const [noReplyResult] = await db
+			.select({ count: sql<number>`count(*)::int` })
+			.from(reviews)
+			.where(and(eq(reviews.appId, appId), isNull(reviews.replyText)));
+
 		return {
-			avgRating: Math.round(avgRating * 100) / 100,
+			averageRating: Math.round(avgRating * 100) / 100,
 			distribution,
-			total,
+			noReplyCount: noReplyResult?.count ?? 0,
+			totalReviews,
 		};
 	}
 

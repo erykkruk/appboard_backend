@@ -59,7 +59,11 @@ export const assetsController = new Elysia({ prefix: "/apps" })
 	.patch(
 		"/:appId/assets/reorder",
 		async ({ body }) => {
-			return AssetsService.reorder(body as { id: string; sortOrder: number }[]);
+			const items = body.assetIds.map((id, index) => ({
+				id,
+				sortOrder: index,
+			}));
+			return AssetsService.reorder(items);
 		},
 		{
 			body: reorderBody,

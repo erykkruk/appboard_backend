@@ -35,7 +35,11 @@ describe("Listings module", () => {
 			.handle(new Request("http://localhost/api/apps"))
 			.then((res) => res.json());
 
-		appId = appsRes.apps[0].id;
+		// Find the mock TaskMaster app
+		const mockApp = appsRes.apps.find(
+			(a: { bundleId: string }) => a.bundleId === "com.example.taskmaster",
+		);
+		appId = mockApp.id;
 	});
 
 	it("POST /api/apps/:appId/listings/sync syncs listings from store", async () => {
