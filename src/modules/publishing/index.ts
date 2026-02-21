@@ -91,6 +91,26 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.post(
+		"/:appId/publishing/screenshots/preview",
+		async ({ body }) => {
+			return PublishingService.previewScreenshot(
+				body.displayType,
+				body.file,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.String({ minLength: 1 }),
+				file: t.File(),
+			}),
+			detail: {
+				description: "Preview a processed screenshot (crop, resize, flatten alpha)",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.post(
 		"/:appId/publishing/screenshots/upload",
 		async ({ body, params }) => {
 			return PublishingService.uploadScreenshot(

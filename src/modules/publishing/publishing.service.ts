@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import type { ApiResource } from "node-app-store-connect-api";
+import sharp from "sharp";
 import type { StoreType } from "@/config/const";
 import { AssetsService } from "@/modules/assets/assets.service";
 import { ListingsService } from "@/modules/listings/listings.service";
@@ -25,6 +26,116 @@ function suggestNextVersion(versionString: string): string {
 	const patch = Number.parseInt(parts[parts.length - 1], 10);
 	parts[parts.length - 1] = String(Number.isNaN(patch) ? 1 : patch + 1);
 	return parts.join(".");
+}
+
+const REQUIRED_SIZES: Record<string, [number, number][]> = {
+	APP_IPHONE_35: [[640, 1136], [1136, 640], [640, 1096], [1136, 600]],
+	APP_IPHONE_40: [[640, 1136], [1136, 640]],
+	APP_IPHONE_47: [[750, 1334], [1334, 750]],
+	APP_IPHONE_55: [[1242, 2208], [2208, 1242]],
+	APP_IPHONE_58: [[1125, 2436], [2436, 1125]],
+	APP_IPHONE_61: [[828, 1792], [1792, 828], [1284, 2778], [2778, 1284]],
+	APP_IPHONE_65: [[1242, 2688], [2688, 1242], [1284, 2778], [2778, 1284]],
+	APP_IPHONE_67: [[1290, 2796], [2796, 1290]],
+	APP_IPAD_PRO_129: [
+		[2064, 2752], [2752, 2064],
+		[2048, 2732], [2732, 2048],
+	],
+};
+
+async function processScreenshot(
+	inputBuffer: Buffer,
+	displayType: string,
+): Promise<{ buffer: Buffer; height: number; width: number }> {
+	const image = sharp(inputBuffer);
+	const meta = await image.metadata();
+	const imgW = meta.width ?? 0;
+	const imgH = meta.height ?? 0;
+
+	if (imgW === 0 || imgH === 0) {
+		throw new Error("Could not read image dimensions");
+	}
+
+	// Pick target size
+	const sizes = REQUIRED_SIZES[displayType];
+	if (!sizes?.length) {
+		throw new Error(`Unknown display type: ${displayType}`);
+	}
+
+	const isPortrait = imgH >= imgW;
+	const candidates = sizes.filter(([w, h]) =>
+		isPortrait ? h >= w : w >= h,
+	);
+	const pool = candidates.length > 0 ? candidates : sizes;
+
+	const imgAspect = imgW / imgH;
+	let best = pool[0];
+	let bestDiff = Math.abs(best[0] / best[1] - imgAspect);
+	for (const size of pool) {
+		const diff = Math.abs(size[0] / size[1] - imgAspect);
+		if (diff < bestDiff) {
+			best = size;
+			bestDiff = diff;
+		}
+	}
+
+	const [targetW, targetH] = best;
+
+	// Crop to target aspect ratio (center crop), then resize
+	const targetAspect = targetW / targetH;
+	const srcAspect = imgW / imgH;
+
+	let cropW: number;
+	let cropH: number;
+	if (srcAspect > targetAspect) {
+		cropH = imgH;
+		cropW = Math.round(imgH * targetAspect);
+	} else {
+		cropW = imgW;
+		cropH = Math.round(imgW / targetAspect);
+	}
+
+	const processed = await sharp(inputBuffer)
+		.extract({
+			left: Math.round((imgW - cropW) / 2),
+			top: Math.round((imgH - cropH) / 2),
+			width: cropW,
+			height: cropH,
+		})
+		.resize(targetW, targetH)
+		.flatten({ background: { r: 255, g: 255, b: 255 } })
+		.png({ compressionLevel: 6 })
+		.toBuffer();
+
+	log.info(
+		{ from: `${imgW}x${imgH}`, to: `${targetW}x${targetH}` },
+		"Processed screenshot",
+	);
+
+	return { buffer: processed, height: targetH, width: targetW };
+}
+
+function extractAscError(err: unknown): string {
+	if (err instanceof Error) {
+		// node-app-store-connect-api wraps ASC errors
+		const msg = err.message;
+		try {
+			// Try to parse JSON error body from the message
+			const jsonMatch = msg.match(/\{[\s\S]*\}/);
+			if (jsonMatch) {
+				const parsed = JSON.parse(jsonMatch[0]);
+				if (parsed.errors?.length) {
+					return parsed.errors
+						.map((e: { detail?: string; title?: string }) => e.detail || e.title)
+						.join("; ");
+				}
+			}
+		} catch {
+			// Ignore parse errors
+		}
+		return msg;
+	}
+	return String(err);
 }
 
 const LISTING_FIELDS = [
@@ -434,24 +545,42 @@ export class PublishingService {
 				});
 				screenshotSet = created.data;
 			} catch (err) {
+				const detail = extractAscError(err);
 				log.error(
-					{ appId, displayType, err, language },
+					{ appId, detail, displayType, err, language },
 					"Failed to create screenshot set",
 				);
 				buildError("storeApiError", {
-					info: `Failed to create screenshot set: ${err instanceof Error ? err.message : String(err)}`,
+					info: `Failed to create screenshot set: ${detail}`,
 				});
 			}
 		}
 
-		const buffer = Buffer.from(await file.arrayBuffer());
+		const rawBuffer = Buffer.from(await file.arrayBuffer());
+
+		// Process image: crop to correct aspect ratio, resize, flatten alpha
+		let processed: { buffer: Buffer; height: number; width: number };
+		try {
+			processed = await processScreenshot(rawBuffer, displayType);
+		} catch (err) {
+			log.error(
+				{ appId, displayType, err, fileName: file.name },
+				"Failed to process screenshot image",
+			);
+			buildError("badRequest", {
+				info: `Image processing failed: ${err instanceof Error ? err.message : String(err)}`,
+			});
+			throw new Error("unreachable");
+		}
+
+		const pngName = file.name.replace(/\.\w+$/, ".png");
 
 		try {
 			// Create screenshot resource
 			const screenshot = await client.create({
 				attributes: {
-					fileName: file.name,
-					fileSize: buffer.length,
+					fileName: pngName,
+					fileSize: processed.buffer.length,
 				},
 				relationships: {
 					appScreenshotSet: screenshotSet,
@@ -460,7 +589,7 @@ export class PublishingService {
 			});
 
 			// 2. Upload binary data
-			await client.uploadAsset(screenshot.data, buffer);
+			await client.uploadAsset(screenshot.data, processed.buffer);
 
 			// 3. Poll until processed
 			await client.pollForUploadSuccess(
@@ -469,19 +598,52 @@ export class PublishingService {
 			);
 
 			log.info(
-				{ appId, fileName: file.name, screenshotId: screenshot.data.id },
+				{
+					appId,
+					fileName: pngName,
+					screenshotId: screenshot.data.id,
+					size: `${processed.width}x${processed.height}`,
+				},
 				"Uploaded screenshot to App Store Connect",
 			);
 
 			return { screenshotId: screenshot.data.id, uploaded: true };
 		} catch (err) {
+			const detail = extractAscError(err);
 			log.error(
-				{ appId, displayType, err, fileName: file.name, language },
+				{ appId, detail, displayType, err, fileName: pngName, language },
 				"Failed to upload screenshot to App Store Connect",
 			);
 			buildError("storeApiError", {
-				info: `Screenshot upload failed: ${err instanceof Error ? err.message : String(err)}`,
+				info: detail,
 			});
+		}
+	}
+
+	static async previewScreenshot(displayType: string, file: File) {
+		const rawBuffer = Buffer.from(await file.arrayBuffer());
+
+		try {
+			const { buffer, height, width } = await processScreenshot(
+				rawBuffer,
+				displayType,
+			);
+			const base64 = buffer.toString("base64");
+
+			return {
+				height,
+				preview: `data:image/png;base64,${base64}`,
+				width,
+			};
+		} catch (err) {
+			log.error(
+				{ displayType, err, fileName: file.name },
+				"Failed to process screenshot for preview",
+			);
+			buildError("badRequest", {
+				info: `Image processing failed: ${err instanceof Error ? err.message : String(err)}`,
+			});
+			throw new Error("unreachable");
 		}
 	}
 
