@@ -71,6 +71,49 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			}),
 		},
 	)
+	.post(
+		"/:appId/publishing/versions/:versionId/localizations",
+		async ({ body, params }) => {
+			return PublishingService.addVersionLocalization(
+				params.appId,
+				params.versionId,
+				body.locale,
+			);
+		},
+		{
+			body: t.Object({
+				locale: t.String({ minLength: 1 }),
+			}),
+			detail: {
+				description: "Add a localization to an App Store version",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.delete(
+		"/:appId/publishing/versions/:versionId/localizations/:localizationId",
+		async ({ params }) => {
+			return PublishingService.deleteVersionLocalization(
+				params.appId,
+				params.localizationId,
+			);
+		},
+		{
+			detail: {
+				description: "Delete a localization from an App Store version",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				localizationId: t.String({ minLength: 1 }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
 	.get(
 		"/:appId/publishing/versions/:versionId/screenshots",
 		async ({ params }) => {

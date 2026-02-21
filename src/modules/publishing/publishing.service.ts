@@ -394,6 +394,7 @@ export class PublishingService {
 				description: (attrs.description as string) ?? "",
 				keywords: (attrs.keywords as string) ?? "",
 				language: locale,
+				localizationId: loc.id,
 				marketingUrl: (attrs.marketingUrl as string) ?? undefined,
 				promotionalText: (attrs.promotionalText as string) ?? undefined,
 				subtitle: (infoLoc?.attributes?.subtitle as string) ?? "",
@@ -409,6 +410,82 @@ export class PublishingService {
 			versionId,
 			versionString,
 		};
+	}
+
+	static async addVersionLocalization(
+		appId: string,
+		versionId: string,
+		locale: string,
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Version localizations are only available for App Store apps",
+			});
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const client = await createAppStoreClient(credentials);
+
+		try {
+			await client.create({
+				attributes: { locale },
+				relationships: {
+					appStoreVersion: { id: versionId, type: "appStoreVersions" },
+				},
+				type: "appStoreVersionLocalizations",
+			});
+		} catch (err) {
+			const detail = extractAscError(err);
+			log.error(
+				{ appId, detail, err, locale, versionId },
+				"Failed to add version localization",
+			);
+			buildError("storeApiError", {
+				info: `Failed to add localization: ${detail}`,
+			});
+		}
+
+		log.info({ appId, locale, versionId }, "Added version localization");
+
+		return { added: true, language: locale };
+	}
+
+	static async deleteVersionLocalization(
+		appId: string,
+		localizationId: string,
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Version localizations are only available for App Store apps",
+			});
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const { remove } = await createAppStoreClient(credentials);
+
+		try {
+			await remove({
+				id: localizationId,
+				type: "appStoreVersionLocalizations",
+			});
+		} catch (err) {
+			const detail = extractAscError(err);
+			log.error(
+				{ appId, detail, err, localizationId },
+				"Failed to delete version localization",
+			);
+			buildError("storeApiError", {
+				info: `Failed to delete localization: ${detail}`,
+			});
+		}
+
+		log.info({ appId, localizationId }, "Deleted version localization");
+
+		return { deleted: true };
 	}
 
 	static async getVersionScreenshots(appId: string, versionId: string) {
