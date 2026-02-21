@@ -94,6 +94,38 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			}),
 		},
 	)
+	.patch(
+		"/:appId/publishing/versions/:versionId/localizations/:localizationId",
+		async ({ body, params }) => {
+			return PublishingService.updateVersionLocalization(
+				params.appId,
+				params.versionId,
+				params.localizationId,
+				body,
+			);
+		},
+		{
+			body: t.Object({
+				description: t.Optional(t.String()),
+				keywords: t.Optional(t.String()),
+				marketingUrl: t.Optional(t.String()),
+				promotionalText: t.Optional(t.String()),
+				subtitle: t.Optional(t.String()),
+				supportUrl: t.Optional(t.String()),
+				title: t.Optional(t.String()),
+				whatsNew: t.Optional(t.String()),
+			}),
+			detail: {
+				description: "Update a version localization",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				localizationId: t.String({ minLength: 1 }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
 	.delete(
 		"/:appId/publishing/versions/:versionId/localizations/:localizationId",
 		async ({ params }) => {

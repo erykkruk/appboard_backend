@@ -2,6 +2,8 @@
 
 ## Overview
 Backend API for AppBoard — an ASO (App Store Optimization) management tool. Manages store connections, app metadata, and listing optimization.
+panel - /Users/erykkruk/Development/Github/Side-projects/appboard_web
+
 
 ## Tech Stack
 

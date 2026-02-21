@@ -412,6 +412,121 @@ export class PublishingService {
 		};
 	}
 
+	static async updateVersionLocalization(
+		appId: string,
+		versionId: string,
+		localizationId: string,
+		data: {
+			description?: string;
+			keywords?: string;
+			marketingUrl?: string;
+			promotionalText?: string;
+			subtitle?: string;
+			supportUrl?: string;
+			title?: string;
+			whatsNew?: string;
+		},
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Version localizations are only available for App Store apps",
+			});
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const client = await createAppStoreClient(credentials);
+
+		// Update version localization fields (description, keywords, whatsNew, etc.)
+		const versionLocAttrs: Record<string, string> = {};
+		if (data.description !== undefined)
+			versionLocAttrs.description = data.description;
+		if (data.keywords !== undefined) versionLocAttrs.keywords = data.keywords;
+		if (data.whatsNew !== undefined) versionLocAttrs.whatsNew = data.whatsNew;
+		if (data.promotionalText !== undefined)
+			versionLocAttrs.promotionalText = data.promotionalText;
+		if (data.marketingUrl !== undefined)
+			versionLocAttrs.marketingUrl = data.marketingUrl;
+		if (data.supportUrl !== undefined)
+			versionLocAttrs.supportUrl = data.supportUrl;
+
+		if (Object.keys(versionLocAttrs).length > 0) {
+			log.info(
+				{ attributes: versionLocAttrs, localizationId },
+				"Updating appStoreVersionLocalizations",
+			);
+			try {
+				await client.update(
+					{ id: localizationId, type: "appStoreVersionLocalizations" },
+					{ attributes: versionLocAttrs },
+				);
+			} catch (err) {
+				const detail = extractAscError(err);
+				log.error(
+					{ appId, detail, err, localizationId },
+					"Failed to update version localization",
+				);
+				buildError("storeApiError", {
+					info: `Failed to update localization: ${detail}`,
+				});
+			}
+		}
+
+		// Update app info localization fields (name/title, subtitle)
+		if (data.title !== undefined || data.subtitle !== undefined) {
+			try {
+				// Read single localization to get its locale
+				const { data: versionLoc } = await client.read(
+					`appStoreVersionLocalizations/${localizationId}`,
+				);
+				const locale =
+					((versionLoc as ApiResource)?.attributes?.locale as string) ?? "";
+
+				if (locale) {
+					const { data: appInfos } = await client.readAll(
+						`apps/${app.externalId}/appInfos`,
+					);
+					if (appInfos?.length) {
+						const latestInfo = appInfos[0] as ApiResource;
+						const { data: infoLocs } = await client.readAll(
+							`appInfos/${latestInfo.id}/appInfoLocalizations`,
+						);
+						const infoLoc = ((infoLocs ?? []) as ApiResource[]).find(
+							(l) => l.attributes.locale === locale,
+						);
+						if (infoLoc) {
+							const infoAttrs: Record<string, string> = {};
+							if (data.title !== undefined) infoAttrs.name = data.title;
+							if (data.subtitle !== undefined)
+								infoAttrs.subtitle = data.subtitle;
+							await client.update(
+								{ id: infoLoc.id, type: "appInfoLocalizations" },
+								{ attributes: infoAttrs },
+							);
+						}
+					}
+				}
+			} catch (err) {
+				const detail = extractAscError(err);
+				log.error(
+					{ appId, detail, err, localizationId },
+					"Failed to update app info localization",
+				);
+				buildError("storeApiError", {
+					info: `Failed to update title/subtitle: ${detail}`,
+				});
+			}
+		}
+
+		log.info(
+			{ appId, fields: Object.keys(data), localizationId },
+			"Updated version localization",
+		);
+
+		return { updated: true };
+	}
+
 	static async addVersionLocalization(
 		appId: string,
 		versionId: string,
