@@ -9,6 +9,10 @@ export const listingLanguageParams = t.Object({
 	language: t.String({ minLength: 2 }),
 });
 
+export const exportQuery = t.Object({
+	format: t.Union([t.Literal("csv"), t.Literal("json")]),
+});
+
 export const updateListingBody = t.Object({
 	fullDesc: t.Optional(t.String()),
 	keywords: t.Optional(t.String({ maxLength: 255 })),

@@ -21,6 +21,174 @@ const LISTING_FIELDS = [
 	"whatsNew",
 ] as const;
 
+const EXPORT_COLUMNS = [
+	"language",
+	"title",
+	"shortDesc",
+	"fullDesc",
+	"keywords",
+	"promoText",
+	"whatsNew",
+	"marketingUrl",
+	"supportUrl",
+	"privacyUrl",
+] as const;
+
+type ExportRow = Record<(typeof EXPORT_COLUMNS)[number], string>;
+
+function escapeCsvField(value: string): string {
+	if (
+		value.includes(",") ||
+		value.includes('"') ||
+		value.includes("\n") ||
+		value.includes("\r")
+	) {
+		return `"${value.replace(/"/g, '""')}"`;
+	}
+	return value;
+}
+
+function rowToCsv(row: ExportRow): string {
+	return EXPORT_COLUMNS.map((col) => escapeCsvField(row[col] ?? "")).join(",");
+}
+
+function toCsv(rows: ExportRow[]): string {
+	const header = EXPORT_COLUMNS.join(",");
+	const lines = rows.map(rowToCsv);
+	return [header, ...lines].join("\n");
+}
+
+function parseCsvLine(line: string): string[] {
+	const fields: string[] = [];
+	let current = "";
+	let inQuotes = false;
+
+	for (let i = 0; i < line.length; i++) {
+		const char = line[i];
+		if (inQuotes) {
+			if (char === '"') {
+				if (i + 1 < line.length && line[i + 1] === '"') {
+					current += '"';
+					i++;
+				} else {
+					inQuotes = false;
+				}
+			} else {
+				current += char;
+			}
+		} else if (char === '"') {
+			inQuotes = true;
+		} else if (char === ",") {
+			fields.push(current);
+			current = "";
+		} else {
+			current += char;
+		}
+	}
+	fields.push(current);
+	return fields;
+}
+
+function parseCsv(content: string): {
+	rows: Record<string, string>[];
+	errors: string[];
+} {
+	const errors: string[] = [];
+	const lines: string[] = [];
+
+	// Handle multiline quoted fields by joining lines within quotes
+	let buffer = "";
+	let inQuotes = false;
+	for (const rawLine of content.split(/\r?\n/)) {
+		if (!inQuotes) {
+			buffer = rawLine;
+		} else {
+			buffer += "\n" + rawLine;
+		}
+		const quoteCount = (buffer.match(/"/g) || []).length;
+		inQuotes = quoteCount % 2 !== 0;
+		if (!inQuotes) {
+			lines.push(buffer);
+			buffer = "";
+		}
+	}
+	if (buffer) lines.push(buffer);
+
+	if (lines.length < 2) {
+		return {
+			errors: ["CSV file must have a header row and at least one data row"],
+			rows: [],
+		};
+	}
+
+	const headers = parseCsvLine(lines[0]).map((h) => h.trim());
+	const rows: Record<string, string>[] = [];
+
+	for (let i = 1; i < lines.length; i++) {
+		const line = lines[i].trim();
+		if (!line) continue;
+
+		const values = parseCsvLine(line);
+		const row: Record<string, string> = {};
+		for (let j = 0; j < headers.length; j++) {
+			const val = values[j]?.trim() ?? "";
+			if (val) row[headers[j]] = val;
+		}
+
+		if (!row.language) {
+			errors.push(`Row ${i + 1}: missing required field "language"`);
+			continue;
+		}
+
+		rows.push(row);
+	}
+
+	return { errors, rows };
+}
+
+function parseJsonContent(content: string): {
+	rows: Record<string, string>[];
+	errors: string[];
+} {
+	const errors: string[] = [];
+
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(content);
+	} catch {
+		return { errors: ["Invalid JSON format"], rows: [] };
+	}
+
+	if (!Array.isArray(parsed)) {
+		return { errors: ["JSON must be an array of objects"], rows: [] };
+	}
+
+	const rows: Record<string, string>[] = [];
+	for (let i = 0; i < parsed.length; i++) {
+		const item = parsed[i];
+		if (typeof item !== "object" || item === null || Array.isArray(item)) {
+			errors.push(`Item ${i + 1}: must be an object`);
+			continue;
+		}
+
+		const row: Record<string, string> = {};
+		for (const [key, value] of Object.entries(item)) {
+			if (typeof value === "string" && value) {
+				row[key] = value;
+			}
+		}
+
+		if (!row.language) {
+			errors.push(`Item ${i + 1}: missing required field "language"`);
+			continue;
+		}
+
+		rows.push(row);
+	}
+
+	return { errors, rows };
+}
+
 export class ListingsService {
 	static async syncFromStore(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
@@ -259,6 +427,103 @@ export class ListingsService {
 
 		log.info({ appId, count: dirtyDrafts.length }, "Listings published");
 		return { published: dirtyDrafts.length };
+	}
+
+	static generateTemplate(format: "csv" | "json"): string {
+		if (format === "json") {
+			const template: Record<string, string> = {};
+			for (const col of EXPORT_COLUMNS) {
+				template[col] = "";
+			}
+			return JSON.stringify([template], null, 2);
+		}
+
+		const emptyRow = {} as ExportRow;
+		for (const col of EXPORT_COLUMNS) {
+			emptyRow[col] = col === "language" ? "en-US" : "";
+		}
+		return toCsv([emptyRow]);
+	}
+
+	static async exportListings(
+		appId: string,
+		format: "csv" | "json",
+	): Promise<string> {
+		const allListings = await db
+			.select()
+			.from(listings)
+			.where(eq(listings.appId, appId));
+
+		// Group by language, prefer draft over remote
+		const byLanguage = new Map<string, (typeof allListings)[number]>();
+		for (const listing of allListings) {
+			const existing = byLanguage.get(listing.language);
+			if (
+				!existing ||
+				(listing.source === "draft" && existing.source === "remote")
+			) {
+				byLanguage.set(listing.language, listing);
+			}
+		}
+
+		const rows: ExportRow[] = [];
+		for (const listing of byLanguage.values()) {
+			const row = {} as ExportRow;
+			for (const col of EXPORT_COLUMNS) {
+				row[col] = (listing[col as keyof typeof listing] as string) ?? "";
+			}
+			rows.push(row);
+		}
+
+		if (format === "json") {
+			return JSON.stringify(rows, null, 2);
+		}
+		return toCsv(rows);
+	}
+
+	static async importListings(
+		appId: string,
+		file: File,
+	): Promise<{ imported: number; errors: string[] }> {
+		const content = await file.text();
+		const isJson =
+			file.type === "application/json" || file.name?.endsWith(".json");
+
+		const { rows, errors } = isJson
+			? parseJsonContent(content)
+			: parseCsv(content);
+
+		let imported = 0;
+		for (const row of rows) {
+			const data: Record<string, string | undefined> = {};
+			for (const field of LISTING_FIELDS) {
+				if (field in row && row[field]) {
+					data[field] = row[field];
+				}
+			}
+
+			await db
+				.insert(listings)
+				.values({
+					...data,
+					appId,
+					isDirty: true,
+					language: row.language,
+					source: "draft",
+				})
+				.onConflictDoUpdate({
+					set: { ...data, isDirty: true },
+					target: [listings.appId, listings.language, listings.source],
+				});
+
+			imported++;
+		}
+
+		log.info(
+			{ appId, errorCount: errors.length, imported },
+			"Listings imported",
+		);
+		return { errors, imported };
 	}
 
 	private static async getAppWithStore(appId: string) {

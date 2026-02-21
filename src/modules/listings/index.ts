@@ -1,5 +1,6 @@
-import Elysia from "elysia";
+import Elysia, { t } from "elysia";
 import {
+	exportQuery,
 	listingLanguageParams,
 	listingParams,
 	updateListingBody,
@@ -7,6 +8,69 @@ import {
 import { ListingsService } from "./listings.service";
 
 export const listingsController = new Elysia({ prefix: "/apps" })
+	.get(
+		"/:appId/listings/template",
+		({ params, query, set }) => {
+			const format = query.format;
+			const content = ListingsService.generateTemplate(format);
+			const ext = format === "json" ? "json" : "csv";
+			const mime = format === "json" ? "application/json" : "text/csv";
+
+			set.headers["content-type"] = `${mime}; charset=utf-8`;
+			set.headers["content-disposition"] =
+				`attachment; filename="listings-template.${ext}"`;
+			return content;
+		},
+		{
+			detail: {
+				description: "Download empty listings template",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+			query: exportQuery,
+		},
+	)
+	.get(
+		"/:appId/listings/export",
+		async ({ params, query, set }) => {
+			const format = query.format;
+			const content = await ListingsService.exportListings(
+				params.appId,
+				format,
+			);
+			const ext = format === "json" ? "json" : "csv";
+			const mime = format === "json" ? "application/json" : "text/csv";
+
+			set.headers["content-type"] = `${mime}; charset=utf-8`;
+			set.headers["content-disposition"] =
+				`attachment; filename="listings-export.${ext}"`;
+			return content;
+		},
+		{
+			detail: {
+				description: "Export listings as CSV or JSON",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+			query: exportQuery,
+		},
+	)
+	.post(
+		"/:appId/listings/import",
+		async ({ params, body }) => {
+			return ListingsService.importListings(params.appId, body.file);
+		},
+		{
+			body: t.Object({
+				file: t.File(),
+			}),
+			detail: {
+				description: "Import listings from CSV or JSON file",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+		},
+	)
 	.get(
 		"/:appId/listings",
 		async ({ params }) => {
