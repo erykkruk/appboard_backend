@@ -35,8 +35,20 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 					data: { info: "Invalid request body" },
 				};
 
-			default:
+			default: {
+				// Handle buildError() responses (status() throws with a specific shape)
+				const statusCode =
+					(error as Record<string, unknown>)?.status ??
+					(error as Record<string, unknown>)?.statusCode;
+				if (typeof statusCode === "number" && statusCode >= 400) {
+					set.status = statusCode;
+					const body = (error as Record<string, unknown>)?.response;
+					if (body && typeof body === "object" && "code" in body) {
+						return body;
+					}
+				}
 				return;
+			}
 		}
 	},
 );

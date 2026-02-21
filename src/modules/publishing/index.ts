@@ -104,7 +104,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		{
 			body: t.Object({
 				displayType: t.String({ minLength: 1 }),
-				file: t.File({ type: ["image/png", "image/jpeg"] }),
+				file: t.File(),
 				language: t.String({ minLength: 1 }),
 				versionId: t.String({ minLength: 1 }),
 			}),

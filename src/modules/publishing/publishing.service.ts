@@ -424,45 +424,65 @@ export class PublishingService {
 		);
 
 		if (!screenshotSet) {
-			const created = await client.create({
-				attributes: { screenshotDisplayType: displayType },
-				relationships: {
-					appStoreVersionLocalization: loc,
-				},
-				type: "appScreenshotSets",
-			});
-			screenshotSet = created.data;
+			try {
+				const created = await client.create({
+					attributes: { screenshotDisplayType: displayType },
+					relationships: {
+						appStoreVersionLocalization: loc,
+					},
+					type: "appScreenshotSets",
+				});
+				screenshotSet = created.data;
+			} catch (err) {
+				log.error(
+					{ appId, displayType, err, language },
+					"Failed to create screenshot set",
+				);
+				buildError("storeApiError", {
+					info: `Failed to create screenshot set: ${err instanceof Error ? err.message : String(err)}`,
+				});
+			}
 		}
 
 		const buffer = Buffer.from(await file.arrayBuffer());
 
-		// Create screenshot resource
-		const screenshot = await client.create({
-			attributes: {
-				fileName: file.name,
-				fileSize: buffer.length,
-			},
-			relationships: {
-				appScreenshotSet: screenshotSet,
-			},
-			type: "appScreenshots",
-		});
+		try {
+			// Create screenshot resource
+			const screenshot = await client.create({
+				attributes: {
+					fileName: file.name,
+					fileSize: buffer.length,
+				},
+				relationships: {
+					appScreenshotSet: screenshotSet,
+				},
+				type: "appScreenshots",
+			});
 
-		// 2. Upload binary data
-		await client.uploadAsset(screenshot.data, buffer);
+			// 2. Upload binary data
+			await client.uploadAsset(screenshot.data, buffer);
 
-		// 3. Poll until processed
-		await client.pollForUploadSuccess(
-			`appScreenshots/${screenshot.data.id}`,
-			"screenshot",
-		);
+			// 3. Poll until processed
+			await client.pollForUploadSuccess(
+				`appScreenshots/${screenshot.data.id}`,
+				"screenshot",
+			);
 
-		log.info(
-			{ appId, fileName: file.name, screenshotId: screenshot.data.id },
-			"Uploaded screenshot to App Store Connect",
-		);
+			log.info(
+				{ appId, fileName: file.name, screenshotId: screenshot.data.id },
+				"Uploaded screenshot to App Store Connect",
+			);
 
-		return { screenshotId: screenshot.data.id, uploaded: true };
+			return { screenshotId: screenshot.data.id, uploaded: true };
+		} catch (err) {
+			log.error(
+				{ appId, displayType, err, fileName: file.name, language },
+				"Failed to upload screenshot to App Store Connect",
+			);
+			buildError("storeApiError", {
+				info: `Screenshot upload failed: ${err instanceof Error ? err.message : String(err)}`,
+			});
+		}
 	}
 
 	static async reorderScreenshots(
