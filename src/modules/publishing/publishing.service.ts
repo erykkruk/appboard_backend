@@ -29,23 +29,63 @@ function suggestNextVersion(versionString: string): string {
 }
 
 const REQUIRED_SIZES: Record<string, [number, number][]> = {
-	APP_IPHONE_35: [[640, 1136], [1136, 640], [640, 1096], [1136, 600]],
-	APP_IPHONE_40: [[640, 1136], [1136, 640]],
-	APP_IPHONE_47: [[750, 1334], [1334, 750]],
-	APP_IPHONE_55: [[1242, 2208], [2208, 1242]],
-	APP_IPHONE_58: [[1125, 2436], [2436, 1125]],
-	APP_IPHONE_61: [[828, 1792], [1792, 828], [1284, 2778], [2778, 1284]],
-	APP_IPHONE_65: [[1242, 2688], [2688, 1242], [1284, 2778], [2778, 1284]],
-	APP_IPHONE_67: [[1290, 2796], [2796, 1290]],
 	APP_IPAD_PRO_129: [
-		[2064, 2752], [2752, 2064],
-		[2048, 2732], [2732, 2048],
+		[2064, 2752],
+		[2752, 2064],
+		[2048, 2732],
+		[2732, 2048],
+	],
+	APP_IPHONE_35: [
+		[640, 1136],
+		[1136, 640],
+		[640, 1096],
+		[1136, 600],
+	],
+	APP_IPHONE_40: [
+		[640, 1136],
+		[1136, 640],
+	],
+	APP_IPHONE_47: [
+		[750, 1334],
+		[1334, 750],
+	],
+	APP_IPHONE_55: [
+		[1242, 2208],
+		[2208, 1242],
+	],
+	APP_IPHONE_58: [
+		[1125, 2436],
+		[2436, 1125],
+	],
+	APP_IPHONE_61: [
+		[828, 1792],
+		[1792, 828],
+		[1284, 2778],
+		[2778, 1284],
+	],
+	APP_IPHONE_65: [
+		[1242, 2688],
+		[2688, 1242],
+		[1284, 2778],
+		[2778, 1284],
+	],
+	APP_IPHONE_67: [
+		[1290, 2796],
+		[2796, 1290],
 	],
 };
+
+interface CropParams {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
 
 async function processScreenshot(
 	inputBuffer: Buffer,
 	displayType: string,
+	cropParams?: CropParams,
 ): Promise<{ buffer: Buffer; height: number; width: number }> {
 	const image = sharp(inputBuffer);
 	const meta = await image.metadata();
@@ -62,17 +102,19 @@ async function processScreenshot(
 		throw new Error(`Unknown display type: ${displayType}`);
 	}
 
-	const isPortrait = imgH >= imgW;
-	const candidates = sizes.filter(([w, h]) =>
-		isPortrait ? h >= w : w >= h,
-	);
+	// Use crop area dimensions for orientation/aspect when user provided crop
+	const refW = cropParams ? cropParams.width : imgW;
+	const refH = cropParams ? cropParams.height : imgH;
+
+	const isPortrait = refH >= refW;
+	const candidates = sizes.filter(([w, h]) => (isPortrait ? h >= w : w >= h));
 	const pool = candidates.length > 0 ? candidates : sizes;
 
-	const imgAspect = imgW / imgH;
+	const refAspect = refW / refH;
 	let best = pool[0];
-	let bestDiff = Math.abs(best[0] / best[1] - imgAspect);
+	let bestDiff = Math.abs(best[0] / best[1] - refAspect);
 	for (const size of pool) {
-		const diff = Math.abs(size[0] / size[1] - imgAspect);
+		const diff = Math.abs(size[0] / size[1] - refAspect);
 		if (diff < bestDiff) {
 			best = size;
 			bestDiff = diff;
@@ -81,29 +123,42 @@ async function processScreenshot(
 
 	const [targetW, targetH] = best;
 
-	// Crop to target aspect ratio (center crop), then resize
-	const targetAspect = targetW / targetH;
-	const srcAspect = imgW / imgH;
+	let pipeline: sharp.Sharp;
 
-	let cropW: number;
-	let cropH: number;
-	if (srcAspect > targetAspect) {
-		cropH = imgH;
-		cropW = Math.round(imgH * targetAspect);
+	if (cropParams) {
+		// User-defined crop region
+		pipeline = sharp(inputBuffer).extract({
+			height: Math.round(cropParams.height),
+			left: Math.round(cropParams.x),
+			top: Math.round(cropParams.y),
+			width: Math.round(cropParams.width),
+		});
 	} else {
-		cropW = imgW;
-		cropH = Math.round(imgW / targetAspect);
-	}
+		// Auto center-crop to target aspect ratio
+		const targetAspect = targetW / targetH;
+		const srcAspect = imgW / imgH;
 
-	const processed = await sharp(inputBuffer)
-		.extract({
+		let cropW: number;
+		let cropH: number;
+		if (srcAspect > targetAspect) {
+			cropH = imgH;
+			cropW = Math.round(imgH * targetAspect);
+		} else {
+			cropW = imgW;
+			cropH = Math.round(imgW / targetAspect);
+		}
+
+		pipeline = sharp(inputBuffer).extract({
+			height: cropH,
 			left: Math.round((imgW - cropW) / 2),
 			top: Math.round((imgH - cropH) / 2),
 			width: cropW,
-			height: cropH,
-		})
+		});
+	}
+
+	const processed = await pipeline
 		.resize(targetW, targetH)
-		.flatten({ background: { r: 255, g: 255, b: 255 } })
+		.flatten({ background: { b: 255, g: 255, r: 255 } })
 		.png({ compressionLevel: 6 })
 		.toBuffer();
 
@@ -126,7 +181,9 @@ function extractAscError(err: unknown): string {
 				const parsed = JSON.parse(jsonMatch[0]);
 				if (parsed.errors?.length) {
 					return parsed.errors
-						.map((e: { detail?: string; title?: string }) => e.detail || e.title)
+						.map(
+							(e: { detail?: string; title?: string }) => e.detail || e.title,
+						)
 						.join("; ");
 				}
 			}
@@ -499,6 +556,7 @@ export class PublishingService {
 		language: string,
 		displayType: string,
 		file: File,
+		cropParams?: CropParams,
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
@@ -536,14 +594,14 @@ export class PublishingService {
 
 		if (!screenshotSet) {
 			try {
-				const created = await client.create({
+				// node-app-store-connect-api create() returns ApiResource directly
+				screenshotSet = (await client.create({
 					attributes: { screenshotDisplayType: displayType },
 					relationships: {
 						appStoreVersionLocalization: loc,
 					},
 					type: "appScreenshotSets",
-				});
-				screenshotSet = created.data;
+				})) as unknown as ApiResource;
 			} catch (err) {
 				const detail = extractAscError(err);
 				log.error(
@@ -561,7 +619,7 @@ export class PublishingService {
 		// Process image: crop to correct aspect ratio, resize, flatten alpha
 		let processed: { buffer: Buffer; height: number; width: number };
 		try {
-			processed = await processScreenshot(rawBuffer, displayType);
+			processed = await processScreenshot(rawBuffer, displayType, cropParams);
 		} catch (err) {
 			log.error(
 				{ appId, displayType, err, fileName: file.name },
@@ -577,7 +635,8 @@ export class PublishingService {
 
 		try {
 			// Create screenshot resource
-			const screenshot = await client.create({
+			// node-app-store-connect-api create() returns ApiResource directly (not wrapped in { data })
+			const screenshot = (await client.create({
 				attributes: {
 					fileName: pngName,
 					fileSize: processed.buffer.length,
@@ -586,14 +645,14 @@ export class PublishingService {
 					appScreenshotSet: screenshotSet,
 				},
 				type: "appScreenshots",
-			});
+			})) as unknown as ApiResource;
 
 			// 2. Upload binary data
-			await client.uploadAsset(screenshot.data, processed.buffer);
+			await client.uploadAsset(screenshot, processed.buffer);
 
 			// 3. Poll until processed
 			await client.pollForUploadSuccess(
-				`appScreenshots/${screenshot.data.id}`,
+				`appScreenshots/${screenshot.id}`,
 				"screenshot",
 			);
 
@@ -601,13 +660,13 @@ export class PublishingService {
 				{
 					appId,
 					fileName: pngName,
-					screenshotId: screenshot.data.id,
+					screenshotId: screenshot.id,
 					size: `${processed.width}x${processed.height}`,
 				},
 				"Uploaded screenshot to App Store Connect",
 			);
 
-			return { screenshotId: screenshot.data.id, uploaded: true };
+			return { screenshotId: screenshot.id, uploaded: true };
 		} catch (err) {
 			const detail = extractAscError(err);
 			log.error(
@@ -620,13 +679,18 @@ export class PublishingService {
 		}
 	}
 
-	static async previewScreenshot(displayType: string, file: File) {
+	static async previewScreenshot(
+		displayType: string,
+		file: File,
+		cropParams?: CropParams,
+	) {
 		const rawBuffer = Buffer.from(await file.arrayBuffer());
 
 		try {
 			const { buffer, height, width } = await processScreenshot(
 				rawBuffer,
 				displayType,
+				cropParams,
 			);
 			const base64 = buffer.toString("base64");
 

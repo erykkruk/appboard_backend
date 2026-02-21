@@ -93,18 +93,36 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	.post(
 		"/:appId/publishing/screenshots/preview",
 		async ({ body }) => {
+			const cropParams =
+				body.cropX !== undefined &&
+				body.cropY !== undefined &&
+				body.cropWidth !== undefined &&
+				body.cropHeight !== undefined
+					? {
+							height: body.cropHeight,
+							width: body.cropWidth,
+							x: body.cropX,
+							y: body.cropY,
+						}
+					: undefined;
 			return PublishingService.previewScreenshot(
 				body.displayType,
 				body.file,
+				cropParams,
 			);
 		},
 		{
 			body: t.Object({
+				cropHeight: t.Optional(t.Numeric()),
+				cropWidth: t.Optional(t.Numeric()),
+				cropX: t.Optional(t.Numeric()),
+				cropY: t.Optional(t.Numeric()),
 				displayType: t.String({ minLength: 1 }),
 				file: t.File(),
 			}),
 			detail: {
-				description: "Preview a processed screenshot (crop, resize, flatten alpha)",
+				description:
+					"Preview a processed screenshot (crop, resize, flatten alpha)",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,
@@ -113,16 +131,33 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	.post(
 		"/:appId/publishing/screenshots/upload",
 		async ({ body, params }) => {
+			const cropParams =
+				body.cropX !== undefined &&
+				body.cropY !== undefined &&
+				body.cropWidth !== undefined &&
+				body.cropHeight !== undefined
+					? {
+							height: body.cropHeight,
+							width: body.cropWidth,
+							x: body.cropX,
+							y: body.cropY,
+						}
+					: undefined;
 			return PublishingService.uploadScreenshot(
 				params.appId,
 				body.versionId,
 				body.language,
 				body.displayType,
 				body.file,
+				cropParams,
 			);
 		},
 		{
 			body: t.Object({
+				cropHeight: t.Optional(t.Numeric()),
+				cropWidth: t.Optional(t.Numeric()),
+				cropX: t.Optional(t.Numeric()),
+				cropY: t.Optional(t.Numeric()),
 				displayType: t.String({ minLength: 1 }),
 				file: t.File(),
 				language: t.String({ minLength: 1 }),
