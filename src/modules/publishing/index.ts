@@ -62,8 +62,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			detail: {
-				description:
-					"Get localizations for a specific App Store version",
+				description: "Get localizations for a specific App Store version",
 				tags: ["Publishing"],
 			},
 			params: t.Object({
@@ -82,13 +81,96 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			detail: {
-				description:
-					"Get iPhone screenshots for a specific App Store version",
+				description: "Get iPhone screenshots for a specific App Store version",
 				tags: ["Publishing"],
 			},
 			params: t.Object({
 				appId: t.String({ format: "uuid" }),
 				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.post(
+		"/:appId/publishing/screenshots/upload",
+		async ({ body, params }) => {
+			return PublishingService.uploadScreenshot(
+				params.appId,
+				body.versionId,
+				body.language,
+				body.displayType,
+				body.file,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.String({ minLength: 1 }),
+				file: t.File({ type: ["image/png", "image/jpeg"] }),
+				language: t.String({ minLength: 1 }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+			detail: {
+				description: "Upload a screenshot to App Store Connect",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.delete(
+		"/:appId/publishing/screenshots/:screenshotId",
+		async ({ params }) => {
+			return PublishingService.deleteScreenshot(
+				params.appId,
+				params.screenshotId,
+			);
+		},
+		{
+			detail: {
+				description: "Delete a screenshot from App Store Connect",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				screenshotId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.patch(
+		"/:appId/publishing/screenshots/reorder",
+		async ({ body, params }) => {
+			return PublishingService.reorderScreenshots(
+				params.appId,
+				body.screenshotSetId,
+				body.screenshotIds,
+			);
+		},
+		{
+			body: t.Object({
+				screenshotIds: t.Array(t.String({ minLength: 1 })),
+				screenshotSetId: t.String({ minLength: 1 }),
+			}),
+			detail: {
+				description: "Reorder screenshots in a screenshot set",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.delete(
+		"/:appId/publishing/screenshot-sets/:screenshotSetId",
+		async ({ params }) => {
+			return PublishingService.deleteAllScreenshots(
+				params.appId,
+				params.screenshotSetId,
+			);
+		},
+		{
+			detail: {
+				description: "Delete all screenshots from a screenshot set",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				screenshotSetId: t.String({ minLength: 1 }),
 			}),
 		},
 	)

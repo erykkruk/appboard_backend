@@ -70,6 +70,11 @@ declare module "node-app-store-connect-api" {
 			data: { id: string; type: string },
 			options: UpdateOptions,
 		): Promise<ApiResource>;
+		postJson(
+			url: string,
+			data: unknown,
+			options?: Record<string, unknown>,
+		): Promise<unknown>;
 		uploadAsset(
 			assetData: CreateResponse,
 			buffer: Buffer,

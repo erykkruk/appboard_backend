@@ -147,10 +147,8 @@ export class PublishingService {
 
 			return {
 				versions: (versions as ApiResource[]).map((v) => {
-					const state =
-						(v.attributes.appStoreState as string) ?? "";
-					const versionString =
-						(v.attributes.versionString as string) ?? "";
+					const state = (v.attributes.appStoreState as string) ?? "";
+					const versionString = (v.attributes.versionString as string) ?? "";
 					return {
 						id: v.id,
 						isEditable: EDITABLE_STATES.includes(state),
@@ -196,8 +194,7 @@ export class PublishingService {
 		}
 
 		const state = (version.attributes.appStoreState as string) ?? "";
-		const versionString =
-			(version.attributes.versionString as string) ?? "";
+		const versionString = (version.attributes.versionString as string) ?? "";
 
 		// Fetch version localizations (description, keywords, whatsNew, promoText, etc.)
 		const { data: versionLocs } = await readAll(
@@ -205,9 +202,7 @@ export class PublishingService {
 		);
 
 		// Also fetch appInfo localizations for title/subtitle
-		const { data: appInfos } = await readAll(
-			`apps/${app.externalId}/appInfos`,
-		);
+		const { data: appInfos } = await readAll(`apps/${app.externalId}/appInfos`);
 		let infoLocByLang = new Map<string, ApiResource>();
 		if (appInfos?.length) {
 			const latestInfo = appInfos[0] as ApiResource;
@@ -222,26 +217,23 @@ export class PublishingService {
 			);
 		}
 
-		const localizations = ((versionLocs ?? []) as ApiResource[]).map(
-			(loc) => {
-				const attrs = loc.attributes;
-				const locale = attrs.locale as string;
-				const infoLoc = infoLocByLang.get(locale);
+		const localizations = ((versionLocs ?? []) as ApiResource[]).map((loc) => {
+			const attrs = loc.attributes;
+			const locale = attrs.locale as string;
+			const infoLoc = infoLocByLang.get(locale);
 
-				return {
-					description: (attrs.description as string) ?? "",
-					keywords: (attrs.keywords as string) ?? "",
-					language: locale,
-					marketingUrl: (attrs.marketingUrl as string) ?? undefined,
-					promotionalText:
-						(attrs.promotionalText as string) ?? undefined,
-					subtitle: (infoLoc?.attributes?.subtitle as string) ?? "",
-					supportUrl: (attrs.supportUrl as string) ?? undefined,
-					title: (infoLoc?.attributes?.name as string) ?? "",
-					whatsNew: (attrs.whatsNew as string) ?? undefined,
-				};
-			},
-		);
+			return {
+				description: (attrs.description as string) ?? "",
+				keywords: (attrs.keywords as string) ?? "",
+				language: locale,
+				marketingUrl: (attrs.marketingUrl as string) ?? undefined,
+				promotionalText: (attrs.promotionalText as string) ?? undefined,
+				subtitle: (infoLoc?.attributes?.subtitle as string) ?? "",
+				supportUrl: (attrs.supportUrl as string) ?? undefined,
+				title: (infoLoc?.attributes?.name as string) ?? "",
+				whatsNew: (attrs.whatsNew as string) ?? undefined,
+			};
+		});
 
 		return {
 			localizations,
@@ -289,26 +281,28 @@ export class PublishingService {
 		]);
 
 		const DISPLAY_TYPE_LABELS: Record<string, string> = {
-			APP_IPHONE_35: "iPhone 3.5\"",
-			APP_IPHONE_40: "iPhone 4.0\"",
-			APP_IPHONE_47: "iPhone 4.7\"",
-			APP_IPHONE_55: "iPhone 5.5\"",
-			APP_IPHONE_58: "iPhone 5.8\"",
-			APP_IPHONE_61: "iPhone 6.1\"",
-			APP_IPHONE_65: "iPhone 6.5\"",
-			APP_IPHONE_67: "iPhone 6.7\"",
+			APP_IPHONE_35: 'iPhone 3.5"',
+			APP_IPHONE_40: 'iPhone 4.0"',
+			APP_IPHONE_47: 'iPhone 4.7"',
+			APP_IPHONE_55: 'iPhone 5.5"',
+			APP_IPHONE_58: 'iPhone 5.8"',
+			APP_IPHONE_61: 'iPhone 6.1"',
+			APP_IPHONE_65: 'iPhone 6.5"',
+			APP_IPHONE_67: 'iPhone 6.7"',
 		};
 
 		const screenshots: {
 			deviceType: string;
 			displayType: string;
+			externalId: string;
 			height: number | null;
 			language: string;
+			screenshotSetId: string;
 			url: string;
 			width: number | null;
 		}[] = [];
 
-		for (const loc of (versionLocs as ApiResource[])) {
+		for (const loc of versionLocs as ApiResource[]) {
 			const locale = loc.attributes.locale as string;
 
 			const { data: screenshotSets } = await readAll(
@@ -344,11 +338,12 @@ export class PublishingService {
 					}
 
 					screenshots.push({
-						deviceType:
-							DISPLAY_TYPE_LABELS[displayType] ?? displayType,
+						deviceType: DISPLAY_TYPE_LABELS[displayType] ?? displayType,
 						displayType,
+						externalId: item.id,
 						height,
 						language: locale,
+						screenshotSetId: set.id,
 						url,
 						width,
 					});
@@ -362,6 +357,179 @@ export class PublishingService {
 		);
 
 		return { screenshots };
+	}
+
+	static async deleteScreenshot(appId: string, screenshotId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Screenshots are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const { remove } = await createAppStoreClient(credentials);
+
+		await remove({ id: screenshotId, type: "appScreenshots" });
+
+		log.info(
+			{ appId, screenshotId },
+			"Deleted screenshot from App Store Connect",
+		);
+
+		return { deleted: true };
+	}
+
+	static async uploadScreenshot(
+		appId: string,
+		versionId: string,
+		language: string,
+		displayType: string,
+		file: File,
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Screenshots are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const client = await createAppStoreClient(credentials);
+
+		// Find the localization for this language
+		const { data: versionLocs } = await client.readAll(
+			`appStoreVersions/${versionId}/appStoreVersionLocalizations`,
+		);
+		const loc = ((versionLocs ?? []) as ApiResource[]).find(
+			(l) => l.attributes.locale === language,
+		);
+		if (!loc) {
+			buildError("notFound", {
+				info: `No localization found for language "${language}"`,
+			});
+			throw new Error("unreachable");
+		}
+
+		// Find or create screenshot set for this display type
+		const { data: sets } = await client.readAll(
+			`appStoreVersionLocalizations/${loc.id}/appScreenshotSets`,
+		);
+		let screenshotSet = ((sets ?? []) as ApiResource[]).find(
+			(s) => s.attributes.screenshotDisplayType === displayType,
+		);
+
+		if (!screenshotSet) {
+			const created = await client.create({
+				attributes: { screenshotDisplayType: displayType },
+				relationships: {
+					appStoreVersionLocalization: loc,
+				},
+				type: "appScreenshotSets",
+			});
+			screenshotSet = created.data;
+		}
+
+		const buffer = Buffer.from(await file.arrayBuffer());
+
+		// Create screenshot resource
+		const screenshot = await client.create({
+			attributes: {
+				fileName: file.name,
+				fileSize: buffer.length,
+			},
+			relationships: {
+				appScreenshotSet: screenshotSet,
+			},
+			type: "appScreenshots",
+		});
+
+		// 2. Upload binary data
+		await client.uploadAsset(screenshot.data, buffer);
+
+		// 3. Poll until processed
+		await client.pollForUploadSuccess(
+			`appScreenshots/${screenshot.data.id}`,
+			"screenshot",
+		);
+
+		log.info(
+			{ appId, fileName: file.name, screenshotId: screenshot.data.id },
+			"Uploaded screenshot to App Store Connect",
+		);
+
+		return { screenshotId: screenshot.data.id, uploaded: true };
+	}
+
+	static async reorderScreenshots(
+		appId: string,
+		screenshotSetId: string,
+		screenshotIds: string[],
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Screenshots are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const client = await createAppStoreClient(credentials);
+
+		// PATCH relationships endpoint to reorder
+		const url = `appScreenshotSets/${screenshotSetId}/relationships/appScreenshots`;
+		const body = {
+			data: screenshotIds.map((id) => ({
+				id,
+				type: "appScreenshots",
+			})),
+		};
+
+		await client.postJson(url, body, { method: "PATCH" });
+
+		log.info(
+			{ appId, count: screenshotIds.length, screenshotSetId },
+			"Reordered screenshots on App Store Connect",
+		);
+
+		return { reordered: true };
+	}
+
+	static async deleteAllScreenshots(appId: string, screenshotSetId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Screenshots are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const { readAll, remove } = await createAppStoreClient(credentials);
+
+		const { data: items } = await readAll(
+			`appScreenshotSets/${screenshotSetId}/appScreenshots`,
+		);
+
+		let deleted = 0;
+		for (const item of (items ?? []) as ApiResource[]) {
+			await remove({ id: item.id, type: "appScreenshots" });
+			deleted++;
+		}
+
+		log.info(
+			{ appId, deleted, screenshotSetId },
+			"Deleted all screenshots from set",
+		);
+
+		return { deleted };
 	}
 
 	static async publishAll(
