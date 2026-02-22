@@ -4,46 +4,50 @@ export const asoProfileParams = t.Object({
 	appId: t.String({ format: "uuid" }),
 });
 
-const stringArray = t.Optional(t.Array(t.String()));
+const nullableString = t.Optional(t.Union([t.String(), t.Null()]));
+const nullableStringArray = t.Optional(
+	t.Union([t.Array(t.String()), t.Null()]),
+);
 
 export const upsertAsoProfileBody = t.Object({
-	// Optional D: Social Proof
-	awards: stringArray,
+	// Social Proof
+	awards: nullableStringArray,
+	downloadCount: nullableString,
+	pressQuotes: nullableStringArray,
+	testimonials: nullableStringArray,
 
-	// Optional C: Tone & Branding
-	brandVoiceExample: t.Optional(t.String()),
-	// Required: Core Information
-	category: t.Optional(t.String({ maxLength: 100 })),
+	// Tone & Branding
+	brandVoiceExample: nullableString,
+	tone: nullableString,
+	wordsToAvoid: nullableStringArray,
+	wordsToInclude: nullableStringArray,
 
-	// Optional B: Competitors
-	competitiveAdvantage: t.Optional(t.String()),
-	competitors: stringArray,
-	differentiator: t.Optional(t.String()),
-	downloadCount: t.Optional(t.String({ maxLength: 50 })),
+	// Core Information
+	category: nullableString,
+	differentiator: nullableString,
+	keyFeatures: nullableStringArray,
+	mainBenefit: nullableString,
+	oneLiner: nullableString,
+	problem: nullableString,
 
-	// Optional F: Keywords
-	excludeKeywords: stringArray,
+	// Competitors
+	competitiveAdvantage: nullableString,
+	competitors: nullableStringArray,
+	positioning: nullableString,
 
-	// Optional E: Product Details
-	freeFeatures: stringArray,
-	keyFeatures: stringArray,
-	longTailKeywords: stringArray,
-	mainBenefit: t.Optional(t.String()),
-	mustIncludeKeywords: stringArray,
-	oneLiner: t.Optional(t.String({ maxLength: 300 })),
+	// Keywords
+	excludeKeywords: nullableStringArray,
+	longTailKeywords: nullableStringArray,
+	mustIncludeKeywords: nullableStringArray,
 
-	// Optional A: Audience
-	painPoints: stringArray,
-	positioning: t.Optional(t.String({ maxLength: 50 })),
-	premiumFeatures: stringArray,
-	pressQuotes: stringArray,
-	price: t.Optional(t.String({ maxLength: 100 })),
-	pricingModel: t.Optional(t.String({ maxLength: 50 })),
-	problem: t.Optional(t.String()),
-	targetAudience: t.Optional(t.String()),
-	testimonials: stringArray,
-	tone: t.Optional(t.String({ maxLength: 50 })),
-	userLanguage: t.Optional(t.String()),
-	wordsToAvoid: stringArray,
-	wordsToInclude: stringArray,
+	// Product Details
+	freeFeatures: nullableStringArray,
+	premiumFeatures: nullableStringArray,
+	price: nullableString,
+	pricingModel: nullableString,
+
+	// Audience
+	painPoints: nullableStringArray,
+	targetAudience: nullableString,
+	userLanguage: nullableString,
 });

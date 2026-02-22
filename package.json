@@ -1,6 +1,6 @@
 {
 	"name": "appboard-be",
-	"version": "0.5.4",
+	"version": "0.5.5",
 	"scripts": {
 		"start": "bun run src/index.ts",
 		"dev": "bun run --watch src/index.ts",

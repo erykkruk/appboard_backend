@@ -28,6 +28,13 @@
       "when": 1771673145870,
       "tag": "0003_dazzling_lenny_balinger",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1771721896883,
+      "tag": "0004_early_klaw",
+      "breakpoints": true
     }
   ],
   "version": "7"

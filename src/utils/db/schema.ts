@@ -143,46 +143,46 @@ export const appAsoProfiles = pgTable("app_aso_profiles", {
 		.references(() => apps.id, { onDelete: "cascade" })
 		.unique(),
 
-	// Optional D: Social Proof
-	awards: jsonb().$type<string[]>(),
-
-	// Optional C: Tone & Branding
-	brandVoiceExample: text(),
-
-	// Required: Core Information
-	category: varchar({ length: 100 }),
-
-	// Optional B: Competitors
-	competitiveAdvantage: text(),
-	competitors: jsonb().$type<string[]>(),
+	// Core Information
+	category: text(),
 	differentiator: text(),
-	downloadCount: varchar({ length: 50 }),
-
-	// Optional F: Keywords
-	excludeKeywords: jsonb().$type<string[]>(),
-
-	// Optional E: Product Details
-	freeFeatures: jsonb().$type<string[]>(),
 	keyFeatures: jsonb().$type<string[]>(),
-	longTailKeywords: jsonb().$type<string[]>(),
 	mainBenefit: text(),
-	mustIncludeKeywords: jsonb().$type<string[]>(),
-	oneLiner: varchar({ length: 300 }),
-
-	// Optional A: Audience
-	painPoints: jsonb().$type<string[]>(),
-	positioning: varchar({ length: 50 }),
-	premiumFeatures: jsonb().$type<string[]>(),
-	pressQuotes: jsonb().$type<string[]>(),
-	price: varchar({ length: 100 }),
-	pricingModel: varchar({ length: 50 }),
+	oneLiner: text(),
 	problem: text(),
-	targetAudience: text(),
-	testimonials: jsonb().$type<string[]>(),
-	tone: varchar({ length: 50 }),
-	userLanguage: text(),
+
+	// Tone & Branding
+	brandVoiceExample: text(),
+	tone: text(),
 	wordsToAvoid: jsonb().$type<string[]>(),
 	wordsToInclude: jsonb().$type<string[]>(),
+
+	// Competitors
+	competitiveAdvantage: text(),
+	competitors: jsonb().$type<string[]>(),
+	positioning: text(),
+
+	// Social Proof
+	awards: jsonb().$type<string[]>(),
+	downloadCount: text(),
+	pressQuotes: jsonb().$type<string[]>(),
+	testimonials: jsonb().$type<string[]>(),
+
+	// Product Details
+	freeFeatures: jsonb().$type<string[]>(),
+	premiumFeatures: jsonb().$type<string[]>(),
+	price: text(),
+	pricingModel: text(),
+
+	// Audience
+	painPoints: jsonb().$type<string[]>(),
+	targetAudience: text(),
+	userLanguage: text(),
+
+	// Keywords
+	excludeKeywords: jsonb().$type<string[]>(),
+	longTailKeywords: jsonb().$type<string[]>(),
+	mustIncludeKeywords: jsonb().$type<string[]>(),
 });
 
 export const appVersions = pgTable(
