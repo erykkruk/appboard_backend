@@ -113,19 +113,24 @@ cleanup() {
     exit 0
 }
 
-check_port() {
+free_port() {
     local port=$1
     local name=$2
     if lsof -i :"$port" -sTCP:LISTEN &>/dev/null; then
-        echo -e "${RED}Port $port is already in use ($name).${NC}"
-        echo -e "${YELLOW}Something else is running on that port. Stop it first or choose a different option.${NC}"
-        return 1
+        echo -e "${YELLOW}Port $port in use ($name) — stopping existing process...${NC}"
+        lsof -ti :"$port" -sTCP:LISTEN | xargs kill -9 2>/dev/null || true
+        sleep 0.5
+        if lsof -i :"$port" -sTCP:LISTEN &>/dev/null; then
+            echo -e "${RED}Could not free port $port. Stop the process manually.${NC}"
+            return 1
+        fi
+        echo -e "${GREEN}Port $port freed.${NC}"
     fi
     return 0
 }
 
 start_backend_only() {
-    if ! check_port "$BACKEND_PORT" "backend"; then
+    if ! free_port "$BACKEND_PORT" "backend"; then
         echo "Press Enter to continue..."
         read -r
         return
@@ -143,7 +148,7 @@ start_panel_only() {
         web_path=$(get_web_path) || return
     fi
 
-    if ! check_port "$PANEL_PORT" "panel"; then
+    if ! free_port "$PANEL_PORT" "panel"; then
         echo "Press Enter to continue..."
         read -r
         return
@@ -164,8 +169,8 @@ start_all() {
 
     # Check ports before starting
     local port_ok=true
-    if ! check_port "$BACKEND_PORT" "backend"; then port_ok=false; fi
-    if ! check_port "$PANEL_PORT" "panel"; then port_ok=false; fi
+    if ! free_port "$BACKEND_PORT" "backend"; then port_ok=false; fi
+    if ! free_port "$PANEL_PORT" "panel"; then port_ok=false; fi
 
     if [[ "$port_ok" == "false" ]]; then
         echo ""

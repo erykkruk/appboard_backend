@@ -145,6 +145,50 @@ Found a bug? Contact us at support@appboard.com
 
 ---
 
+## Template 7: Feature Graphic (Google Play — 1024×500 px)
+
+### Opis:
+Feature graphic to kluczowy asset na Google Play — wyświetlany prominentnie nad screenshotami. Często niedoceniany przez marketerów, ale może znacząco wpływać na konwersję.
+
+### Formuła:
+```
+[Brand visual] + [Primary value proposition] + [CTA lub social proof]
+```
+
+### Wskazówki:
+- Traktuj jak banner reklamowy — jedno jasne przesłanie
+- Tekst czytelny na małych ekranach (duża czcionka)
+- Kolory spójne z ikoną i screenshotami
+- Sezonowe warianty (święta, Black Friday, etc.)
+- **A/B testuj** — to jeden z elementów testowanych w Google Play Experiments
+
+### Przykłady:
+```
+"Save Money Effortlessly — Join 1M+ Users" [z gradientowym tłem i ikoną app]
+"Your All-in-One ASO Tool — Start Free" [z UI preview i brand colors]
+```
+
+---
+
+## Template 8: Metadata Update Cadencja
+
+### Rekomendowany cykl aktualizacji:
+
+| Platforma | Kadencja | Co aktualizować |
+|-----------|----------|----------------|
+| **iOS** | Co **4 tygodnie** | Keywords, subtitle, promotional text |
+| **Google Play** | Co **4-6 tygodni** | Title, short desc, long desc |
+| **Screenshoty** | Co **2-3 miesiące** lub przy UI changes | Captions, visual style, order |
+| **Sezonowe** | Wg kalendarza (T-2 tygodnie) | Seasonal keywords, creatives, promo text |
+
+### Zasady:
+- **Sequential**: keyword changes FIRST, creative changes SECOND
+- **3-4 tygodnie** między znaczącymi zmianami — pozwól algorytmowi ustabilizować ranking
+- Nie usuwaj high-performing keywords przy update
+- Iteracyjne updates > sporadyczne duże zmiany
+
+---
+
 ## Checklist opisu — przed publikacją
 
 - [ ] Hook w pierwszych 3 liniach (widoczne bez rozwijania)

@@ -31,3 +31,20 @@ export const generateReleaseNotesBody = t.Object({
 	changes: t.Array(t.String({ minLength: 1 })),
 	version: t.String({ minLength: 1 }),
 });
+
+export const generateListingFieldBody = t.Object({
+	appId: t.String({ minLength: 1 }),
+	appName: t.String({ minLength: 1 }),
+	currentValue: t.Optional(t.String()),
+	field: t.Union([
+		t.Literal("title"),
+		t.Literal("subtitle"),
+		t.Literal("shortDescription"),
+		t.Literal("description"),
+		t.Literal("keywords"),
+		t.Literal("promotionalText"),
+		t.Literal("whatsNew"),
+	]),
+	language: t.String({ minLength: 1 }),
+	platform: t.String({ minLength: 1 }),
+});

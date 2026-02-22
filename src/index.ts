@@ -2,6 +2,8 @@ import cors from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 import config from "@/config";
+import { aiController } from "@/modules/ai";
+import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { publishingController } from "@/modules/publishing";
@@ -32,7 +34,9 @@ const app = new Elysia()
 			.use(publishingController)
 			.use(appsController)
 			.use(asoProfileController)
-			.use(settingsController),
+			.use(settingsController)
+			.use(aiController)
+			.use(appAiPromptsController),
 	)
 	.listen(port);
 

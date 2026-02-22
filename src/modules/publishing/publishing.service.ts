@@ -1065,14 +1065,16 @@ export class PublishingService {
 			try {
 				// Push version localization fields
 				const versionLocAttrs: Record<string, string> = {};
-				if (draft.description) versionLocAttrs.description = draft.description;
-				if (draft.keywords) versionLocAttrs.keywords = draft.keywords;
-				if (draft.whatsNew) versionLocAttrs.whatsNew = draft.whatsNew;
-				if (draft.promotionalText)
+				if (draft.description != null)
+					versionLocAttrs.description = draft.description;
+				if (draft.keywords != null) versionLocAttrs.keywords = draft.keywords;
+				if (draft.whatsNew != null) versionLocAttrs.whatsNew = draft.whatsNew;
+				if (draft.promotionalText != null)
 					versionLocAttrs.promotionalText = draft.promotionalText;
-				if (draft.marketingUrl)
+				if (draft.marketingUrl != null)
 					versionLocAttrs.marketingUrl = draft.marketingUrl;
-				if (draft.supportUrl) versionLocAttrs.supportUrl = draft.supportUrl;
+				if (draft.supportUrl != null)
+					versionLocAttrs.supportUrl = draft.supportUrl;
 
 				if (Object.keys(versionLocAttrs).length > 0) {
 					await client.update(
@@ -1085,7 +1087,7 @@ export class PublishingService {
 				}
 
 				// Push title/subtitle via appInfoLocalizations
-				if (draft.title || draft.subtitle) {
+				if (draft.title != null || draft.subtitle != null) {
 					try {
 						const { data: versionLoc } = await client.read(
 							`appStoreVersionLocalizations/${draft.externalId}`,
@@ -1107,8 +1109,9 @@ export class PublishingService {
 								);
 								if (infoLoc) {
 									const infoAttrs: Record<string, string> = {};
-									if (draft.title) infoAttrs.name = draft.title;
-									if (draft.subtitle) infoAttrs.subtitle = draft.subtitle;
+									if (draft.title != null) infoAttrs.name = draft.title;
+									if (draft.subtitle != null)
+										infoAttrs.subtitle = draft.subtitle;
 									await client.update(
 										{
 											id: infoLoc.id,
@@ -1116,14 +1119,20 @@ export class PublishingService {
 										},
 										{ attributes: infoAttrs },
 									);
+								} else {
+									errors.push(
+										`${draft.language}: Could not find appInfoLocalization for title/subtitle`,
+									);
 								}
 							}
 						}
 					} catch (err) {
+						const detail = extractAscError(err);
 						log.warn(
-							{ appId, err, language: draft.language },
+							{ appId, detail, err, language: draft.language },
 							"Failed to push title/subtitle to ASC",
 						);
+						errors.push(`${draft.language} title/subtitle: ${detail}`);
 					}
 				}
 

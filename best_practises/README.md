@@ -59,16 +59,39 @@ Te pliki służą jako **baza wiedzy** dla AI do generowania:
 9. **Apple Search Ads synergy** — użyj `aso-advanced-strategies.md` sekcja 5
 10. **Analiza konkurencji** — użyj `aso-advanced-strategies.md` sekcja 6
 11. **Sezonowe kampanie** — użyj `aso-advanced-strategies.md` sekcja 7
+12. **Narzędzia ASO i MMP** — użyj `aso-advanced-strategies.md` sekcja 10
+13. **Case studies i benchmarki** — użyj `aso-advanced-strategies.md` sekcja 11
+14. **Feature Graphic (Google Play)** — użyj `aso-description-templates.md` Template 7
+15. **Metadata update cadencja** — użyj `aso-description-templates.md` Template 8
+16. **6-krokowy framework strategii** — użyj `aso-complete-guide.md` sekcja 14
+17. **Persona-driven ASO** — użyj `aso-data-requirements.md` sekcja A (z przykładem "Fitness Fiona")
+18. **Super Geo Localization** — użyj `aso-complete-guide.md` sekcja 3
 
 ---
 
 ## Źródła (luty 2026)
 
+### Główne przewodniki ASO:
 - [AppTweak — ASO Best Practices 2026](https://www.apptweak.com/en/aso-blog/app-store-optimization-aso-best-practices)
+- [AppTweak — What is ASO: Guide 2026](https://www.apptweak.com/en/aso-blog/what-is-app-store-optimization-and-why-is-aso-important)
+- [AppTweak — How to Build an Effective ASO Strategy 2026](https://www.apptweak.com/en/aso-blog/how-to-build-an-effective-aso-strategy)
+- [AppTweak — Best ASO Tools of 2026](https://www.apptweak.com/en/aso-blog/best-aso-tools)
+- [Moburst — ASO Guide & Checklist 2026](https://www.moburst.com/blog/app-store-optimization-guide/)
 - [Udonis — Complete ASO Guide 2026](https://www.blog.udonis.co/mobile-marketing/mobile-apps/complete-guide-to-app-store-optimization)
-- [Moburst — ASO Guide & Checklist](https://www.moburst.com/blog/app-store-optimization-guide/)
 - [TechMagnate — ASO Guide 2026](https://www.techmagnate.com/blog/what-is-app-store-optimization/)
+- [MobileAction — ASO Tips and Tricks](https://www.mobileaction.co/blog/aso-tips-and-tricks/)
+- [ASOWorld — Essential ASO Guide 2026](https://asoworld.com/blog/what-is-app-store-optimization/)
+- [Scalebay — Ultimate ASO Guide 2026](https://scalebay.io/blog/the-ultimate-2025-aso-guide)
+
+### Screenshoty i creative:
 - [AppTweak — Screenshot Optimization](https://www.apptweak.com/en/aso-blog/how-to-optimize-your-app-screenshots)
 - [AppTweak — Keyword Research](https://www.apptweak.com/en/aso-blog/app-store-keyword-research-aso)
 - [AppScreenshotStudio — Screenshot Mistakes 2026](https://appscreenshotstudio.com/blog/5-app-store-screenshot-mistakes-killing-conversions-2026)
+
+### Zaawansowane strategie:
+- [AppFollow — Advanced ASO Strategies Webinar 2026](https://appfollow.io/blog/advanced-aso-strategies-2026)
+- [Yodel Mobile — App Growth Playbook 2026](https://www.businessofapps.com/insights/your-essential-guide-to-aso-success-in-2026-is-here/)
+- [MobiLoud — Practical Guide to ASO](https://www.mobiloud.com/blog/app-store-optimization)
+
+### Skills:
 - [skills.sh — Agent Skills Directory](https://skills.sh/)

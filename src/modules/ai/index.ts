@@ -2,6 +2,7 @@ import Elysia from "elysia";
 import {
 	draftReplyBody,
 	generateDescriptionBody,
+	generateListingFieldBody,
 	generateReleaseNotesBody,
 	suggestKeywordsBody,
 	translateBody,
@@ -9,6 +10,27 @@ import {
 import { AIService } from "./ai.service";
 
 export const aiController = new Elysia({ prefix: "/ai" })
+	.post(
+		"/generate-listing-field",
+		async ({ body }) => {
+			const { model, result } = await AIService.generateListingField(
+				body.field,
+				body.appId,
+				body.appName,
+				body.platform,
+				body.language,
+				body.currentValue,
+			);
+			return { mock: false, model, result };
+		},
+		{
+			body: generateListingFieldBody,
+			detail: {
+				description: "Generate or rephrase a listing field using AI",
+				tags: ["AI"],
+			},
+		},
+	)
 	.post(
 		"/translate",
 		async ({ body }) => {

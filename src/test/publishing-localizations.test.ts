@@ -385,6 +385,181 @@ describe("Publishing localizations endpoints", () => {
 		});
 	});
 
+	// ── PATCH (update localization — empty string fields) ───────────────
+
+	describe("PATCH localizations — empty string field values", () => {
+		it("accepts empty string for description (null-check, not truthy)", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
+					{
+						body: JSON.stringify({ description: "" }),
+						headers: { "Content-Type": "application/json" },
+						method: "PATCH",
+					},
+				),
+			);
+
+			// Empty string is valid — should fail with 404 (app not found), not 422
+			expect(res.status).toBe(404);
+		});
+
+		it("accepts empty string for title and subtitle simultaneously", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
+					{
+						body: JSON.stringify({ subtitle: "", title: "" }),
+						headers: { "Content-Type": "application/json" },
+						method: "PATCH",
+					},
+				),
+			);
+
+			expect(res.status).toBe(404);
+		});
+
+		it("accepts empty string for all optional fields at once", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
+					{
+						body: JSON.stringify({
+							description: "",
+							keywords: "",
+							marketingUrl: "",
+							promotionalText: "",
+							subtitle: "",
+							supportUrl: "",
+							title: "",
+							whatsNew: "",
+						}),
+						headers: { "Content-Type": "application/json" },
+						method: "PATCH",
+					},
+				),
+			);
+
+			expect(res.status).toBe(404);
+		});
+	});
+
+	// ── POST publish-localizations ──────────────────────────────────────
+
+	describe("POST /api/apps/:appId/publishing/versions/:versionId/publish-localizations", () => {
+		it("returns 422 when appId is not a valid UUID", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/publish-localizations`,
+					{ method: "POST" },
+				),
+			);
+
+			expect(res.status).toBe(422);
+		});
+
+		it("returns 404 when app does not exist", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/publish-localizations`,
+					{ method: "POST" },
+				),
+			);
+
+			expect(res.status).toBe(404);
+		});
+	});
+
+	// ── PATCH copyright ─────────────────────────────────────────────────
+
+	describe("PATCH /api/apps/:appId/publishing/versions/:versionId/copyright", () => {
+		it("returns 422 when appId is not a valid UUID", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/copyright`,
+					{
+						body: JSON.stringify({ copyright: "© 2024" }),
+						headers: { "Content-Type": "application/json" },
+						method: "PATCH",
+					},
+				),
+			);
+
+			expect(res.status).toBe(422);
+		});
+
+		it("returns 422 when copyright exceeds 255 characters", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/copyright`,
+					{
+						body: JSON.stringify({ copyright: "x".repeat(256) }),
+						headers: { "Content-Type": "application/json" },
+						method: "PATCH",
+					},
+				),
+			);
+
+			expect(res.status).toBe(422);
+		});
+
+		it("returns 422 when copyright is missing from body", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/copyright`,
+					{
+						body: JSON.stringify({}),
+						headers: { "Content-Type": "application/json" },
+						method: "PATCH",
+					},
+				),
+			);
+
+			expect(res.status).toBe(422);
+		});
+
+		it("returns 404 when app does not exist", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/copyright`,
+					{
+						body: JSON.stringify({ copyright: "© 2024 Test Corp" }),
+						headers: { "Content-Type": "application/json" },
+						method: "PATCH",
+					},
+				),
+			);
+
+			expect(res.status).toBe(404);
+		});
+	});
+
+	// ── POST sync-versions ──────────────────────────────────────────────
+
+	describe("POST /api/apps/:appId/publishing/sync-versions", () => {
+		it("returns 422 when appId is not a valid UUID", async () => {
+			const res = await app.handle(
+				new Request(
+					"http://localhost/api/apps/not-a-uuid/publishing/sync-versions",
+					{ method: "POST" },
+				),
+			);
+
+			expect(res.status).toBe(422);
+		});
+
+		it("returns 404 when app does not exist", async () => {
+			const res = await app.handle(
+				new Request(
+					`http://localhost/api/apps/${FAKE_UUID}/publishing/sync-versions`,
+					{ method: "POST" },
+				),
+			);
+
+			expect(res.status).toBe(404);
+		});
+	});
+
 	// ── POST submit for review ───────────────────────────────────────────
 
 	describe("POST /api/apps/:appId/publishing/submit-review", () => {

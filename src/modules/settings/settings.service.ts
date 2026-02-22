@@ -6,6 +6,10 @@ import { buildError } from "@/utils/errors";
 
 const SENSITIVE_KEYS = ["OPENROUTER_API_KEY"];
 
+function normalizeKey(key: string): string {
+	return key.toUpperCase();
+}
+
 export class SettingsService {
 	static async getAll() {
 		const rows = await db.select().from(settings);
@@ -16,14 +20,15 @@ export class SettingsService {
 	}
 
 	static async get(key: string) {
+		const k = normalizeKey(key);
 		const [row] = await db
 			.select()
 			.from(settings)
-			.where(eq(settings.key, key))
+			.where(eq(settings.key, k))
 			.limit(1);
 
 		if (!row) {
-			buildError("notFound", { info: `Setting '${key}' not found` });
+			buildError("notFound", { info: `Setting '${k}' not found` });
 			throw new Error("unreachable");
 		}
 
@@ -34,10 +39,11 @@ export class SettingsService {
 	}
 
 	static async getRaw(key: string): Promise<string | null> {
+		const k = normalizeKey(key);
 		const [row] = await db
 			.select()
 			.from(settings)
-			.where(eq(settings.key, key))
+			.where(eq(settings.key, k))
 			.limit(1);
 
 		if (!row) return null;
@@ -45,36 +51,43 @@ export class SettingsService {
 	}
 
 	static async set(key: string, value: string) {
-		const isEncrypted = SENSITIVE_KEYS.includes(key);
+		const k = normalizeKey(key);
+		const isEncrypted = SENSITIVE_KEYS.includes(k);
 		const storedValue = isEncrypted ? encrypt(value) : value;
 
 		const existing = await db
 			.select()
 			.from(settings)
-			.where(eq(settings.key, key))
+			.where(eq(settings.key, k))
 			.limit(1);
 
 		if (existing.length > 0) {
 			await db
 				.update(settings)
 				.set({ isEncrypted, value: storedValue })
-				.where(eq(settings.key, key));
+				.where(eq(settings.key, k));
 		} else {
 			await db.insert(settings).values({
 				isEncrypted,
-				key,
+				key: k,
 				value: storedValue,
 			});
 		}
 
-		return { key, success: true };
+		return { key: k, success: true };
+	}
+
+	static async delete(key: string) {
+		const k = normalizeKey(key);
+		await db.delete(settings).where(eq(settings.key, k));
+		return { key: k, success: true };
 	}
 
 	static async update(data: Record<string, string>) {
-		const results = [];
 		for (const [key, value] of Object.entries(data)) {
-			results.push(await SettingsService.set(key, value));
+			await SettingsService.set(key, value);
 		}
-		return { updated: results.length };
+		const allSettings = await SettingsService.getAll();
+		return { settings: allSettings };
 	}
 }

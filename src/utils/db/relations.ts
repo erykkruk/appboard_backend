@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+	appAiPrompts,
 	appAsoProfiles,
 	apps,
 	appVersions,
@@ -16,6 +17,7 @@ export const storesRelations = relations(stores, ({ many }) => ({
 }));
 
 export const appsRelations = relations(apps, ({ many, one }) => ({
+	aiPrompts: many(appAiPrompts),
 	asoProfile: one(appAsoProfiles, {
 		fields: [apps.id],
 		references: [appAsoProfiles.appId],
@@ -29,6 +31,13 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 		references: [stores.id],
 	}),
 	versions: many(appVersions),
+}));
+
+export const appAiPromptsRelations = relations(appAiPrompts, ({ one }) => ({
+	app: one(apps, {
+		fields: [appAiPrompts.appId],
+		references: [apps.id],
+	}),
 }));
 
 export const appAsoProfilesRelations = relations(appAsoProfiles, ({ one }) => ({

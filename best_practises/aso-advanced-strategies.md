@@ -276,6 +276,12 @@ ASO (wyższy organic ranking)
 | **Quality Score** | Dobre ASO → wyższy relevance score → niższy CPT w Ads |
 | **CPP integration** | Łącz Ad Groups z konkretnym CPP dla message alignment |
 
+### Google Ads Campaigns:
+- **Google App Campaigns** automatyzują promocję w Google Search, YouTube, Google Play i Display Network
+- Machine learning optymalizuje bidding na podstawie app store listings
+- Mniejsza granularna kontrola nad keywords niż Apple Ads
+- Komplementarne z ASO — spójne messaging i kreacje w obu kanałach
+
 ### Zmiana marzec 2026:
 
 > Apple rozszerza liczbę slotów reklamowych w wynikach wyszukiwania App Store — wiele płatnych reklam będzie się pojawiać **w całych wynikach**, nie tylko na górze.
@@ -346,6 +352,16 @@ ASO (wyższy organic ranking)
 4. Priorytetyzuj gap keywords po: relevance × volume × difficulty
 5. Dodaj top gap keywords do swojej metadata
 ```
+
+#### Krok 6: Marketing Events & Update Frequency
+
+| Element do monitorowania | Co sprawdzić |
+|--------------------------|-------------|
+| **In-App Events / LiveOps** | Strategia eventów: częstotliwość, typy, timing |
+| **Update frequency & impact** | Jak często aktualizują i jak to wpływa na ranking/recenzje |
+| **Feature benchmarking** | Porównaj feature set — czego nie masz, a oni mają |
+| **Paid campaigns** | Apple Search Ads keywords, Google Ads creative |
+| **Seasonal strategies** | Dopasowanie do kalendarza sezonowego |
 
 ### Narzędzia do competitor analysis:
 
@@ -535,6 +551,33 @@ T+1 tydzień:   Rollback — wróć do standardowych kreatywnych
 | **AppTamin** | App preview video production |
 | **The ASO Project** | CRO agency + screenshot design |
 
+### Dodatkowe specjalistyczne narzędzia:
+
+| Narzędzie | Specjalizacja |
+|-----------|--------------|
+| **ASODesk** | Keyword tracking, metadata tools, review management (small-mid teams) |
+| **Geeklab** | Pre-launch A/B testing — look-alike product pages, concept validation |
+| **Appbot** | Review monitoring, multi-store (iOS, Google Play, Amazon), auto replies |
+| **42matters** | App store data API — metadata, SDK insights, broad analytics |
+| **Reporting Studio (AppTweak)** | Unified dashboards (ASO + consoles + MMPs), no-code reporting |
+
+### MMP / Attribution narzędzia:
+
+| Narzędzie | Specjalizacja |
+|-----------|--------------|
+| **AppsFlyer** | Mobile attribution, deep analytics, fraud protection |
+| **Adjust** | Campaign performance, user analytics, CTV |
+| **Branch** | Deep linking, user engagement, web-to-app |
+| **Singular** | Marketing + attribution in one, 1000+ ad networks |
+
+### Creative design narzędzia:
+
+| Narzędzie | Specjalizacja |
+|-----------|--------------|
+| **Figma** | Collaborative UI/UX design, team workflows |
+| **Canva** | Quick, user-friendly design, templates |
+| **Animoto** | Video creation, drag-and-drop |
+
 ### Free narzędzia:
 
 | Narzędzie | Co daje |
@@ -543,6 +586,52 @@ T+1 tydzień:   Rollback — wróć do standardowych kreatywnych
 | **App Store Connect** | CPP, Product Page Optimization |
 | **Google Trends** | Seasonal keyword trends |
 | **ChatGPT / Claude** | Keyword brainstorming, description writing |
+| **Google Natural Language Analysis** | Sprawdź jak AI interpretuje twoje metadata |
+
+### Algorithm Change Detector:
+- **AppTweak's App Store Algorithm Change Detector** — monitoruje zmiany algorytmów Apple i Google Play
+- Wykrywa anomalie w keyword rankings
+- Pomaga odróżnić spadek spowodowany zmianą algorytmu od spadku competitive
+- **Nie reaguj impulsywnie** na wahania — najpierw zweryfikuj czy to zmiana algorytmu
+
+---
+
+## 11. Dodatkowe case studies i benchmarki
+
+### Case studies (2025-2026):
+
+| Marka | Strategia | Wynik |
+|-------|-----------|-------|
+| **Wix** | Keyword optimization | #1 ranking na top 3 keywords |
+| **Superscale** | Comprehensive ASO on Google Play | **+450% wzrost organic downloads** |
+| **AppQuantum** | Creative A/B testing (ikony, screenshoty) | **+21% wzrost instalacji** |
+| **Upside** | Seasonal ASO (Black Friday) | #9 ranking na "Black Friday", +10% visibility |
+| **The North Face** | Review prompt po zakupie | Rating: 3.68→4.23 iOS, 3.71→4.54 Android |
+| **Vinted** | Keyword research + competitor monitoring | Top 10 na 210 nowych keywords w 6 rynkach EU |
+| **IE Business School study** | Ogólna analiza 16,897 gier | **+12% downloads** średnio dzięki ASO |
+
+### Kluczowe benchmarki (AppTweak ASO Benchmarks 2025):
+
+| Metryka | Wartość |
+|---------|---------|
+| Apps z rating 4+ wśród featured | **92%** |
+| Top apps aktualizujące screenshoty 2+/rok | **~50%** |
+| Top gry A/B testujące screenshoty/ikony 2+/rok na GP | **57%** |
+| Optymalna kadencja update iOS metadata | Co **4 tygodnie** |
+| Optymalna kadencja update GP metadata | Co **4-6 tygodni** |
+| Subtitles localization rate (top apps iOS) | **88%** |
+| Description localization rate (top apps iOS) | **82%** |
+
+### On-metadata vs Off-metadata factors:
+
+**On-metadata (kontrolowane przez publishera):**
+- App title, subtitle, keyword field, short/long description
+- Promo text (iOS), app icon, screenshots, preview video
+- Category, URL/package
+
+**Off-metadata (poza kontrolą, ale ogromny wpływ):**
+- Ratings & reviews, download count, download velocity
+- App size, bugs/crashes, retention rate, uninstall rate
 
 ---
 
@@ -561,3 +650,13 @@ T+1 tydzień:   Rollback — wróć do standardowych kreatywnych
 - [AppTweak — App Store Seasonality](https://www.apptweak.com/en/aso-blog/app-store-seasonality)
 - [Moburst — App Store Ranking Factors](https://www.moburst.com/blog/app-store-ranking-factors/)
 - [SEM Nexus — ASO 2026 What Drives Installs](https://semnexus.com/app-store-optimization-in-2026-what-actually-drives-installs-now/)
+- [AppTweak — How to Build an Effective ASO Strategy 2026](https://www.apptweak.com/en/aso-blog/how-to-build-an-effective-aso-strategy)
+- [AppTweak — Best ASO Tools of 2026](https://www.apptweak.com/en/aso-blog/best-aso-tools)
+- [AppTweak — What is ASO: Guide 2026](https://www.apptweak.com/en/aso-blog/what-is-app-store-optimization-and-why-is-aso-important)
+- [Moburst — Complete ASO Guide 2026](https://www.moburst.com/blog/app-store-optimization-guide/)
+- [AppFollow — Advanced ASO Strategies Webinar 2026](https://appfollow.io/blog/advanced-aso-strategies-2026)
+- [MobileAction — ASO Tips and Tricks 2026](https://www.mobileaction.co/blog/aso-tips-and-tricks/)
+- [Yodel Mobile — App Growth Playbook 2026](https://www.businessofapps.com/insights/your-essential-guide-to-aso-success-in-2026-is-here/)
+- [MobiLoud — Practical Guide to ASO](https://www.mobiloud.com/blog/app-store-optimization)
+- [Scalebay — Ultimate ASO Guide 2026](https://scalebay.io/blog/the-ultimate-2025-aso-guide)
+- [ASOWorld — Essential ASO Guide 2026](https://asoworld.com/blog/what-is-app-store-optimization/)

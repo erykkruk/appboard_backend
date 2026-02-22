@@ -204,14 +204,28 @@ Frustracja → Odkrycie → Zrozumienie → Zachwyt → Zaufanie → Akcja
 1. **Pierwszy screenshot** — największy wpływ na konwersję
 2. **Captions** — tekst korzyści vs tekst funkcji
 3. **Kolorystyka** — jasne vs ciemne tło
-4. **Kolejność** — inna sekwencja storytellingu
+4. **Kolejność** — inna sekwencja storytellingu (testuj value propositions order)
 5. **Z ludźmi vs bez** — ludzki element vs czysty UI
 6. **Social proof** — z oceną/liczbą vs bez
+7. **Per-persona koncepty** — male vs female, feature A vs feature B
+8. **Sezonowe warianty** — dopasowane do sezonu/trendów w kategorii
+
+### Konkretne hipotezy do testowania:
+
+| Hipoteza | Wariant A | Wariant B |
+|----------|-----------|-----------|
+| Social proof konwertuje lepiej | Screenshoty z gwiazdkami/pobraniami | Screenshoty bez social proof |
+| Feature-first vs benefit-first | "AI Photo Editor" | "Perfect Photos in Seconds" |
+| Dark vs light theme | Ciemne tło screenshotów | Jasne tło screenshotów |
+| Persona targeting | Screenshoty z mężczyzną | Screenshoty z kobietą |
+| Value proposition order | "Save Money" first | "Track Expenses" first |
+| UI screenshot vs lifestyle | Czysty UI aplikacji | Ludzie korzystający z app |
 
 ### Narzędzia:
-- Apple Custom Product Pages (CPP)
+- Apple Custom Product Pages (CPP) — Product Page Optimization (PPO)
 - Google Play Store Listing Experiments
 - SplitMetrics (third-party, zaawansowane testy iOS)
+- **Geeklab** — pre-launch A/B testing, look-alike product pages
 
 ### Metryki:
 - **CVR (Conversion Rate)** — % odwiedzin → instalacja

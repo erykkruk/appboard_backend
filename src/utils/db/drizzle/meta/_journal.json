@@ -1,41 +1,13 @@
 {
+  "version": "7",
   "dialect": "postgresql",
   "entries": [
     {
-      "breakpoints": true,
       "idx": 0,
-      "tag": "0000_stiff_sugar_man",
       "version": "7",
-      "when": 1771591762366
-    },
-    {
-      "breakpoints": true,
-      "idx": 1,
-      "tag": "0001_flashy_sleepwalker",
-      "version": "7",
-      "when": 1771592736885
-    },
-    {
-      "breakpoints": true,
-      "idx": 2,
-      "tag": "0002_dry_hawkeye",
-      "version": "7",
-      "when": 1771602938416
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1771673145870,
-      "tag": "0003_dazzling_lenny_balinger",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1771721896883,
-      "tag": "0004_early_klaw",
+      "when": 1771770601489,
+      "tag": "0000_spooky_red_skull",
       "breakpoints": true
     }
-  ],
-  "version": "7"
+  ]
 }

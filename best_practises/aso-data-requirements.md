@@ -77,6 +77,19 @@ OPTIONAL (lepszy output, ale nie blokuje generowania)
 
 **Wpływ:** Opis bardziej trafia w potrzeby, keywords bliższe językowi użytkowników.
 
+**Przykład pełnej persony (fitness app):**
+```
+Persona: "Fitness Fiona"
+- Wiek: 30 lat, kobieta, pracownik biurowy
+- Problem: ceni wellness ale nie ma czasu na ćwiczenia przez napięty harmonogram
+- Szuka: szybkich treningów w domu, guided sessions, personalizowanych planów
+- Keywords wynikające z persony: "lazy workout", "home fitness", "15-minute workout", "women workout"
+- Screenshot messaging: "Quick 15-min workouts" > "Workout tracker"
+- CPP/CSL: osobna strona z obrazkami treningów w domu, captions "No gym needed"
+```
+
+> **Tip**: Persona powinna informować WSZYSTKIE aspekty ASO — od wyboru keywords, przez captions na screenshotach, po CPP/CSL targeting.
+
 ### B. Konkurencja i pozycjonowanie
 
 | Pole | Typ | Opis | Przykład |

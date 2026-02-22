@@ -95,3 +95,65 @@
 - [ ] Naprawic hardcoded version `"0.1.0"` w settings page — `package.json` ma `"0.5.3"`
 - [ ] Dodac optimistic updates dla reorder/save operacji
 - [ ] Naprawic `syncStore.isPending` blokujacy WSZYSTKIE przyciski sync naraz
+
+## Sprint 6 — ASO Tools & Intelligence (P2)
+
+### Phase 1: AI-Enhanced Metadata ✅ (done)
+- [x] Platform-aware prompty (iOS vs Android algorytmy, 3-warstwowy system prompt)
+- [x] Pole `shortDescription` (Android 80 chars) z auto-mappingiem subtitle→shortDescription
+- [x] Platform field validation (keywords/promotionalText → iOS only, shortDescription → Android only)
+- [x] Wzbogacony ASO context (awards, testimonials, pressQuotes, brandVoice, pricing, userLanguage)
+- [x] Persona-driven instructions w user prompt (targetAudience, painPoints, userLanguage)
+- [x] Keyword suggestion z semantic clusters (feature, problem, category, alternative, longTail)
+- [x] Empathy framework AAAA+I w draft reply (acknowledge, appreciate, address, act, invite)
+
+### Phase 2: Keyword Research & Tracking
+- [ ] Keyword difficulty/volume estimation (integracja z AppTweak lub wlasna heurystyka)
+- [ ] Rank tracking w czasie — codzienne snapshoty pozycji per keyword per locale
+- [ ] Keyword gap analysis vs konkurencja — jakie keywords ma konkurent a my nie
+- [ ] Seasonal keyword calendar — sugestie sezonowych keywords per kategoria
+- [ ] Keyword cannibalization detection — wykrywanie overlappingu miedzy title/subtitle/keywords
+
+### Phase 3: Competitor Analysis
+- [ ] Dashboard metadata audit konkurencji — porownanie title, description, screenshots
+- [ ] Creative audit — analiza screenshotow, ikon, feature graphics konkurencji
+- [ ] Rating velocity tracking — tempo zmian ocen konkurencji
+- [ ] Alerty na zmiany metadata konkurencji — powiadomienia o aktualizacjach
+- [ ] Competitor keyword overlap matrix
+
+### Phase 4: Review Intelligence
+- [ ] Sentiment analysis (Appbot-like) — pozytywny/negatywny/neutralny per review
+- [ ] Auto-tagging: bugs, feature requests, UX issues, praise, fixable/non-fixable
+- [ ] Templated auto-replies z AI — gotowe szablony per kategoria problemu
+- [ ] Dashboard trendu ocen — rolling average, velocity, distribution over time
+- [ ] Review response rate tracking i impact on ratings
+
+### Phase 5: ASO Audit & Score
+- [ ] ASO score per listing — 0-100 na podstawie checklisty best practices
+- [ ] Checklist per locale — co jest wypelnione, co brakuje, co mozna poprawic
+- [ ] Benchmarki kategorii — jak wypadamy vs srednia kategorii
+- [ ] Priorytetyzowane sugestie — co daje najwiekszy impact per effort
+
+### Phase 6: A/B Testing & Performance
+- [ ] CPP (Custom Product Pages, iOS) management — tworzenie i tracking wariantow
+- [ ] CSL (Custom Store Listings, Android) management
+- [ ] Google Play Experiments integration — A/B testy listingow
+- [ ] CVR/CTR dashboard — conversion rate per listing wariant
+- [ ] Screenshot caption generator AI — generowanie tekstow na screenshoty
+
+### Phase 7: Localization Intelligence
+- [ ] Super Geo Localization strategy — lokalizacja per rynek (nie tylko per jezyk)
+- [ ] Lokalizowany keyword research (native keywords, nie tlumaczenie)
+- [ ] Performance dashboard per locale — CVR, impressions, downloads per kraj/jezyk
+- [ ] Translation quality scoring — porownanie AI vs native tlumaczy
+
+### Narzedzia zewnetrzne do integracji
+
+| Narzedzie | Co daje | Priorytet | Phase |
+|-----------|---------|-----------|-------|
+| AppTweak API | Keywords, competitor, ranking, difficulty | Wysoki | 2, 3 |
+| Appbot | Review analytics, sentiment, auto-tagging | Sredni | 4 |
+| Google Play Console API | A/B tests, Vitals, metrics | Wysoki | 6 |
+| App Store Connect API | CPP, metrics, keywords | Wysoki (czesciowo zrobione) | 6 |
+| Google Trends API | Seasonal data, trending topics | Niski | 2 |
+| SensorTower/data.ai API | Market data, category benchmarks | Sredni | 5 |
