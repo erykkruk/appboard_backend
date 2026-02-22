@@ -51,6 +51,7 @@ describe("Error utilities", () => {
 			"somethingWentWrong",
 			"storeApiError",
 			"storeConnectionFailed",
+			"storeUnavailable",
 			"unauthorized",
 			"validationFailed",
 		];

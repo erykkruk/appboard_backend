@@ -5,6 +5,7 @@ dist/
 .DS_Store
 dump.sql
 /.claude
+appboard.config.json
 aso-features-research.md
 aso-api-research.md
 /keys

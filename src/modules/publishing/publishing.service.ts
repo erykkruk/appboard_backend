@@ -8,7 +8,13 @@ import { createProvider } from "@/providers";
 import { createAppStoreClient } from "@/providers/app-store/client";
 import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
-import { apps, listings, stores } from "@/utils/db/schema";
+import {
+	apps,
+	appVersions,
+	listings,
+	stores,
+	versionLocalizations,
+} from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
@@ -248,39 +254,29 @@ export class PublishingService {
 		// Asset changes
 		const assetChanges = await AssetsService.getDirtyCount(appId);
 
-		// Version info (App Store only)
+		// Version info (App Store only) — use cached data
 		let version: {
 			isEditable: boolean;
 			state: string;
 			suggestedVersion: string | null;
 			versionString: string;
 		} | null = null;
-		if (app.store.type === "app_store" && app.store.credentials) {
-			try {
-				const credentials = JSON.parse(decrypt(app.store.credentials));
-				if (credentials.keyId) {
-					const { readAll } = await createAppStoreClient(credentials);
-					const { data: versions } = await readAll(
-						`apps/${app.externalId}/appStoreVersions`,
-					);
-					if (versions?.length) {
-						const latest = versions[0] as ApiResource;
-						const state = (latest.attributes.appStoreState as string) ?? "";
-						const versionString =
-							(latest.attributes.versionString as string) ?? "";
-						const isEditable = EDITABLE_STATES.includes(state);
-						version = {
-							isEditable,
-							state,
-							suggestedVersion: isEditable
-								? null
-								: suggestNextVersion(versionString),
-							versionString,
-						};
-					}
-				}
-			} catch (err) {
-				log.warn({ appId, err }, "Could not fetch version info");
+		if (app.store.type === "app_store") {
+			const cachedVersions = await db
+				.select()
+				.from(appVersions)
+				.where(eq(appVersions.appId, appId));
+
+			if (cachedVersions.length > 0) {
+				const latest = cachedVersions[0];
+				version = {
+					isEditable: latest.isEditable,
+					state: latest.state,
+					suggestedVersion: latest.isEditable
+						? null
+						: suggestNextVersion(latest.versionString),
+					versionString: latest.versionString,
+				};
 			}
 		}
 
@@ -295,40 +291,164 @@ export class PublishingService {
 		};
 	}
 
+	static async syncVersions(appId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			return { source: "cache" as const, synced: 0 };
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		if (!credentials.keyId) {
+			return { source: "cache" as const, synced: 0 };
+		}
+
+		try {
+			const { readAll } = await createAppStoreClient(credentials);
+			const { data: ascVersions } = await readAll(
+				`apps/${app.externalId}/appStoreVersions`,
+			);
+
+			if (!ascVersions?.length) {
+				return { source: "live" as const, synced: 0 };
+			}
+
+			// Fetch appInfo localizations for title/subtitle
+			const { data: appInfos } = await readAll(
+				`apps/${app.externalId}/appInfos`,
+			);
+			let infoLocByLang = new Map<string, ApiResource>();
+			if (appInfos?.length) {
+				const latestInfo = appInfos[0] as ApiResource;
+				const { data: infoLocs } = await readAll(
+					`appInfos/${latestInfo.id}/appInfoLocalizations`,
+				);
+				infoLocByLang = new Map(
+					((infoLocs ?? []) as ApiResource[]).map((l) => [
+						l.attributes.locale as string,
+						l,
+					]),
+				);
+			}
+
+			let synced = 0;
+			const now = new Date();
+
+			for (const v of ascVersions as ApiResource[]) {
+				const state = (v.attributes.appStoreState as string) ?? "";
+				const versionString = (v.attributes.versionString as string) ?? "";
+				const copyright = (v.attributes.copyright as string) ?? "";
+				const isEditable = EDITABLE_STATES.includes(state);
+
+				// Upsert app_versions
+				const [dbVersion] = await db
+					.insert(appVersions)
+					.values({
+						appId,
+						copyright,
+						externalId: v.id,
+						isEditable,
+						state,
+						syncedAt: now,
+						versionString,
+					})
+					.onConflictDoUpdate({
+						set: {
+							copyright,
+							isEditable,
+							state,
+							syncedAt: now,
+							versionString,
+						},
+						target: [appVersions.appId, appVersions.externalId],
+					})
+					.returning();
+
+				// Fetch localizations for this version
+				const { data: versionLocs } = await readAll(
+					`appStoreVersions/${v.id}/appStoreVersionLocalizations`,
+				);
+
+				for (const loc of (versionLocs ?? []) as ApiResource[]) {
+					const attrs = loc.attributes;
+					const locale = attrs.locale as string;
+					const infoLoc = infoLocByLang.get(locale);
+
+					await db
+						.insert(versionLocalizations)
+						.values({
+							appId,
+							description: (attrs.description as string) ?? "",
+							externalId: loc.id,
+							keywords: (attrs.keywords as string) ?? "",
+							language: locale,
+							marketingUrl: (attrs.marketingUrl as string) ?? undefined,
+							promotionalText: (attrs.promotionalText as string) ?? undefined,
+							source: "remote",
+							subtitle: (infoLoc?.attributes?.subtitle as string) ?? "",
+							supportUrl: (attrs.supportUrl as string) ?? undefined,
+							syncedAt: now,
+							title: (infoLoc?.attributes?.name as string) ?? "",
+							versionId: dbVersion.id,
+							whatsNew: (attrs.whatsNew as string) ?? undefined,
+						})
+						.onConflictDoUpdate({
+							set: {
+								description: (attrs.description as string) ?? "",
+								externalId: loc.id,
+								keywords: (attrs.keywords as string) ?? "",
+								marketingUrl: (attrs.marketingUrl as string) ?? undefined,
+								promotionalText: (attrs.promotionalText as string) ?? undefined,
+								subtitle: (infoLoc?.attributes?.subtitle as string) ?? "",
+								supportUrl: (attrs.supportUrl as string) ?? undefined,
+								syncedAt: now,
+								title: (infoLoc?.attributes?.name as string) ?? "",
+								whatsNew: (attrs.whatsNew as string) ?? undefined,
+							},
+							target: [
+								versionLocalizations.versionId,
+								versionLocalizations.language,
+								versionLocalizations.source,
+							],
+						});
+				}
+
+				synced++;
+			}
+
+			log.info({ appId, synced }, "Synced versions from ASC");
+			return { source: "live" as const, synced };
+		} catch (err) {
+			log.warn({ appId, err }, "Could not sync versions from ASC, using cache");
+			return { source: "cache" as const, synced: 0 };
+		}
+	}
+
 	static async listVersions(appId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
 		if (app.store.type !== "app_store" || !app.store.credentials) {
-			return { versions: [] };
+			return { source: "live" as const, versions: [] };
 		}
 
-		try {
-			const credentials = JSON.parse(decrypt(app.store.credentials));
-			if (!credentials.keyId) return { versions: [] };
+		// Try to sync from ASC first
+		const syncResult = await PublishingService.syncVersions(appId);
 
-			const { readAll } = await createAppStoreClient(credentials);
-			const { data: versions } = await readAll(
-				`apps/${app.externalId}/appStoreVersions`,
-			);
+		// Read from local DB
+		const cachedVersions = await db
+			.select()
+			.from(appVersions)
+			.where(eq(appVersions.appId, appId));
 
-			if (!versions?.length) return { versions: [] };
-
-			return {
-				versions: (versions as ApiResource[]).map((v) => {
-					const state = (v.attributes.appStoreState as string) ?? "";
-					const versionString = (v.attributes.versionString as string) ?? "";
-					return {
-						id: v.id,
-						isEditable: EDITABLE_STATES.includes(state),
-						state,
-						versionString,
-					};
-				}),
-			};
-		} catch (err) {
-			log.warn({ appId, err }, "Could not fetch versions");
-			return { versions: [] };
-		}
+		return {
+			source: syncResult.source,
+			versions: cachedVersions.map((v) => ({
+				id: v.externalId,
+				isEditable: v.isEditable,
+				state: v.state,
+				versionString: v.versionString,
+			})),
+		};
 	}
 
 	static async getVersionLocalizations(appId: string, versionId: string) {
@@ -341,75 +461,429 @@ export class PublishingService {
 			throw new Error("unreachable");
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
-		if (!credentials.keyId) {
-			buildError("badRequest", { info: "Missing App Store credentials" });
-			throw new Error("unreachable");
+		// Find the cached version by externalId
+		let [dbVersion] = await db
+			.select()
+			.from(appVersions)
+			.where(
+				and(
+					eq(appVersions.appId, appId),
+					eq(appVersions.externalId, versionId),
+				),
+			)
+			.limit(1);
+
+		// If no cached version, try syncing first
+		if (!dbVersion) {
+			await PublishingService.syncVersions(appId);
+			const result = await db
+				.select()
+				.from(appVersions)
+				.where(
+					and(
+						eq(appVersions.appId, appId),
+						eq(appVersions.externalId, versionId),
+					),
+				)
+				.limit(1);
+			dbVersion = result[0];
 		}
 
-		const { readAll } = await createAppStoreClient(credentials);
-
-		// Fetch version info
-		const { data: versions } = await readAll(
-			`apps/${app.externalId}/appStoreVersions`,
-		);
-		const version = (versions as ApiResource[])?.find(
-			(v) => v.id === versionId,
-		);
-		if (!version) {
+		if (!dbVersion) {
 			buildError("notFound", { info: "Version not found" });
 			throw new Error("unreachable");
 		}
 
-		const state = (version.attributes.appStoreState as string) ?? "";
-		const versionString = (version.attributes.versionString as string) ?? "";
-
-		// Fetch version localizations (description, keywords, whatsNew, promoText, etc.)
-		const { data: versionLocs } = await readAll(
-			`appStoreVersions/${versionId}/appStoreVersionLocalizations`,
-		);
-
-		// Also fetch appInfo localizations for title/subtitle
-		const { data: appInfos } = await readAll(`apps/${app.externalId}/appInfos`);
-		let infoLocByLang = new Map<string, ApiResource>();
-		if (appInfos?.length) {
-			const latestInfo = appInfos[0] as ApiResource;
-			const { data: infoLocs } = await readAll(
-				`appInfos/${latestInfo.id}/appInfoLocalizations`,
+		// Get remote localizations
+		const remoteLocs = await db
+			.select()
+			.from(versionLocalizations)
+			.where(
+				and(
+					eq(versionLocalizations.versionId, dbVersion.id),
+					eq(versionLocalizations.source, "remote"),
+				),
 			);
-			infoLocByLang = new Map(
-				((infoLocs ?? []) as ApiResource[]).map((l) => [
-					l.attributes.locale as string,
-					l,
-				]),
+
+		// Get draft localizations
+		const draftLocs = await db
+			.select()
+			.from(versionLocalizations)
+			.where(
+				and(
+					eq(versionLocalizations.versionId, dbVersion.id),
+					eq(versionLocalizations.source, "draft"),
+				),
 			);
-		}
 
-		const localizations = ((versionLocs ?? []) as ApiResource[]).map((loc) => {
-			const attrs = loc.attributes;
-			const locale = attrs.locale as string;
-			const infoLoc = infoLocByLang.get(locale);
+		const draftByLang = new Map(draftLocs.map((d) => [d.language, d]));
 
+		// Merge: draft over remote (same pattern as listings)
+		const localizations = remoteLocs.map((remote) => {
+			const draft = draftByLang.get(remote.language);
+			const merged = draft ?? remote;
 			return {
-				description: (attrs.description as string) ?? "",
-				keywords: (attrs.keywords as string) ?? "",
-				language: locale,
-				localizationId: loc.id,
-				marketingUrl: (attrs.marketingUrl as string) ?? undefined,
-				promotionalText: (attrs.promotionalText as string) ?? undefined,
-				subtitle: (infoLoc?.attributes?.subtitle as string) ?? "",
-				supportUrl: (attrs.supportUrl as string) ?? undefined,
-				title: (infoLoc?.attributes?.name as string) ?? "",
-				whatsNew: (attrs.whatsNew as string) ?? undefined,
+				description: merged.description ?? "",
+				isDirty: draft?.isDirty ?? false,
+				keywords: merged.keywords ?? "",
+				language: merged.language,
+				localizationId: remote.externalId ?? remote.id,
+				marketingUrl: merged.marketingUrl ?? undefined,
+				promotionalText: merged.promotionalText ?? undefined,
+				subtitle: merged.subtitle ?? "",
+				supportUrl: merged.supportUrl ?? undefined,
+				title: merged.title ?? "",
+				whatsNew: merged.whatsNew ?? undefined,
 			};
 		});
 
+		// Determine source based on sync freshness
+		const isFresh =
+			dbVersion.syncedAt && Date.now() - dbVersion.syncedAt.getTime() < 60_000;
+		const source = isFresh ? ("live" as const) : ("cache" as const);
+
 		return {
+			copyright: dbVersion.copyright ?? "",
 			localizations,
-			state,
+			source,
+			state: dbVersion.state,
 			versionId,
-			versionString,
+			versionString: dbVersion.versionString,
 		};
+	}
+
+	static async updateVersionCopyright(
+		appId: string,
+		versionId: string,
+		copyright: string,
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Copyright is only available for App Store apps",
+			});
+		}
+
+		// Save locally first
+		await db
+			.update(appVersions)
+			.set({ copyright, copyrightDirty: true })
+			.where(
+				and(
+					eq(appVersions.appId, appId),
+					eq(appVersions.externalId, versionId),
+				),
+			);
+
+		// Try to push to ASC
+		let savedLocally = false;
+		try {
+			const credentials = JSON.parse(decrypt(app.store.credentials!));
+			const client = await createAppStoreClient(credentials);
+			await client.update(
+				{ id: versionId, type: "appStoreVersions" },
+				{ attributes: { copyright } },
+			);
+
+			// Mark as clean after successful push
+			await db
+				.update(appVersions)
+				.set({ copyrightDirty: false })
+				.where(
+					and(
+						eq(appVersions.appId, appId),
+						eq(appVersions.externalId, versionId),
+					),
+				);
+		} catch (err) {
+			log.warn(
+				{ appId, err, versionId },
+				"Could not push copyright to ASC, saved locally",
+			);
+			savedLocally = true;
+		}
+
+		log.info({ appId, savedLocally, versionId }, "Updated version copyright");
+		return { savedLocally, updated: true };
+	}
+
+	static async getReviewDetail(appId: string, versionId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Review detail is only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const client = await createAppStoreClient(credentials);
+
+		try {
+			const { data: reviewDetail } = await client.read(
+				`appStoreVersions/${versionId}/appStoreReviewDetail`,
+			);
+
+			if (!reviewDetail) {
+				return { reviewDetail: null };
+			}
+
+			const detail = reviewDetail as ApiResource;
+			const attrs = detail.attributes;
+
+			// Fetch attachments
+			let attachments: {
+				id: string;
+				fileName: string;
+				fileSize: number;
+				url: string;
+			}[] = [];
+
+			try {
+				const { data: attachmentData } = await client.readAll(
+					`appStoreReviewDetails/${detail.id}/appStoreReviewAttachments`,
+				);
+
+				attachments = ((attachmentData ?? []) as ApiResource[]).map((att) => {
+					const a = att.attributes;
+					const asset = a.uploadOperations
+						? undefined
+						: (a.imageAsset as Record<string, unknown> | undefined);
+					let url = "";
+					if (asset?.templateUrl) {
+						url = (asset.templateUrl as string)
+							.replace("{w}", String(asset.width ?? 0))
+							.replace("{h}", String(asset.height ?? 0))
+							.replace("{f}", "png");
+					}
+					return {
+						fileName: (a.fileName as string) ?? "",
+						fileSize: (a.fileSize as number) ?? 0,
+						id: att.id,
+						url,
+					};
+				});
+			} catch {
+				log.warn({ appId, versionId }, "Could not fetch review attachments");
+			}
+
+			return {
+				reviewDetail: {
+					attachments,
+					contactEmail: (attrs.contactEmail as string) ?? "",
+					contactFirstName: (attrs.contactFirstName as string) ?? "",
+					contactLastName: (attrs.contactLastName as string) ?? "",
+					contactPhone: (attrs.contactPhone as string) ?? "",
+					demoAccountName: (attrs.demoAccountName as string) ?? "",
+					demoAccountPassword: (attrs.demoAccountPassword as string) ?? "",
+					demoAccountRequired: (attrs.demoAccountRequired as boolean) ?? false,
+					notes: (attrs.notes as string) ?? "",
+					reviewDetailId: detail.id,
+				},
+			};
+		} catch (err) {
+			// If 404, no review detail exists yet
+			const msg = err instanceof Error ? err.message : String(err);
+			if (msg.includes("404") || msg.includes("not found")) {
+				return { reviewDetail: null };
+			}
+			const detail = extractAscError(err);
+			log.error(
+				{ appId, detail, err, versionId },
+				"Failed to fetch review detail",
+			);
+			buildError("storeApiError", {
+				info: `Failed to fetch review detail: ${detail}`,
+			});
+			throw new Error("unreachable");
+		}
+	}
+
+	static async updateReviewDetail(
+		appId: string,
+		versionId: string,
+		data: {
+			contactFirstName?: string;
+			contactLastName?: string;
+			contactPhone?: string;
+			contactEmail?: string;
+			demoAccountName?: string;
+			demoAccountPassword?: string;
+			demoAccountRequired?: boolean;
+			notes?: string;
+		},
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Review detail is only available for App Store apps",
+			});
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const client = await createAppStoreClient(credentials);
+
+		const attributes: Record<string, string | boolean> = {};
+		if (data.contactFirstName !== undefined)
+			attributes.contactFirstName = data.contactFirstName;
+		if (data.contactLastName !== undefined)
+			attributes.contactLastName = data.contactLastName;
+		if (data.contactPhone !== undefined)
+			attributes.contactPhone = data.contactPhone;
+		if (data.contactEmail !== undefined)
+			attributes.contactEmail = data.contactEmail;
+		if (data.demoAccountName !== undefined)
+			attributes.demoAccountName = data.demoAccountName;
+		if (data.demoAccountPassword !== undefined)
+			attributes.demoAccountPassword = data.demoAccountPassword;
+		if (data.demoAccountRequired !== undefined)
+			attributes.demoAccountRequired = data.demoAccountRequired;
+		if (data.notes !== undefined) attributes.notes = data.notes;
+
+		try {
+			// Try to get existing review detail
+			let reviewDetailId: string | null = null;
+			try {
+				const { data: existing } = await client.read(
+					`appStoreVersions/${versionId}/appStoreReviewDetail`,
+				);
+				if (existing) {
+					reviewDetailId = (existing as ApiResource).id;
+				}
+			} catch {
+				// No existing detail
+			}
+
+			if (reviewDetailId) {
+				await client.update(
+					{ id: reviewDetailId, type: "appStoreReviewDetails" },
+					{ attributes },
+				);
+			} else {
+				await client.create({
+					attributes,
+					relationships: {
+						appStoreVersion: { id: versionId, type: "appStoreVersions" },
+					},
+					type: "appStoreReviewDetails",
+				});
+			}
+		} catch (err) {
+			const detail = extractAscError(err);
+			log.error(
+				{ appId, detail, err, versionId },
+				"Failed to update review detail",
+			);
+			buildError("storeApiError", {
+				info: `Failed to update review detail: ${detail}`,
+			});
+		}
+
+		log.info({ appId, versionId }, "Updated review detail");
+		return { updated: true };
+	}
+
+	static async uploadReviewAttachment(
+		appId: string,
+		versionId: string,
+		file: File,
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Review attachments are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const client = await createAppStoreClient(credentials);
+
+		// Get review detail ID
+		let reviewDetailId: string;
+		try {
+			const { data: existing } = await client.read(
+				`appStoreVersions/${versionId}/appStoreReviewDetail`,
+			);
+			if (!existing) {
+				buildError("notFound", {
+					info: "Review detail not found. Save review information first.",
+				});
+				throw new Error("unreachable");
+			}
+			reviewDetailId = (existing as ApiResource).id;
+		} catch (err) {
+			if (err && typeof err === "object" && "status" in err) throw err;
+			const detail = extractAscError(err);
+			buildError("storeApiError", {
+				info: `Failed to get review detail: ${detail}`,
+			});
+			throw new Error("unreachable");
+		}
+
+		const buffer = Buffer.from(await file.arrayBuffer());
+
+		try {
+			const attachment = (await client.create({
+				attributes: {
+					fileName: file.name,
+					fileSize: buffer.length,
+				},
+				relationships: {
+					appStoreReviewDetail: {
+						id: reviewDetailId,
+						type: "appStoreReviewDetails",
+					},
+				},
+				type: "appStoreReviewAttachments",
+			})) as unknown as ApiResource;
+
+			await client.uploadAsset(attachment, buffer);
+			await client.pollForUploadSuccess(
+				`appStoreReviewAttachments/${attachment.id}`,
+				"reviewAttachment",
+			);
+
+			log.info(
+				{ appId, attachmentId: attachment.id, fileName: file.name },
+				"Uploaded review attachment",
+			);
+
+			return { attachmentId: attachment.id, uploaded: true };
+		} catch (err) {
+			if (err && typeof err === "object" && "status" in err) throw err;
+			const detail = extractAscError(err);
+			log.error(
+				{ appId, detail, err, fileName: file.name },
+				"Failed to upload review attachment",
+			);
+			buildError("storeApiError", {
+				info: `Failed to upload attachment: ${detail}`,
+			});
+		}
+	}
+
+	static async deleteReviewAttachment(appId: string, attachmentId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Review attachments are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const { remove } = await createAppStoreClient(credentials);
+
+		await remove({ id: attachmentId, type: "appStoreReviewAttachments" });
+
+		log.info({ appId, attachmentId }, "Deleted review attachment");
+		return { deleted: true };
 	}
 
 	static async updateVersionLocalization(
@@ -435,96 +909,289 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
-		const client = await createAppStoreClient(credentials);
+		// Find the cached version by externalId (versionId is ASC external ID)
+		const [dbVersion] = await db
+			.select()
+			.from(appVersions)
+			.where(
+				and(
+					eq(appVersions.appId, appId),
+					eq(appVersions.externalId, versionId),
+				),
+			)
+			.limit(1);
 
-		// Update version localization fields (description, keywords, whatsNew, etc.)
-		const versionLocAttrs: Record<string, string> = {};
-		if (data.description !== undefined)
-			versionLocAttrs.description = data.description;
-		if (data.keywords !== undefined) versionLocAttrs.keywords = data.keywords;
-		if (data.whatsNew !== undefined) versionLocAttrs.whatsNew = data.whatsNew;
-		if (data.promotionalText !== undefined)
-			versionLocAttrs.promotionalText = data.promotionalText;
-		if (data.marketingUrl !== undefined)
-			versionLocAttrs.marketingUrl = data.marketingUrl;
-		if (data.supportUrl !== undefined)
-			versionLocAttrs.supportUrl = data.supportUrl;
+		if (!dbVersion) {
+			buildError("notFound", { info: "Version not found in local cache" });
+			throw new Error("unreachable");
+		}
 
-		if (Object.keys(versionLocAttrs).length > 0) {
-			log.info(
-				{ attributes: versionLocAttrs, localizationId },
-				"Updating appStoreVersionLocalizations",
+		// Find the remote localization to get language
+		const [remoteLoc] = await db
+			.select()
+			.from(versionLocalizations)
+			.where(
+				and(
+					eq(versionLocalizations.versionId, dbVersion.id),
+					eq(versionLocalizations.source, "remote"),
+					eq(versionLocalizations.externalId, localizationId),
+				),
+			)
+			.limit(1);
+
+		if (!remoteLoc) {
+			buildError("notFound", { info: "Localization not found" });
+			throw new Error("unreachable");
+		}
+
+		// Build the draft data: start with remote values, overlay provided fields
+		const draftValues = {
+			appId,
+			description: data.description ?? remoteLoc.description,
+			externalId: localizationId,
+			isDirty: true,
+			keywords: data.keywords ?? remoteLoc.keywords,
+			language: remoteLoc.language,
+			marketingUrl: data.marketingUrl ?? remoteLoc.marketingUrl,
+			promotionalText: data.promotionalText ?? remoteLoc.promotionalText,
+			source: "draft" as const,
+			subtitle: data.subtitle ?? remoteLoc.subtitle,
+			supportUrl: data.supportUrl ?? remoteLoc.supportUrl,
+			title: data.title ?? remoteLoc.title,
+			versionId: dbVersion.id,
+			whatsNew: data.whatsNew ?? remoteLoc.whatsNew,
+		};
+
+		// Upsert draft
+		await db
+			.insert(versionLocalizations)
+			.values(draftValues)
+			.onConflictDoUpdate({
+				set: {
+					description: draftValues.description,
+					isDirty: true,
+					keywords: draftValues.keywords,
+					marketingUrl: draftValues.marketingUrl,
+					promotionalText: draftValues.promotionalText,
+					subtitle: draftValues.subtitle,
+					supportUrl: draftValues.supportUrl,
+					title: draftValues.title,
+					whatsNew: draftValues.whatsNew,
+				},
+				target: [
+					versionLocalizations.versionId,
+					versionLocalizations.language,
+					versionLocalizations.source,
+				],
+			});
+
+		log.info(
+			{ appId, fields: Object.keys(data), localizationId, savedLocally: true },
+			"Saved version localization draft locally",
+		);
+
+		return { savedLocally: true, updated: true };
+	}
+
+	static async publishVersionLocalizations(appId: string, versionId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Version localizations are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		// Find the cached version
+		const [dbVersion] = await db
+			.select()
+			.from(appVersions)
+			.where(
+				and(
+					eq(appVersions.appId, appId),
+					eq(appVersions.externalId, versionId),
+				),
+			)
+			.limit(1);
+
+		if (!dbVersion) {
+			buildError("notFound", { info: "Version not found in local cache" });
+			throw new Error("unreachable");
+		}
+
+		// Get dirty drafts
+		const dirtyDrafts = await db
+			.select()
+			.from(versionLocalizations)
+			.where(
+				and(
+					eq(versionLocalizations.versionId, dbVersion.id),
+					eq(versionLocalizations.source, "draft"),
+					eq(versionLocalizations.isDirty, true),
+				),
 			);
+
+		if (dirtyDrafts.length === 0) {
+			return { published: 0 };
+		}
+
+		let credentials: Record<string, string>;
+		try {
+			credentials = JSON.parse(decrypt(app.store.credentials));
+		} catch {
+			buildError("badRequest", { info: "Invalid App Store credentials" });
+			throw new Error("unreachable");
+		}
+
+		let client: Awaited<ReturnType<typeof createAppStoreClient>>;
+		try {
+			client = await createAppStoreClient(credentials);
+		} catch (err) {
+			log.warn({ appId, err }, "Could not connect to ASC for publish");
+			return {
+				error: "store_unavailable",
+				published: 0,
+				savedLocally: true,
+			};
+		}
+
+		let published = 0;
+		const errors: string[] = [];
+
+		for (const draft of dirtyDrafts) {
+			if (!draft.externalId) continue;
+
 			try {
-				await client.update(
-					{ id: localizationId, type: "appStoreVersionLocalizations" },
-					{ attributes: versionLocAttrs },
-				);
+				// Push version localization fields
+				const versionLocAttrs: Record<string, string> = {};
+				if (draft.description) versionLocAttrs.description = draft.description;
+				if (draft.keywords) versionLocAttrs.keywords = draft.keywords;
+				if (draft.whatsNew) versionLocAttrs.whatsNew = draft.whatsNew;
+				if (draft.promotionalText)
+					versionLocAttrs.promotionalText = draft.promotionalText;
+				if (draft.marketingUrl)
+					versionLocAttrs.marketingUrl = draft.marketingUrl;
+				if (draft.supportUrl) versionLocAttrs.supportUrl = draft.supportUrl;
+
+				if (Object.keys(versionLocAttrs).length > 0) {
+					await client.update(
+						{
+							id: draft.externalId,
+							type: "appStoreVersionLocalizations",
+						},
+						{ attributes: versionLocAttrs },
+					);
+				}
+
+				// Push title/subtitle via appInfoLocalizations
+				if (draft.title || draft.subtitle) {
+					try {
+						const { data: versionLoc } = await client.read(
+							`appStoreVersionLocalizations/${draft.externalId}`,
+						);
+						const locale =
+							((versionLoc as ApiResource)?.attributes?.locale as string) ?? "";
+
+						if (locale) {
+							const { data: appInfos } = await client.readAll(
+								`apps/${app.externalId}/appInfos`,
+							);
+							if (appInfos?.length) {
+								const latestInfo = appInfos[0] as ApiResource;
+								const { data: infoLocs } = await client.readAll(
+									`appInfos/${latestInfo.id}/appInfoLocalizations`,
+								);
+								const infoLoc = ((infoLocs ?? []) as ApiResource[]).find(
+									(l) => l.attributes.locale === locale,
+								);
+								if (infoLoc) {
+									const infoAttrs: Record<string, string> = {};
+									if (draft.title) infoAttrs.name = draft.title;
+									if (draft.subtitle) infoAttrs.subtitle = draft.subtitle;
+									await client.update(
+										{
+											id: infoLoc.id,
+											type: "appInfoLocalizations",
+										},
+										{ attributes: infoAttrs },
+									);
+								}
+							}
+						}
+					} catch (err) {
+						log.warn(
+							{ appId, err, language: draft.language },
+							"Failed to push title/subtitle to ASC",
+						);
+					}
+				}
+
+				// Update remote copy with draft values
+				await db
+					.update(versionLocalizations)
+					.set({
+						description: draft.description,
+						keywords: draft.keywords,
+						marketingUrl: draft.marketingUrl,
+						promotionalText: draft.promotionalText,
+						subtitle: draft.subtitle,
+						supportUrl: draft.supportUrl,
+						syncedAt: new Date(),
+						title: draft.title,
+						whatsNew: draft.whatsNew,
+					})
+					.where(
+						and(
+							eq(versionLocalizations.versionId, dbVersion.id),
+							eq(versionLocalizations.language, draft.language),
+							eq(versionLocalizations.source, "remote"),
+						),
+					);
+
+				// Mark draft as clean
+				await db
+					.update(versionLocalizations)
+					.set({ isDirty: false })
+					.where(eq(versionLocalizations.id, draft.id));
+
+				published++;
 			} catch (err) {
 				const detail = extractAscError(err);
 				log.error(
-					{ appId, detail, err, localizationId },
-					"Failed to update version localization",
+					{ appId, detail, err, language: draft.language },
+					"Failed to publish version localization",
 				);
-				buildError("storeApiError", {
-					info: `Failed to update localization: ${detail}`,
-				});
+				errors.push(`${draft.language}: ${detail}`);
 			}
 		}
 
-		// Update app info localization fields (name/title, subtitle)
-		if (data.title !== undefined || data.subtitle !== undefined) {
+		// Also push dirty copyright if needed
+		if (dbVersion.copyrightDirty && dbVersion.copyright) {
 			try {
-				// Read single localization to get its locale
-				const { data: versionLoc } = await client.read(
-					`appStoreVersionLocalizations/${localizationId}`,
+				await client.update(
+					{ id: versionId, type: "appStoreVersions" },
+					{ attributes: { copyright: dbVersion.copyright } },
 				);
-				const locale =
-					((versionLoc as ApiResource)?.attributes?.locale as string) ?? "";
-
-				if (locale) {
-					const { data: appInfos } = await client.readAll(
-						`apps/${app.externalId}/appInfos`,
-					);
-					if (appInfos?.length) {
-						const latestInfo = appInfos[0] as ApiResource;
-						const { data: infoLocs } = await client.readAll(
-							`appInfos/${latestInfo.id}/appInfoLocalizations`,
-						);
-						const infoLoc = ((infoLocs ?? []) as ApiResource[]).find(
-							(l) => l.attributes.locale === locale,
-						);
-						if (infoLoc) {
-							const infoAttrs: Record<string, string> = {};
-							if (data.title !== undefined) infoAttrs.name = data.title;
-							if (data.subtitle !== undefined)
-								infoAttrs.subtitle = data.subtitle;
-							await client.update(
-								{ id: infoLoc.id, type: "appInfoLocalizations" },
-								{ attributes: infoAttrs },
-							);
-						}
-					}
-				}
+				await db
+					.update(appVersions)
+					.set({ copyrightDirty: false })
+					.where(eq(appVersions.id, dbVersion.id));
 			} catch (err) {
-				const detail = extractAscError(err);
-				log.error(
-					{ appId, detail, err, localizationId },
-					"Failed to update app info localization",
-				);
-				buildError("storeApiError", {
-					info: `Failed to update title/subtitle: ${detail}`,
-				});
+				log.warn({ appId, err }, "Failed to push copyright to ASC");
+				errors.push(`copyright: ${extractAscError(err)}`);
 			}
 		}
 
 		log.info(
-			{ appId, fields: Object.keys(data), localizationId },
-			"Updated version localization",
+			{ appId, errors: errors.length, published, versionId },
+			"Published version localizations",
 		);
 
-		return { updated: true };
+		return {
+			...(errors.length > 0 ? { errors } : {}),
+			published,
+		};
 	}
 
 	static async addVersionLocalization(
@@ -1009,22 +1676,36 @@ export class PublishingService {
 			return null;
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
-		if (!credentials.keyId) return null;
+		// Use cached version data
+		const cachedVersions = await db
+			.select()
+			.from(appVersions)
+			.where(eq(appVersions.appId, appId));
 
-		const { readAll } = await createAppStoreClient(credentials);
-		const { data: versions } = await readAll(
-			`apps/${app.externalId}/appStoreVersions`,
-		);
+		if (cachedVersions.length > 0) {
+			const latest = cachedVersions[0];
+			return {
+				isEditable: latest.isEditable,
+				state: latest.state,
+				versionString: latest.versionString,
+			};
+		}
 
-		if (!versions?.length) return null;
+		// No cached data — try syncing
+		await PublishingService.syncVersions(appId);
 
-		const latest = versions[0] as ApiResource;
-		const state = (latest.attributes.appStoreState as string) ?? "";
+		const [synced] = await db
+			.select()
+			.from(appVersions)
+			.where(eq(appVersions.appId, appId))
+			.limit(1);
+
+		if (!synced) return null;
+
 		return {
-			isEditable: EDITABLE_STATES.includes(state),
-			state,
-			versionString: (latest.attributes.versionString as string) ?? "",
+			isEditable: synced.isEditable,
+			state: synced.state,
+			versionString: synced.versionString,
 		};
 	}
 

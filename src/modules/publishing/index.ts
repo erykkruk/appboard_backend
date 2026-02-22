@@ -304,6 +304,150 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			}),
 		},
 	)
+	.patch(
+		"/:appId/publishing/versions/:versionId/copyright",
+		async ({ body, params }) => {
+			return PublishingService.updateVersionCopyright(
+				params.appId,
+				params.versionId,
+				body.copyright,
+			);
+		},
+		{
+			body: t.Object({
+				copyright: t.String({ maxLength: 255 }),
+			}),
+			detail: {
+				description: "Update version copyright",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.get(
+		"/:appId/publishing/versions/:versionId/review-detail",
+		async ({ params }) => {
+			return PublishingService.getReviewDetail(params.appId, params.versionId);
+		},
+		{
+			detail: {
+				description: "Get app review detail for a version",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.patch(
+		"/:appId/publishing/versions/:versionId/review-detail",
+		async ({ body, params }) => {
+			return PublishingService.updateReviewDetail(
+				params.appId,
+				params.versionId,
+				body,
+			);
+		},
+		{
+			body: t.Object({
+				contactEmail: t.Optional(t.String()),
+				contactFirstName: t.Optional(t.String()),
+				contactLastName: t.Optional(t.String()),
+				contactPhone: t.Optional(t.String()),
+				demoAccountName: t.Optional(t.String()),
+				demoAccountPassword: t.Optional(t.String()),
+				demoAccountRequired: t.Optional(t.Boolean()),
+				notes: t.Optional(t.String({ maxLength: 4000 })),
+			}),
+			detail: {
+				description: "Update app review detail for a version",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.post(
+		"/:appId/publishing/versions/:versionId/review-detail/attachments",
+		async ({ body, params }) => {
+			return PublishingService.uploadReviewAttachment(
+				params.appId,
+				params.versionId,
+				body.file,
+			);
+		},
+		{
+			body: t.Object({
+				file: t.File(),
+			}),
+			detail: {
+				description: "Upload a review attachment",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.delete(
+		"/:appId/publishing/review-attachments/:attachmentId",
+		async ({ params }) => {
+			return PublishingService.deleteReviewAttachment(
+				params.appId,
+				params.attachmentId,
+			);
+		},
+		{
+			detail: {
+				description: "Delete a review attachment",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				attachmentId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.post(
+		"/:appId/publishing/sync-versions",
+		async ({ params }) => {
+			return PublishingService.syncVersions(params.appId);
+		},
+		{
+			detail: {
+				description: "Sync versions and localizations from App Store Connect",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.post(
+		"/:appId/publishing/versions/:versionId/publish-localizations",
+		async ({ params }) => {
+			return PublishingService.publishVersionLocalizations(
+				params.appId,
+				params.versionId,
+			);
+		},
+		{
+			detail: {
+				description:
+					"Push dirty version localization drafts to App Store Connect",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
 	.get(
 		"/:appId/publishing/version",
 		async ({ params }) => {

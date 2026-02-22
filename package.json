@@ -1,9 +1,9 @@
 {
 	"name": "appboard-be",
-	"version": "0.5.3",
+	"version": "0.5.4",
 	"scripts": {
 		"start": "bun run src/index.ts",
-		"dev": "pkill -f 'bun run --watch src/index.ts' 2>/dev/null; sleep 0.5; bun run --watch src/index.ts",
+		"dev": "bun run --watch src/index.ts",
 		"test": "bun test",
 		"db:up": "docker-compose up -d postgres",
 		"db:generate": "drizzle-kit generate --config ./drizzle.config.ts",

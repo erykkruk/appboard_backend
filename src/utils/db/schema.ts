@@ -135,12 +135,112 @@ export const reviews = pgTable("reviews", {
 	title: varchar({ length: 500 }),
 });
 
+export const appAsoProfiles = pgTable("app_aso_profiles", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	appId: uuid()
+		.notNull()
+		.references(() => apps.id, { onDelete: "cascade" })
+		.unique(),
+
+	// Optional D: Social Proof
+	awards: jsonb().$type<string[]>(),
+
+	// Optional C: Tone & Branding
+	brandVoiceExample: text(),
+
+	// Required: Core Information
+	category: varchar({ length: 100 }),
+
+	// Optional B: Competitors
+	competitiveAdvantage: text(),
+	competitors: jsonb().$type<string[]>(),
+	differentiator: text(),
+	downloadCount: varchar({ length: 50 }),
+
+	// Optional F: Keywords
+	excludeKeywords: jsonb().$type<string[]>(),
+
+	// Optional E: Product Details
+	freeFeatures: jsonb().$type<string[]>(),
+	keyFeatures: jsonb().$type<string[]>(),
+	longTailKeywords: jsonb().$type<string[]>(),
+	mainBenefit: text(),
+	mustIncludeKeywords: jsonb().$type<string[]>(),
+	oneLiner: varchar({ length: 300 }),
+
+	// Optional A: Audience
+	painPoints: jsonb().$type<string[]>(),
+	positioning: varchar({ length: 50 }),
+	premiumFeatures: jsonb().$type<string[]>(),
+	pressQuotes: jsonb().$type<string[]>(),
+	price: varchar({ length: 100 }),
+	pricingModel: varchar({ length: 50 }),
+	problem: text(),
+	targetAudience: text(),
+	testimonials: jsonb().$type<string[]>(),
+	tone: varchar({ length: 50 }),
+	userLanguage: text(),
+	wordsToAvoid: jsonb().$type<string[]>(),
+	wordsToInclude: jsonb().$type<string[]>(),
+});
+
+export const appVersions = pgTable(
+	"app_versions",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		copyright: text(),
+		copyrightDirty: boolean().notNull().default(false),
+		externalId: varchar({ length: 255 }).notNull(),
+		isEditable: boolean().notNull().default(false),
+		state: varchar({ length: 100 }).notNull(),
+		syncedAt: timestamp(),
+		versionString: varchar({ length: 50 }).notNull(),
+	},
+	(t) => [unique().on(t.appId, t.externalId)],
+);
+
+export const versionLocalizations = pgTable(
+	"version_localizations",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		description: text(),
+		externalId: varchar({ length: 255 }),
+		isDirty: boolean().notNull().default(false),
+		keywords: varchar({ length: 255 }),
+		language: varchar({ length: 20 }).notNull(),
+		marketingUrl: varchar({ length: 1024 }),
+		promotionalText: text(),
+		source: varchar({ length: 20 }).notNull().default("remote"),
+		subtitle: varchar({ length: 255 }),
+		supportUrl: varchar({ length: 1024 }),
+		syncedAt: timestamp(),
+		title: varchar({ length: 255 }),
+		versionId: uuid()
+			.notNull()
+			.references(() => appVersions.id, { onDelete: "cascade" }),
+		whatsNew: text(),
+	},
+	(t) => [unique().on(t.versionId, t.language, t.source)],
+);
+
 export const schema = {
+	appAsoProfiles,
 	apps,
+	appVersions,
 	assets,
 	listingHistory,
 	listings,
 	reviews,
 	settings,
 	stores,
+	versionLocalizations,
 };

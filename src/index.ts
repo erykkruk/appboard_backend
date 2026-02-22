@@ -3,6 +3,7 @@ import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 import config from "@/config";
 import { appsController } from "@/modules/apps";
+import { asoProfileController } from "@/modules/aso-profile";
 import { publishingController } from "@/modules/publishing";
 import { reviewsController } from "@/modules/reviews";
 import { settingsController } from "@/modules/settings";
@@ -30,6 +31,7 @@ const app = new Elysia()
 			.use(reviewsController)
 			.use(publishingController)
 			.use(appsController)
+			.use(asoProfileController)
 			.use(settingsController),
 	)
 	.listen(port);

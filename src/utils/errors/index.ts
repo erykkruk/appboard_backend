@@ -11,6 +11,7 @@ export const errors = {
 	somethingWentWrong: { code: "SOMETHING_WENT_WRONG", status: 500 },
 	storeApiError: { code: "STORE_API_ERROR", status: 502 },
 	storeConnectionFailed: { code: "STORE_CONNECTION_FAILED", status: 502 },
+	storeUnavailable: { code: "STORE_UNAVAILABLE", status: 503 },
 	unauthorized: { code: "UNAUTHORIZED", status: 401 },
 	validationFailed: { code: "VALIDATION", status: 422 },
 } as const satisfies Record<

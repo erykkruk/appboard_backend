@@ -134,5 +134,83 @@ export async function runMigrations() {
 		)
 	`);
 
+	await db.execute(sql`
+		CREATE TABLE IF NOT EXISTS "app_aso_profiles" (
+			"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+			"created_at" timestamp DEFAULT now() NOT NULL,
+			"updated_at" timestamp DEFAULT now() NOT NULL,
+			"app_id" uuid NOT NULL REFERENCES "apps"("id") ON DELETE CASCADE,
+			"awards" jsonb,
+			"brand_voice_example" text,
+			"category" varchar(100),
+			"competitive_advantage" text,
+			"competitors" jsonb,
+			"differentiator" text,
+			"download_count" varchar(50),
+			"exclude_keywords" jsonb,
+			"free_features" jsonb,
+			"key_features" jsonb,
+			"long_tail_keywords" jsonb,
+			"main_benefit" text,
+			"must_include_keywords" jsonb,
+			"one_liner" varchar(300),
+			"pain_points" jsonb,
+			"positioning" varchar(50),
+			"premium_features" jsonb,
+			"press_quotes" jsonb,
+			"price" varchar(100),
+			"pricing_model" varchar(50),
+			"problem" text,
+			"target_audience" text,
+			"testimonials" jsonb,
+			"tone" varchar(50),
+			"user_language" text,
+			"words_to_avoid" jsonb,
+			"words_to_include" jsonb,
+			UNIQUE("app_id")
+		)
+	`);
+
+	await db.execute(sql`
+		CREATE TABLE IF NOT EXISTS "app_versions" (
+			"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+			"created_at" timestamp DEFAULT now() NOT NULL,
+			"updated_at" timestamp DEFAULT now() NOT NULL,
+			"app_id" uuid NOT NULL REFERENCES "apps"("id") ON DELETE CASCADE,
+			"copyright" text,
+			"copyright_dirty" boolean DEFAULT false NOT NULL,
+			"external_id" varchar(255) NOT NULL,
+			"is_editable" boolean DEFAULT false NOT NULL,
+			"state" varchar(100) NOT NULL,
+			"synced_at" timestamp,
+			"version_string" varchar(50) NOT NULL,
+			UNIQUE("app_id", "external_id")
+		)
+	`);
+
+	await db.execute(sql`
+		CREATE TABLE IF NOT EXISTS "version_localizations" (
+			"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+			"created_at" timestamp DEFAULT now() NOT NULL,
+			"updated_at" timestamp DEFAULT now() NOT NULL,
+			"app_id" uuid NOT NULL REFERENCES "apps"("id") ON DELETE CASCADE,
+			"description" text,
+			"external_id" varchar(255),
+			"is_dirty" boolean DEFAULT false NOT NULL,
+			"keywords" varchar(255),
+			"language" varchar(20) NOT NULL,
+			"marketing_url" varchar(1024),
+			"promotional_text" text,
+			"source" varchar(20) DEFAULT 'remote' NOT NULL,
+			"subtitle" varchar(255),
+			"support_url" varchar(1024),
+			"synced_at" timestamp,
+			"title" varchar(255),
+			"version_id" uuid NOT NULL REFERENCES "app_versions"("id") ON DELETE CASCADE,
+			"whats_new" text,
+			UNIQUE("version_id", "language", "source")
+		)
+	`);
+
 	log.info("Database schema sync complete");
 }

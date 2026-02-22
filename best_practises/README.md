@@ -11,6 +11,7 @@
 |------|------|----------|
 | [aso-complete-guide.md](./aso-complete-guide.md) | **Główny przewodnik ASO** | Kompletny guide: keywords, opisy, screenshoty, lokalizacja, A/B testy, trendy 2026, checklista |
 | [aso-advanced-strategies.md](./aso-advanced-strategies.md) | **Zaawansowane strategie** | Algorytmy rankingowe, CPP/CSL, In-App Events, sezonowość, Apple Search Ads synergy, analiza konkurencji, retencja, ikony |
+| [aso-data-requirements.md](./aso-data-requirements.md) | **Wymagane dane o aplikacji** | Jakie info zbieramy od usera: 8 required pól + 7 optional sekcji, mapowanie dane→output, UX flow, walidacja |
 | [aso-description-templates.md](./aso-description-templates.md) | **Szablony opisów** | Gotowe templates: krótki opis, długi opis, promotional text, release notes, captions |
 | [aso-screenshots-guide.md](./aso-screenshots-guide.md) | **Screenshoty — design guide** | Projektowanie, psychologia kolorów, storytelling, layouty, wymagania techniczne |
 | [copywriting-skill.md](./copywriting-skill.md) | **Skill: Copywriting** | Ze skills.sh — zasady pisania konwertujących tekstów, struktura, CTA |
