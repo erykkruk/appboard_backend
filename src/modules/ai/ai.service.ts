@@ -626,6 +626,77 @@ Write a ${isPositive ? "thankful, encouraging reply that reinforces their positi
 		return { model, reply: content };
 	}
 
+	static async generatePrivacyDeclaration(
+		appName: string,
+		description: string,
+	): Promise<{ model: string; result: string }> {
+		const systemPrompt = `You are an expert in Apple App Store privacy declarations (App Privacy "nutrition labels").
+
+Given an app name and a description of what data it collects and processes, generate a structured privacy declaration.
+
+Return ONLY valid JSON: an array of objects with this exact shape:
+{ "category": string, "dataType": string, "purposes": string[], "linked": boolean, "tracking": boolean }
+
+Valid categories: "contact_info", "health_fitness", "financial", "location", "sensitive_info", "contacts", "user_content", "browsing_history", "search_history", "identifiers", "purchases", "usage_data", "diagnostics", "other"
+
+Example data types per category:
+- contact_info: "Email Address", "Name", "Phone Number", "Physical Address"
+- health_fitness: "Health", "Fitness"
+- financial: "Payment Info", "Credit Info"
+- location: "Precise Location", "Coarse Location"
+- contacts: "Contacts"
+- user_content: "Photos or Videos", "Audio Data", "Other User Content"
+- identifiers: "User ID", "Device ID"
+- purchases: "Purchase History"
+- usage_data: "Product Interaction", "Advertising Data"
+- diagnostics: "Crash Data", "Performance Data"
+
+Valid purposes: "analytics", "app_functionality", "developers_advertising", "other_purposes", "product_personalization", "third_party_advertising"
+
+Rules:
+- "linked" = true if the data is linked to the user's identity (e.g. via login)
+- "tracking" = true if the data is used for tracking across apps/websites (ATT relevant)
+- Be realistic and thorough — include all data types implied by the description
+- Include diagnostics (crash data) by default unless the description explicitly says no analytics
+- Return a JSON array, no markdown, no explanations`;
+
+		const userPrompt = `App name: ${appName}
+
+Description of data collection:
+${description}
+
+Generate the privacy declaration JSON array.`;
+
+		log.info({ appName }, "Generating privacy declaration");
+
+		const { content, model } = await AIService.callOpenRouter(
+			systemPrompt,
+			userPrompt,
+			"generate",
+		);
+
+		// Try to extract JSON from the response
+		let cleaned = content.trim();
+		if (cleaned.startsWith("```")) {
+			cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+		}
+
+		// Validate it's valid JSON
+		try {
+			JSON.parse(cleaned);
+		} catch {
+			log.error(
+				{ content },
+				"AI returned invalid JSON for privacy declaration",
+			);
+			buildError("somethingWentWrong", {
+				info: "AI returned invalid privacy declaration format",
+			});
+		}
+
+		return { model, result: cleaned };
+	}
+
 	static async generateReleaseNotes(
 		appName: string,
 		_version: string,

@@ -3,6 +3,7 @@ import {
 	draftReplyBody,
 	generateDescriptionBody,
 	generateListingFieldBody,
+	generatePrivacyBody,
 	generateReleaseNotesBody,
 	suggestKeywordsBody,
 	translateBody,
@@ -94,6 +95,23 @@ export const aiController = new Elysia({ prefix: "/ai" })
 			body: draftReplyBody,
 			detail: {
 				description: "Draft a review reply",
+				tags: ["AI"],
+			},
+		},
+	)
+	.post(
+		"/generate-privacy",
+		async ({ body }) => {
+			const { model, result } = await AIService.generatePrivacyDeclaration(
+				body.appName,
+				body.description,
+			);
+			return { mock: false, model, result };
+		},
+		{
+			body: generatePrivacyBody,
+			detail: {
+				description: "Generate privacy declaration using AI",
 				tags: ["AI"],
 			},
 		},

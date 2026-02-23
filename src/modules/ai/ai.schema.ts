@@ -32,6 +32,11 @@ export const generateReleaseNotesBody = t.Object({
 	version: t.String({ minLength: 1 }),
 });
 
+export const generatePrivacyBody = t.Object({
+	appName: t.String({ minLength: 1 }),
+	description: t.String({ minLength: 10 }),
+});
+
 export const generateListingFieldBody = t.Object({
 	appId: t.String({ minLength: 1 }),
 	appName: t.String({ minLength: 1 }),
