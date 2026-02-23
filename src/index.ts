@@ -9,6 +9,7 @@ import {
 import { aiController } from "@/modules/ai";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appsController } from "@/modules/apps";
+import { assetsController } from "@/modules/assets";
 import { asoProfileController } from "@/modules/aso-profile";
 import { listingsController } from "@/modules/listings";
 import {
@@ -50,6 +51,7 @@ const app = new Elysia()
 			.use(settingsController)
 			.use(aiController)
 			.use(appAiPromptsController)
+			.use(assetsController)
 			.use(listingsController),
 	)
 	.listen(port);
