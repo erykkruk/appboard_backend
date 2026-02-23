@@ -5,6 +5,7 @@ import {
 	generateListingFieldBody,
 	generatePrivacyBody,
 	generateReleaseNotesBody,
+	suggestCategoryBody,
 	suggestKeywordsBody,
 	translateBody,
 } from "./ai.schema";
@@ -129,6 +130,24 @@ export const aiController = new Elysia({ prefix: "/ai" })
 			body: generateReleaseNotesBody,
 			detail: {
 				description: "Generate release notes",
+				tags: ["AI"],
+			},
+		},
+	)
+	.post(
+		"/suggest-category",
+		async ({ body }) => {
+			return AIService.suggestCategory(
+				body.appId,
+				body.appName,
+				body.platform,
+				body.description,
+			);
+		},
+		{
+			body: suggestCategoryBody,
+			detail: {
+				description: "Suggest best app category using AI",
 				tags: ["AI"],
 			},
 		},

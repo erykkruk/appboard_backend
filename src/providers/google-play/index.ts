@@ -8,6 +8,7 @@ import type {
 	AppData,
 	AssetData,
 	AssetMetadata,
+	CategoryData,
 	ListingData,
 	ListingUpdateData,
 	ReviewData,
@@ -64,6 +65,20 @@ export class GooglePlayProvider implements StoreProvider {
 	): Promise<void> {
 		// Google Play age ratings are managed via the IARC questionnaire on Play Console
 		log.info("Google Play age rating update not supported via API");
+	}
+
+	async fetchCategories(_appId: string): Promise<CategoryData> {
+		// Google Play categories are managed via Play Console
+		return { primaryCategory: null, secondaryCategory: null };
+	}
+
+	async updateCategories(
+		_appId: string,
+		_primaryCategory: string,
+		_secondaryCategory?: string,
+	): Promise<void> {
+		// Google Play categories are managed via Play Console
+		log.info("Google Play category update not supported via API");
 	}
 
 	async validateCredentials(): Promise<boolean> {

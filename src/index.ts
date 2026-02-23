@@ -10,6 +10,7 @@ import { aiController } from "@/modules/ai";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
+import { listingsController } from "@/modules/listings";
 import {
 	privacyDeclarationController,
 	privacyTemplatesController,
@@ -48,7 +49,8 @@ const app = new Elysia()
 			.use(ageRatingController)
 			.use(settingsController)
 			.use(aiController)
-			.use(appAiPromptsController),
+			.use(appAiPromptsController)
+			.use(listingsController),
 	)
 	.listen(port);
 

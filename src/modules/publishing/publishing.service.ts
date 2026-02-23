@@ -1243,6 +1243,127 @@ export class PublishingService {
 		return { added: true, language: locale };
 	}
 
+	static async addVersionLocalizationWithTranslation(
+		appId: string,
+		versionId: string,
+		locale: string,
+		sourceLocale: string,
+	) {
+		// 1. Create the locale in ASC
+		await PublishingService.addVersionLocalization(appId, versionId, locale);
+
+		// 2. Sync to get the new localization in DB
+		await PublishingService.syncVersions(appId);
+
+		// 3. Find the DB version
+		const [dbVersion] = await db
+			.select()
+			.from(appVersions)
+			.where(
+				and(
+					eq(appVersions.appId, appId),
+					eq(appVersions.externalId, versionId),
+				),
+			)
+			.limit(1);
+
+		if (!dbVersion) {
+			buildError("notFound", { info: "Version not found after sync" });
+			throw new Error("unreachable");
+		}
+
+		// 4. Get source localization data
+		const [sourceLoc] = await db
+			.select()
+			.from(versionLocalizations)
+			.where(
+				and(
+					eq(versionLocalizations.versionId, dbVersion.id),
+					eq(versionLocalizations.language, sourceLocale),
+					eq(versionLocalizations.source, "remote"),
+				),
+			)
+			.limit(1);
+
+		if (!sourceLoc) {
+			log.warn(
+				{ appId, sourceLocale },
+				"Source localization not found, skipping translation",
+			);
+			return { added: true, language: locale, translated: false };
+		}
+
+		// 5. Collect non-empty text fields
+		const fields: Record<string, string> = {};
+		if (sourceLoc.title?.trim()) fields.title = sourceLoc.title;
+		if (sourceLoc.subtitle?.trim()) fields.subtitle = sourceLoc.subtitle;
+		if (sourceLoc.description?.trim())
+			fields.description = sourceLoc.description;
+		if (sourceLoc.keywords?.trim()) fields.keywords = sourceLoc.keywords;
+		if (sourceLoc.promotionalText?.trim())
+			fields.promotionalText = sourceLoc.promotionalText;
+		if (sourceLoc.whatsNew?.trim()) fields.whatsNew = sourceLoc.whatsNew;
+
+		if (Object.keys(fields).length === 0) {
+			log.info({ appId, sourceLocale }, "No text fields to translate");
+			return { added: true, language: locale, translated: false };
+		}
+
+		// 6. Translate via AI
+		let translations: Record<string, string>;
+		try {
+			const { AIService } = await import("@/modules/ai/ai.service");
+			const result = await AIService.translateLocalization(
+				fields,
+				sourceLocale,
+				locale,
+			);
+			translations = result.translations;
+		} catch (err) {
+			log.warn(
+				{ appId, err, locale, sourceLocale },
+				"AI translation failed, language was added without translations",
+			);
+			return { added: true, language: locale, translated: false };
+		}
+
+		// 7. Find the new localization's externalId
+		const [newLoc] = await db
+			.select()
+			.from(versionLocalizations)
+			.where(
+				and(
+					eq(versionLocalizations.versionId, dbVersion.id),
+					eq(versionLocalizations.language, locale),
+					eq(versionLocalizations.source, "remote"),
+				),
+			)
+			.limit(1);
+
+		if (!newLoc?.externalId) {
+			log.warn(
+				{ appId, locale },
+				"New localization not found after sync, cannot save translations",
+			);
+			return { added: true, language: locale, translated: false };
+		}
+
+		// 8. Save translated fields as draft
+		await PublishingService.updateVersionLocalization(
+			appId,
+			versionId,
+			newLoc.externalId,
+			translations,
+		);
+
+		log.info(
+			{ appId, fields: Object.keys(translations), locale, sourceLocale },
+			"Added localization with AI translation",
+		);
+
+		return { added: true, language: locale, translated: true };
+	}
+
 	static async deleteVersionLocalization(
 		appId: string,
 		localizationId: string,

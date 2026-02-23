@@ -37,6 +37,13 @@ export const generatePrivacyBody = t.Object({
 	description: t.String({ minLength: 10 }),
 });
 
+export const suggestCategoryBody = t.Object({
+	appId: t.String({ minLength: 1 }),
+	appName: t.String({ minLength: 1 }),
+	description: t.Optional(t.String()),
+	platform: t.String({ minLength: 1 }),
+});
+
 export const generateListingFieldBody = t.Object({
 	appId: t.String({ minLength: 1 }),
 	appName: t.String({ minLength: 1 }),

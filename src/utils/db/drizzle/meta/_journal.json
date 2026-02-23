@@ -14,6 +14,13 @@
 			"tag": "0001_keen_masked_marvel",
 			"version": "7",
 			"when": 1771875457887
+		},
+		{
+			"breakpoints": true,
+			"idx": 2,
+			"tag": "0002_faithful_marten_broadcloak",
+			"version": "7",
+			"when": 1771882977651
 		}
 	],
 	"version": "7"

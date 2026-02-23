@@ -3,6 +3,7 @@ import {
 	exportQuery,
 	listingLanguageParams,
 	listingParams,
+	updateCategoriesBody,
 	updateListingBody,
 } from "./listings.schema";
 import { ListingsService } from "./listings.service";
@@ -138,6 +139,37 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 		{
 			detail: {
 				description: "Sync listings from store",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+		},
+	)
+	.get(
+		"/:appId/listings/categories",
+		async ({ params }) => {
+			return ListingsService.getCategories(params.appId);
+		},
+		{
+			detail: {
+				description: "Get app categories (primary + secondary)",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+		},
+	)
+	.put(
+		"/:appId/listings/categories",
+		async ({ body, params }) => {
+			return ListingsService.updateCategories(
+				params.appId,
+				body.primaryCategory,
+				body.secondaryCategory,
+			);
+		},
+		{
+			body: updateCategoriesBody,
+			detail: {
+				description: "Update app categories (push to store)",
 				tags: ["Listings"],
 			},
 			params: listingParams,

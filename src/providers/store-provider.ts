@@ -4,6 +4,11 @@ export interface VersionData {
 	versionString: string;
 }
 
+export interface CategoryData {
+	primaryCategory: string | null;
+	secondaryCategory: string | null;
+}
+
 export interface StoreProvider {
 	validateCredentials(): Promise<boolean>;
 	fetchApps(): Promise<AppData[]>;
@@ -32,6 +37,12 @@ export interface StoreProvider {
 	updateAgeRating(
 		appId: string,
 		appleQuestionnaire: Record<string, string>,
+	): Promise<void>;
+	fetchCategories(appId: string): Promise<CategoryData>;
+	updateCategories(
+		appId: string,
+		primaryCategory: string,
+		secondaryCategory?: string,
 	): Promise<void>;
 }
 

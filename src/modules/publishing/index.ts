@@ -72,6 +72,32 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.post(
+		"/:appId/publishing/versions/:versionId/localizations/translate",
+		async ({ body, params }) => {
+			return PublishingService.addVersionLocalizationWithTranslation(
+				params.appId,
+				params.versionId,
+				body.locale,
+				body.sourceLocale,
+			);
+		},
+		{
+			body: t.Object({
+				locale: t.String({ minLength: 1 }),
+				sourceLocale: t.String({ minLength: 1 }),
+			}),
+			detail: {
+				description:
+					"Add a localization with AI translation from a source language",
+				tags: ["Publishing"],
+			},
+			params: t.Object({
+				appId: t.String({ format: "uuid" }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+		},
+	)
+	.post(
 		"/:appId/publishing/versions/:versionId/localizations",
 		async ({ body, params }) => {
 			return PublishingService.addVersionLocalization(

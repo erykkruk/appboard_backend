@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { APP_STORE_CATEGORIES } from "@/config/const";
 import { getSettingKey, type PromptMode } from "@/modules/ai/ai.prompts";
 import { AsoProfileService } from "@/modules/aso-profile/aso-profile.service";
 import { SettingsService } from "@/modules/settings/settings.service";
@@ -697,6 +698,89 @@ Generate the privacy declaration JSON array.`;
 		return { model, result: cleaned };
 	}
 
+	static async translateLocalization(
+		fields: Record<string, string>,
+		sourceLanguage: string,
+		targetLanguage: string,
+	): Promise<{ model: string; translations: Record<string, string> }> {
+		const fieldEntries = Object.entries(fields).filter(
+			([, v]) => v.trim().length > 0,
+		);
+		if (fieldEntries.length === 0) {
+			return { model: DEFAULT_MODEL, translations: {} };
+		}
+
+		const fieldLimits: Record<string, number> = {
+			description: 4000,
+			keywords: 100,
+			promotionalText: 170,
+			subtitle: 30,
+			title: 30,
+			whatsNew: 4000,
+		};
+
+		const fieldsBlock = fieldEntries
+			.map(([key, value]) => {
+				const limit = fieldLimits[key] ?? 4000;
+				return `"${key}" (max ${limit} chars): """${value}"""`;
+			})
+			.join("\n\n");
+
+		const systemPrompt = `You are a professional translator specializing in app store content (ASO).
+Translate all provided fields from ${sourceLanguage} to ${targetLanguage}.
+
+Rules:
+- Maintain marketing tone and ASO effectiveness in the target language
+- Respect character limits for each field
+- For "keywords": translate individual keywords, keep comma-separated format, no spaces after commas
+- NEVER use emoji or special Unicode symbols
+- Preserve the original structure (bullet points, line breaks, etc.)
+- Return ONLY valid JSON where keys match the input field names and values are translations
+- No explanations, no markdown, just the JSON object`;
+
+		const userPrompt = `Translate the following app store listing fields from ${sourceLanguage} to ${targetLanguage}:
+
+${fieldsBlock}
+
+Return ONLY a JSON object with the same keys and translated values.`;
+
+		log.info(
+			{ fieldCount: fieldEntries.length, sourceLanguage, targetLanguage },
+			"Translating localization fields",
+		);
+
+		const { content, model } = await AIService.callOpenRouter(
+			systemPrompt,
+			userPrompt,
+			"generate",
+		);
+
+		let cleaned = content.trim();
+		if (cleaned.startsWith("```")) {
+			cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+		}
+
+		try {
+			const translations = JSON.parse(cleaned) as Record<string, string>;
+
+			// Enforce character limits
+			for (const [key, value] of Object.entries(translations)) {
+				const limit = fieldLimits[key];
+				if (limit && value.length > limit) {
+					translations[key] = value.substring(0, limit);
+				}
+			}
+
+			return { model, translations };
+		} catch {
+			log.error({ content }, "Failed to parse translation response");
+			buildError("somethingWentWrong", {
+				info: "AI returned invalid translation format",
+			});
+			throw new Error("unreachable");
+		}
+	}
+
 	static async generateReleaseNotes(
 		appName: string,
 		_version: string,
@@ -711,5 +795,72 @@ Generate the privacy declaration JSON array.`;
 			changes.join("\n"),
 		);
 		return { model, releaseNotes: result };
+	}
+
+	static async suggestCategory(
+		appId: string,
+		appName: string,
+		platform: string,
+		description?: string,
+	): Promise<{
+		model: string;
+		primary: string;
+		reasoning: string;
+		secondary: string | null;
+	}> {
+		const asoProfile = appId ? await AsoProfileService.get(appId) : null;
+		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
+
+		const categoryList = APP_STORE_CATEGORIES.map(
+			(c) => `${c.id} (${c.name})`,
+		).join(", ");
+
+		const systemPrompt = `You are an ASO expert specializing in app categorization. Your job is to suggest the best primary and secondary App Store categories for an app.
+
+Available categories: ${categoryList}
+
+Rules:
+- Primary category should be the most relevant to the app's core functionality
+- Secondary category should capture a secondary use case (or null if none fits well)
+- Consider both discoverability (where users would search) and competition (less crowded categories rank higher)
+- Return ONLY valid JSON with this exact structure: {"primary": "CATEGORY_ID", "secondary": "CATEGORY_ID" or null, "reasoning": "brief explanation"}`;
+
+		const userPrompt = `App name: ${appName}
+Platform: ${platform === "ios" ? "iOS (App Store)" : "Android (Google Play)"}
+${description ? `Description: ${description}` : ""}
+${asoContext ? `\nASO Profile:\n${asoContext}` : ""}
+
+Suggest the best primary and secondary category. Return ONLY the JSON.`;
+
+		log.info({ appId, appName }, "Suggesting categories with AI");
+
+		const { content, model } = await AIService.callOpenRouter(
+			systemPrompt,
+			userPrompt,
+			"research",
+		);
+
+		let cleaned = content.trim();
+		if (cleaned.startsWith("```")) {
+			cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+		}
+
+		try {
+			const result = JSON.parse(cleaned) as {
+				primary: string;
+				reasoning: string;
+				secondary: string | null;
+			};
+			return { model, ...result };
+		} catch {
+			log.error(
+				{ content },
+				"AI returned invalid JSON for category suggestion",
+			);
+			buildError("somethingWentWrong", {
+				info: "AI returned invalid category suggestion format",
+			});
+			throw new Error("unreachable");
+		}
 	}
 }

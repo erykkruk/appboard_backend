@@ -24,3 +24,8 @@ export const updateListingBody = t.Object({
 	title: t.Optional(t.String({ maxLength: 255 })),
 	whatsNew: t.Optional(t.String()),
 });
+
+export const updateCategoriesBody = t.Object({
+	primaryCategory: t.String({ maxLength: 100, minLength: 1 }),
+	secondaryCategory: t.Optional(t.String({ maxLength: 100 })),
+});

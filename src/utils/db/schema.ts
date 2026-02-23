@@ -37,7 +37,9 @@ export const apps = pgTable("apps", {
 	lastSyncedAt: timestamp(),
 	name: varchar({ length: 255 }).notNull(),
 	platform: varchar({ length: 50 }).notNull(),
+	primaryCategory: varchar({ length: 100 }),
 	rawData: jsonb(),
+	secondaryCategory: varchar({ length: 100 }),
 	status: varchar({ length: 50 }).notNull().default("active"),
 	storeId: uuid()
 		.notNull()

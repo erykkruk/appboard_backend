@@ -89,6 +89,38 @@ export const APPLE_ANSWER_VALUES = [
 ] as const;
 export type AppleAnswerValue = (typeof APPLE_ANSWER_VALUES)[number];
 
+// App Store Categories (App Store Connect category IDs)
+export const APP_STORE_CATEGORIES = [
+	{ id: "BOOKS", name: "Books" },
+	{ id: "BUSINESS", name: "Business" },
+	{ id: "DEVELOPER_TOOLS", name: "Developer Tools" },
+	{ id: "EDUCATION", name: "Education" },
+	{ id: "ENTERTAINMENT", name: "Entertainment" },
+	{ id: "FINANCE", name: "Finance" },
+	{ id: "FOOD_AND_DRINK", name: "Food & Drink" },
+	{ id: "GAMES", name: "Games" },
+	{ id: "GRAPHICS_AND_DESIGN", name: "Graphics & Design" },
+	{ id: "HEALTH_AND_FITNESS", name: "Health & Fitness" },
+	{ id: "LIFESTYLE", name: "Lifestyle" },
+	{ id: "MAGAZINES_AND_NEWSPAPERS", name: "Magazines & Newspapers" },
+	{ id: "MEDICAL", name: "Medical" },
+	{ id: "MUSIC", name: "Music" },
+	{ id: "NAVIGATION", name: "Navigation" },
+	{ id: "NEWS", name: "News" },
+	{ id: "PHOTO_AND_VIDEO", name: "Photo & Video" },
+	{ id: "PRODUCTIVITY", name: "Productivity" },
+	{ id: "REFERENCE", name: "Reference" },
+	{ id: "SHOPPING", name: "Shopping" },
+	{ id: "SOCIAL_NETWORKING", name: "Social Networking" },
+	{ id: "SPORTS", name: "Sports" },
+	{ id: "STICKERS", name: "Stickers" },
+	{ id: "TRAVEL", name: "Travel" },
+	{ id: "UTILITIES", name: "Utilities" },
+	{ id: "WEATHER", name: "Weather" },
+] as const;
+
+export type AppStoreCategory = (typeof APP_STORE_CATEGORIES)[number]["id"];
+
 export const CHAR_LIMITS = {
 	APP_STORE: {
 		description: 4000,

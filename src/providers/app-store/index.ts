@@ -9,6 +9,7 @@ import type {
 	AppData,
 	AssetData,
 	AssetMetadata,
+	CategoryData,
 	ListingData,
 	ListingUpdateData,
 	ReviewData,
@@ -810,6 +811,102 @@ export class AppStoreProvider implements StoreProvider {
 			log.error(
 				{ appId, err },
 				"Failed to update age rating on App Store Connect",
+			);
+			throw err;
+		}
+	}
+
+	async fetchCategories(appId: string): Promise<CategoryData> {
+		if (this.isMock) {
+			return { primaryCategory: "UTILITIES", secondaryCategory: null };
+		}
+
+		try {
+			const { readAll } = await createAppStoreClient(this.credentials);
+			const { data: appInfos } = await readAll(`apps/${appId}/appInfos`);
+
+			if (!appInfos?.length) {
+				return { primaryCategory: null, secondaryCategory: null };
+			}
+
+			const latestInfo = appInfos[0] as ApiResource;
+			const primaryRel = latestInfo.relationships?.primaryCategory?.data as
+				| { id: string }
+				| undefined;
+			const secondaryRel = latestInfo.relationships?.secondaryCategory?.data as
+				| { id: string }
+				| undefined;
+
+			log.info(
+				{
+					appId,
+					primary: primaryRel?.id ?? null,
+					secondary: secondaryRel?.id ?? null,
+				},
+				"Fetched categories from App Store Connect",
+			);
+
+			return {
+				primaryCategory: primaryRel?.id ?? null,
+				secondaryCategory: secondaryRel?.id ?? null,
+			};
+		} catch (err) {
+			log.error(
+				{ appId, err },
+				"Failed to fetch categories from App Store Connect",
+			);
+			return { primaryCategory: null, secondaryCategory: null };
+		}
+	}
+
+	async updateCategories(
+		appId: string,
+		primaryCategory: string,
+		secondaryCategory?: string,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info(
+				{ appId, primaryCategory, secondaryCategory },
+				"Mock: categories updated",
+			);
+			return;
+		}
+
+		try {
+			const { readAll, update } = await createAppStoreClient(this.credentials);
+			const { data: appInfos } = await readAll(`apps/${appId}/appInfos`);
+
+			if (!appInfos?.length) {
+				throw new Error(`No appInfos found for app ${appId}`);
+			}
+
+			const editableInfo = findEditableVersion(appInfos as ApiResource[]);
+			const targetInfo = editableInfo ?? (appInfos[0] as ApiResource);
+
+			const relationships: Record<string, unknown> = {
+				primaryCategory: {
+					data: { id: primaryCategory, type: "appCategories" },
+				},
+			};
+
+			if (secondaryCategory) {
+				relationships.secondaryCategory = {
+					data: { id: secondaryCategory, type: "appCategories" },
+				};
+			} else {
+				relationships.secondaryCategory = { data: null };
+			}
+
+			await update({ id: targetInfo.id, type: "appInfos" }, { relationships });
+
+			log.info(
+				{ appId, primaryCategory, secondaryCategory },
+				"Updated categories on App Store Connect",
+			);
+		} catch (err) {
+			log.error(
+				{ appId, err },
+				"Failed to update categories on App Store Connect",
 			);
 			throw err;
 		}

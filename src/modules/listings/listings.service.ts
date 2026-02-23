@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import type { StoreType } from "@/config/const";
+import { APP_STORE_CATEGORIES, type StoreType } from "@/config/const";
 import { createProvider } from "@/providers";
 import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
@@ -230,6 +230,21 @@ export class ListingsService {
 					},
 					target: [listings.appId, listings.language, listings.source],
 				});
+		}
+
+		// Sync categories from store
+		try {
+			const categories = await provider.fetchCategories(app.externalId);
+			await db
+				.update(apps)
+				.set({
+					primaryCategory: categories.primaryCategory,
+					secondaryCategory: categories.secondaryCategory,
+				})
+				.where(eq(apps.id, appId));
+			log.info({ appId, categories }, "Categories synced from store");
+		} catch (err) {
+			log.warn({ appId, err }, "Failed to sync categories from store");
 		}
 
 		log.info({ appId, count: fetched.length }, "Listings synced from store");
@@ -524,6 +539,62 @@ export class ListingsService {
 			"Listings imported",
 		);
 		return { errors, imported };
+	}
+
+	static async getCategories(appId: string) {
+		const [app] = await db
+			.select({
+				platform: apps.platform,
+				primaryCategory: apps.primaryCategory,
+				secondaryCategory: apps.secondaryCategory,
+			})
+			.from(apps)
+			.where(eq(apps.id, appId))
+			.limit(1);
+
+		if (!app) {
+			buildError("notFound", { info: "App not found" });
+			throw new Error("unreachable");
+		}
+
+		return {
+			availableCategories: APP_STORE_CATEGORIES,
+			primaryCategory: app.primaryCategory,
+			secondaryCategory: app.secondaryCategory,
+		};
+	}
+
+	static async updateCategories(
+		appId: string,
+		primaryCategory: string,
+		secondaryCategory?: string,
+	) {
+		const app = await ListingsService.getAppWithStore(appId);
+		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const provider = createProvider(app.store.type as StoreType, credentials);
+
+		// Push to store
+		await provider.updateCategories(
+			app.externalId,
+			primaryCategory,
+			secondaryCategory,
+		);
+
+		// Update local DB
+		await db
+			.update(apps)
+			.set({
+				primaryCategory,
+				secondaryCategory: secondaryCategory ?? null,
+			})
+			.where(eq(apps.id, appId));
+
+		log.info(
+			{ appId, primaryCategory, secondaryCategory },
+			"Categories updated",
+		);
+
+		return { primaryCategory, secondaryCategory: secondaryCategory ?? null };
 	}
 
 	private static async getAppWithStore(appId: string) {
