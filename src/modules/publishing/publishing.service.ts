@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import type { ApiResource } from "node-app-store-connect-api";
 import sharp from "sharp";
 import type { StoreType } from "@/config/const";
@@ -369,9 +369,12 @@ export class PublishingService {
 					`appStoreVersions/${v.id}/appStoreVersionLocalizations`,
 				);
 
+				const ascLocales: string[] = [];
+
 				for (const loc of (versionLocs ?? []) as ApiResource[]) {
 					const attrs = loc.attributes;
 					const locale = attrs.locale as string;
+					ascLocales.push(locale);
 					const infoLoc = infoLocByLang.get(locale);
 
 					await db
@@ -411,6 +414,30 @@ export class PublishingService {
 								versionLocalizations.source,
 							],
 						});
+				}
+
+				// Remove localizations that no longer exist in ASC
+				if (ascLocales.length > 0) {
+					const deleted = await db
+						.delete(versionLocalizations)
+						.where(
+							and(
+								eq(versionLocalizations.versionId, dbVersion.id),
+								notInArray(versionLocalizations.language, ascLocales),
+							),
+						)
+						.returning({ language: versionLocalizations.language });
+
+					if (deleted.length > 0) {
+						log.info(
+							{
+								appId,
+								removed: deleted.map((d) => d.language),
+								versionId: v.id,
+							},
+							"Removed stale localizations not in ASC",
+						);
+					}
 				}
 
 				synced++;
