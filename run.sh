@@ -113,6 +113,33 @@ cleanup() {
     exit 0
 }
 
+ensure_database() {
+    local container_status
+    container_status=$(docker inspect -f '{{.State.Running}}' AppBoardPostgres 2>/dev/null || echo "missing")
+
+    if [[ "$container_status" == "true" ]]; then
+        return 0
+    fi
+
+    echo -e "${YELLOW}Starting PostgreSQL...${NC}"
+    cd "$SCRIPT_DIR" && docker compose up -d postgres
+
+    local DB_URL="postgresql://appboard:appboard@localhost:5441/appboard"
+    local retries=30
+    local count=0
+    while ! psql "$DB_URL" -c "SELECT 1;" &>/dev/null; do
+        count=$((count + 1))
+        if [[ $count -ge $retries ]]; then
+            echo -e "${RED}Database did not become ready in time${NC}"
+            return 1
+        fi
+        echo -n "."
+        sleep 1
+    done
+    echo -e "${GREEN}PostgreSQL ready${NC}"
+    return 0
+}
+
 free_port() {
     local port=$1
     local name=$2
@@ -130,6 +157,12 @@ free_port() {
 }
 
 start_backend_only() {
+    if ! ensure_database; then
+        echo "Press Enter to continue..."
+        read -r
+        return
+    fi
+
     if ! free_port "$BACKEND_PORT" "backend"; then
         echo "Press Enter to continue..."
         read -r
@@ -165,6 +198,13 @@ start_all() {
     if ! web_path=$(get_web_path); then
         setup_web_path || return
         web_path=$(get_web_path) || return
+    fi
+
+    # Ensure database is running
+    if ! ensure_database; then
+        echo "Press Enter to continue..."
+        read -r
+        return
     fi
 
     # Check ports before starting
