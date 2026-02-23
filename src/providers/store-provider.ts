@@ -29,6 +29,10 @@ export interface StoreProvider {
 		versionString: string,
 	): Promise<{ state: string; versionString: string }>;
 	getLatestVersion(appId: string): Promise<VersionData | null>;
+	updateAgeRating(
+		appId: string,
+		appleQuestionnaire: Record<string, string>,
+	): Promise<void>;
 }
 
 export interface AppData {

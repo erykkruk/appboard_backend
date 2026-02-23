@@ -12,42 +12,42 @@ const nullableStringArray = t.Optional(
 export const upsertAsoProfileBody = t.Object({
 	// Social Proof
 	awards: nullableStringArray,
-	downloadCount: nullableString,
-	pressQuotes: nullableStringArray,
-	testimonials: nullableStringArray,
 
 	// Tone & Branding
 	brandVoiceExample: nullableString,
-	tone: nullableString,
-	wordsToAvoid: nullableStringArray,
-	wordsToInclude: nullableStringArray,
 
 	// Core Information
 	category: nullableString,
-	differentiator: nullableString,
-	keyFeatures: nullableStringArray,
-	mainBenefit: nullableString,
-	oneLiner: nullableString,
-	problem: nullableString,
 
 	// Competitors
 	competitiveAdvantage: nullableString,
 	competitors: nullableStringArray,
-	positioning: nullableString,
+	differentiator: nullableString,
+	downloadCount: nullableString,
 
 	// Keywords
 	excludeKeywords: nullableStringArray,
-	longTailKeywords: nullableStringArray,
-	mustIncludeKeywords: nullableStringArray,
 
 	// Product Details
 	freeFeatures: nullableStringArray,
-	premiumFeatures: nullableStringArray,
-	price: nullableString,
-	pricingModel: nullableString,
+	keyFeatures: nullableStringArray,
+	longTailKeywords: nullableStringArray,
+	mainBenefit: nullableString,
+	mustIncludeKeywords: nullableStringArray,
+	oneLiner: nullableString,
 
 	// Audience
 	painPoints: nullableStringArray,
+	positioning: nullableString,
+	premiumFeatures: nullableStringArray,
+	pressQuotes: nullableStringArray,
+	price: nullableString,
+	pricingModel: nullableString,
+	problem: nullableString,
 	targetAudience: nullableString,
+	testimonials: nullableStringArray,
+	tone: nullableString,
 	userLanguage: nullableString,
+	wordsToAvoid: nullableStringArray,
+	wordsToInclude: nullableStringArray,
 });

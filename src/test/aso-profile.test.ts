@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
-import { asoProfileController } from "@/modules/aso-profile";
 import { appsController } from "@/modules/apps";
+import { asoProfileController } from "@/modules/aso-profile";
 import { storesController } from "@/modules/stores";
 import { db } from "@/utils/db";
 import { appAsoProfiles } from "@/utils/db/schema";
@@ -10,10 +10,7 @@ import { cleanupStores } from "./setup";
 
 describe("ASO Profile module", () => {
 	const app = new Elysia().group("/api", (app) =>
-		app
-			.use(storesController)
-			.use(appsController)
-			.use(asoProfileController),
+		app.use(storesController).use(appsController).use(asoProfileController),
 	);
 
 	let storeId: string;
@@ -54,9 +51,7 @@ describe("ASO Profile module", () => {
 
 	it("GET /api/apps/:appId/aso-profile returns null when no profile exists", async () => {
 		const response = await app
-			.handle(
-				new Request(`http://localhost/api/apps/${appId}/aso-profile`),
-			)
+			.handle(new Request(`http://localhost/api/apps/${appId}/aso-profile`))
 			.then((res) => res.json());
 
 		expect(response.asoProfile).toBeNull();
@@ -65,11 +60,11 @@ describe("ASO Profile module", () => {
 	it("PUT /api/apps/:appId/aso-profile creates a new profile", async () => {
 		const body = {
 			category: "Productivity",
+			differentiator: "AI-powered prioritization",
+			keyFeatures: ["Reminders", "Calendar sync", "Team sharing"],
+			mainBenefit: "Never miss a deadline again",
 			oneLiner: "The best task manager",
 			problem: "People forget important tasks",
-			mainBenefit: "Never miss a deadline again",
-			keyFeatures: ["Reminders", "Calendar sync", "Team sharing"],
-			differentiator: "AI-powered prioritization",
 		};
 
 		const res = await app.handle(
@@ -97,9 +92,7 @@ describe("ASO Profile module", () => {
 
 	it("GET /api/apps/:appId/aso-profile returns saved profile", async () => {
 		const response = await app
-			.handle(
-				new Request(`http://localhost/api/apps/${appId}/aso-profile`),
-			)
+			.handle(new Request(`http://localhost/api/apps/${appId}/aso-profile`))
 			.then((res) => res.json());
 
 		expect(response.asoProfile).not.toBeNull();
@@ -115,13 +108,13 @@ describe("ASO Profile module", () => {
 	it("PUT /api/apps/:appId/aso-profile updates existing profile (upsert)", async () => {
 		const body = {
 			category: "Business",
+			competitors: ["Todoist", "Asana"],
+			differentiator: "AI-powered prioritization",
+			keyFeatures: ["Reminders", "Calendar sync"],
+			mainBenefit: "Never miss a deadline again",
 			oneLiner: "Updated tagline",
 			problem: "People forget important tasks",
-			mainBenefit: "Never miss a deadline again",
-			keyFeatures: ["Reminders", "Calendar sync"],
-			differentiator: "AI-powered prioritization",
 			tone: "Professional",
-			competitors: ["Todoist", "Asana"],
 		};
 
 		const response = await app
@@ -146,9 +139,7 @@ describe("ASO Profile module", () => {
 
 	it("GET after update returns updated data", async () => {
 		const response = await app
-			.handle(
-				new Request(`http://localhost/api/apps/${appId}/aso-profile`),
-			)
+			.handle(new Request(`http://localhost/api/apps/${appId}/aso-profile`))
 			.then((res) => res.json());
 
 		expect(response.asoProfile.category).toBe("Business");
@@ -158,39 +149,39 @@ describe("ASO Profile module", () => {
 
 	it("PUT with all optional sections saves correctly", async () => {
 		const body = {
+			awards: ["Best Fitness App 2025"],
+			brandVoiceExample: "You got this! Let's crush today's workout.",
 			category: "Health & Fitness",
-			oneLiner: "Your personal trainer",
-			problem: "Hard to stay consistent",
-			mainBenefit: "Build lasting habits",
-			keyFeatures: ["Tracking", "Coaching"],
-			differentiator: "Adaptive plans",
-			// Audience
-			targetAudience: "Fitness beginners aged 25-40",
-			painPoints: ["No time", "Lack of motivation"],
-			userLanguage: "Casual and encouraging",
+			competitiveAdvantage: "More affordable",
 			// Competitors
 			competitors: ["Nike Training Club", "Peloton"],
-			competitiveAdvantage: "More affordable",
-			positioning: "Budget-friendly",
-			// Tone
-			tone: "Motivational",
-			brandVoiceExample: "You got this! Let's crush today's workout.",
-			wordsToInclude: ["results", "progress"],
-			wordsToAvoid: ["pain", "suffer"],
+			differentiator: "Adaptive plans",
 			// Social Proof
 			downloadCount: "500K+",
-			awards: ["Best Fitness App 2025"],
-			pressQuotes: ["'Amazing app' - TechCrunch"],
-			testimonials: ["Changed my life!"],
-			// Product
-			pricingModel: "Freemium",
-			price: "$9.99/month",
+			excludeKeywords: ["bodybuilding"],
 			freeFeatures: ["Basic tracking", "Community"],
-			premiumFeatures: ["Personal coaching", "Custom plans"],
+			keyFeatures: ["Tracking", "Coaching"],
+			longTailKeywords: ["home workout for beginners"],
+			mainBenefit: "Build lasting habits",
 			// Keywords
 			mustIncludeKeywords: ["fitness", "workout"],
-			longTailKeywords: ["home workout for beginners"],
-			excludeKeywords: ["bodybuilding"],
+			oneLiner: "Your personal trainer",
+			painPoints: ["No time", "Lack of motivation"],
+			positioning: "Budget-friendly",
+			premiumFeatures: ["Personal coaching", "Custom plans"],
+			pressQuotes: ["'Amazing app' - TechCrunch"],
+			price: "$9.99/month",
+			// Product
+			pricingModel: "Freemium",
+			problem: "Hard to stay consistent",
+			// Audience
+			targetAudience: "Fitness beginners aged 25-40",
+			testimonials: ["Changed my life!"],
+			// Tone
+			tone: "Motivational",
+			userLanguage: "Casual and encouraging",
+			wordsToAvoid: ["pain", "suffer"],
+			wordsToInclude: ["results", "progress"],
 		};
 
 		const response = await app
@@ -227,14 +218,11 @@ describe("ASO Profile module", () => {
 		const otherAppId = appsRes.apps[1].id;
 
 		const res = await app.handle(
-			new Request(
-				`http://localhost/api/apps/${otherAppId}/aso-profile`,
-				{
-					body: JSON.stringify({}),
-					headers: { "Content-Type": "application/json" },
-					method: "PUT",
-				},
-			),
+			new Request(`http://localhost/api/apps/${otherAppId}/aso-profile`, {
+				body: JSON.stringify({}),
+				headers: { "Content-Type": "application/json" },
+				method: "PUT",
+			}),
 		);
 
 		expect(res.status).toBe(200);

@@ -2,10 +2,18 @@ import cors from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 import config from "@/config";
+import {
+	ageRatingController,
+	ageRatingPresetsController,
+} from "@/modules/age-rating";
 import { aiController } from "@/modules/ai";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
+import {
+	privacyDeclarationController,
+	privacyTemplatesController,
+} from "@/modules/privacy-declaration";
 import { publishingController } from "@/modules/publishing";
 import { reviewsController } from "@/modules/reviews";
 import { settingsController } from "@/modules/settings";
@@ -34,6 +42,10 @@ const app = new Elysia()
 			.use(publishingController)
 			.use(appsController)
 			.use(asoProfileController)
+			.use(privacyTemplatesController)
+			.use(privacyDeclarationController)
+			.use(ageRatingPresetsController)
+			.use(ageRatingController)
 			.use(settingsController)
 			.use(aiController)
 			.use(appAiPromptsController),

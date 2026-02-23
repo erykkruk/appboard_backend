@@ -247,9 +247,48 @@ export const appAiPrompts = pgTable(
 	(t) => [unique().on(t.appId, t.field, t.mode)],
 );
 
+export const appPrivacyDeclarations = pgTable("app_privacy_declarations", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	appId: uuid()
+		.notNull()
+		.references(() => apps.id, { onDelete: "cascade" })
+		.unique(),
+	dataCollections:
+		jsonb().$type<
+			Array<{
+				category: string;
+				dataType: string;
+				linked: boolean;
+				purposes: string[];
+				tracking: boolean;
+			}>
+		>(),
+	privacyPolicyUrl: varchar({ length: 2048 }),
+	templateId: varchar({ length: 50 }).notNull(),
+	trackingDomains: jsonb().$type<string[]>(),
+	trackingEnabled: boolean().notNull().default(false),
+});
+
+export const appAgeRatings = pgTable("app_age_ratings", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	appId: uuid()
+		.notNull()
+		.references(() => apps.id, { onDelete: "cascade" })
+		.unique(),
+	appleQuestionnaire: jsonb().$type<Record<string, string>>(),
+	appleRating: varchar({ length: 50 }),
+	googleQuestionnaire: jsonb().$type<Record<string, string | boolean>>(),
+	googleRating: varchar({ length: 50 }),
+	presetId: varchar({ length: 50 }).notNull(),
+});
+
 export const schema = {
+	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
+	appPrivacyDeclarations,
 	apps,
 	appVersions,
 	assets,

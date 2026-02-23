@@ -1,7 +1,9 @@
 import { relations } from "drizzle-orm";
 import {
+	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
+	appPrivacyDeclarations,
 	apps,
 	appVersions,
 	assets,
@@ -17,6 +19,10 @@ export const storesRelations = relations(stores, ({ many }) => ({
 }));
 
 export const appsRelations = relations(apps, ({ many, one }) => ({
+	ageRating: one(appAgeRatings, {
+		fields: [apps.id],
+		references: [appAgeRatings.appId],
+	}),
 	aiPrompts: many(appAiPrompts),
 	asoProfile: one(appAsoProfiles, {
 		fields: [apps.id],
@@ -25,6 +31,10 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 	assets: many(assets),
 	listingHistory: many(listingHistory),
 	listings: many(listings),
+	privacyDeclaration: one(appPrivacyDeclarations, {
+		fields: [apps.id],
+		references: [appPrivacyDeclarations.appId],
+	}),
 	reviews: many(reviews),
 	store: one(stores, {
 		fields: [apps.storeId],
@@ -101,3 +111,20 @@ export const versionLocalizationsRelations = relations(
 		}),
 	}),
 );
+
+export const appPrivacyDeclarationsRelations = relations(
+	appPrivacyDeclarations,
+	({ one }) => ({
+		app: one(apps, {
+			fields: [appPrivacyDeclarations.appId],
+			references: [apps.id],
+		}),
+	}),
+);
+
+export const appAgeRatingsRelations = relations(appAgeRatings, ({ one }) => ({
+	app: one(apps, {
+		fields: [appAgeRatings.appId],
+		references: [apps.id],
+	}),
+}));

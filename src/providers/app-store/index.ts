@@ -47,6 +47,35 @@ const DEVICE_TO_SCREENSHOT_DISPLAY_TYPE: Record<string, string> =
 		Object.entries(SCREENSHOT_DISPLAY_TYPE_TO_DEVICE).map(([k, v]) => [v, k]),
 	);
 
+// Maps internal question keys to ASC API attribute names (string enum values)
+const APPLE_QUESTION_TO_ASC_ATTRIBUTE: Record<string, string> = {
+	ALCOHOL_TOBACCO_DRUG_USE: "alcoholTobaccoOrDrugUseOrReferences",
+	CARTOON_FANTASY_VIOLENCE: "violenceCartoonOrFantasy",
+	GAMBLING_CONTESTS: "gamblingSimulated",
+	GRAPHIC_SEXUAL_CONTENT_NUDITY: "sexualContentGraphicAndNudity",
+	HORROR_FEAR_THEMES: "horrorOrFearThemes",
+	MATURE_SUGGESTIVE: "matureOrSuggestiveThemes",
+	MEDICAL_TREATMENT_INFO: "medicalOrTreatmentInformation",
+	PROFANITY_CRUDE_HUMOR: "profanityOrCrudeHumor",
+	PROLONGED_GRAPHIC_SADISTIC_REALISTIC_VIOLENCE:
+		"violenceRealisticProlongedGraphicOrSadistic",
+	REALISTIC_VIOLENCE: "violenceRealistic",
+	SEXUAL_CONTENT_NUDITY: "sexualContentOrNudity",
+	SIMULATED_GAMBLING: "gamblingSimulated",
+};
+
+// Maps internal question keys to boolean ASC attributes
+const APPLE_QUESTION_TO_ASC_BOOLEAN: Record<string, string> = {
+	UNRESTRICTED_WEB_ACCESS: "unrestrictedWebAccess",
+};
+
+// ASC API uses INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE (with _OR_)
+const INTERNAL_TO_ASC_VALUE: Record<string, string> = {
+	FREQUENT_INTENSE: "FREQUENT_OR_INTENSE",
+	INFREQUENT_MILD: "INFREQUENT_OR_MILD",
+	NONE: "NONE",
+};
+
 const EDITABLE_STATES = [
 	"PREPARE_FOR_SUBMISSION",
 	"DEVELOPER_REJECTED",
@@ -703,6 +732,84 @@ export class AppStoreProvider implements StoreProvider {
 			log.error(
 				{ appId, err, reviewId },
 				"Failed to reply to review in App Store Connect",
+			);
+			throw err;
+		}
+	}
+
+	async updateAgeRating(
+		appId: string,
+		appleQuestionnaire: Record<string, string>,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId }, "Mock: age rating updated");
+			return;
+		}
+
+		try {
+			const { read, readAll, update } = await createAppStoreClient(
+				this.credentials,
+			);
+
+			// Get the editable appInfo (age rating is tied to appInfo, not version)
+			const { data: appInfos } = await readAll(`apps/${appId}/appInfos`);
+			if (!appInfos?.length) {
+				throw new Error(`No appInfos found for app ${appId}`);
+			}
+
+			// Find an editable appInfo first, fall back to the first one
+			const editableInfo = findEditableVersion(appInfos as ApiResource[]);
+			const latestInfo = editableInfo ?? (appInfos[0] as ApiResource);
+
+			if (!editableInfo) {
+				log.warn(
+					{ appId },
+					"No editable appInfo found — age rating may not be updatable. Create a new version first.",
+				);
+			}
+
+			// Read the ageRatingDeclaration linked to this appInfo
+			const { data: declarations } = await read(
+				`appInfos/${latestInfo.id}/ageRatingDeclaration`,
+			);
+			const declaration = (
+				Array.isArray(declarations) ? declarations[0] : declarations
+			) as ApiResource | undefined;
+
+			if (!declaration) {
+				throw new Error(`No age rating declaration found for app ${appId}`);
+			}
+
+			// Map internal keys to ASC API attributes with correct types/values
+			const ascAttributes: Record<string, unknown> = {};
+			for (const [key, value] of Object.entries(appleQuestionnaire)) {
+				// Check if this is a boolean attribute
+				const boolKey = APPLE_QUESTION_TO_ASC_BOOLEAN[key];
+				if (boolKey) {
+					ascAttributes[boolKey] = value !== "NONE";
+					continue;
+				}
+
+				// String enum attribute
+				const ascKey = APPLE_QUESTION_TO_ASC_ATTRIBUTE[key];
+				if (ascKey) {
+					ascAttributes[ascKey] = INTERNAL_TO_ASC_VALUE[value] ?? value;
+				}
+			}
+
+			await update(
+				{ id: declaration.id, type: "ageRatingDeclarations" },
+				{ attributes: ascAttributes },
+			);
+
+			log.info(
+				{ appId, fields: Object.keys(ascAttributes) },
+				"Updated age rating declaration on App Store Connect",
+			);
+		} catch (err) {
+			log.error(
+				{ appId, err },
+				"Failed to update age rating on App Store Connect",
 			);
 			throw err;
 		}

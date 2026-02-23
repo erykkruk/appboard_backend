@@ -23,9 +23,7 @@ export class AsoProfileService {
 
 	static async upsert(appId: string, data: AsoProfileData) {
 		const setData =
-			Object.keys(data).length > 0
-				? data
-				: { updatedAt: new Date() };
+			Object.keys(data).length > 0 ? data : { updatedAt: new Date() };
 
 		const [result] = await db
 			.insert(appAsoProfiles)

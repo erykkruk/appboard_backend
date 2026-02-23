@@ -1,13 +1,20 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1771770601489,
-      "tag": "0000_spooky_red_skull",
-      "breakpoints": true
-    }
-  ]
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"breakpoints": true,
+			"idx": 0,
+			"tag": "0000_spooky_red_skull",
+			"version": "7",
+			"when": 1771770601489
+		},
+		{
+			"breakpoints": true,
+			"idx": 1,
+			"tag": "0001_keen_masked_marvel",
+			"version": "7",
+			"when": 1771875457887
+		}
+	],
+	"version": "7"
 }

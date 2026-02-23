@@ -58,6 +58,14 @@ export class GooglePlayProvider implements StoreProvider {
 		return null;
 	}
 
+	async updateAgeRating(
+		_appId: string,
+		_appleQuestionnaire: Record<string, string>,
+	): Promise<void> {
+		// Google Play age ratings are managed via the IARC questionnaire on Play Console
+		log.info("Google Play age rating update not supported via API");
+	}
+
 	async validateCredentials(): Promise<boolean> {
 		if (this.isMock) return true;
 

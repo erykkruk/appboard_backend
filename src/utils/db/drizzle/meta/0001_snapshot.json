@@ -6,13 +6,99 @@
 	},
 	"dialect": "postgresql",
 	"enums": {},
-	"id": "52df276d-3f95-4119-b9bb-1a2945a269f7",
+	"id": "884a6cf8-de61-4380-9cd8-f352d672cd7a",
 	"policies": {},
-	"prevId": "00000000-0000-0000-0000-000000000000",
+	"prevId": "52df276d-3f95-4119-b9bb-1a2945a269f7",
 	"roles": {},
 	"schemas": {},
 	"sequences": {},
 	"tables": {
+		"public.app_age_ratings": {
+			"checkConstraints": {},
+			"columns": {
+				"app_id": {
+					"name": "app_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"apple_questionnaire": {
+					"name": "apple_questionnaire",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
+				"apple_rating": {
+					"name": "apple_rating",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"google_questionnaire": {
+					"name": "google_questionnaire",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
+				"google_rating": {
+					"name": "google_rating",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"preset_id": {
+					"name": "preset_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"app_age_ratings_app_id_apps_id_fk": {
+					"columnsFrom": ["app_id"],
+					"columnsTo": ["id"],
+					"name": "app_age_ratings_app_id_apps_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "app_age_ratings",
+					"tableTo": "apps"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "app_age_ratings",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {
+				"app_age_ratings_appId_unique": {
+					"columns": ["app_id"],
+					"name": "app_age_ratings_appId_unique",
+					"nullsNotDistinct": false
+				}
+			}
+		},
 		"public.app_ai_prompts": {
 			"checkConstraints": {},
 			"columns": {
@@ -301,6 +387,93 @@
 				"app_aso_profiles_appId_unique": {
 					"columns": ["app_id"],
 					"name": "app_aso_profiles_appId_unique",
+					"nullsNotDistinct": false
+				}
+			}
+		},
+		"public.app_privacy_declarations": {
+			"checkConstraints": {},
+			"columns": {
+				"app_id": {
+					"name": "app_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"data_collections": {
+					"name": "data_collections",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"privacy_policy_url": {
+					"name": "privacy_policy_url",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "varchar(2048)"
+				},
+				"template_id": {
+					"name": "template_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"tracking_domains": {
+					"name": "tracking_domains",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
+				"tracking_enabled": {
+					"default": false,
+					"name": "tracking_enabled",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "boolean"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"app_privacy_declarations_app_id_apps_id_fk": {
+					"columnsFrom": ["app_id"],
+					"columnsTo": ["id"],
+					"name": "app_privacy_declarations_app_id_apps_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "app_privacy_declarations",
+					"tableTo": "apps"
+				}
+			},
+			"indexes": {},
+			"isRLSEnabled": false,
+			"name": "app_privacy_declarations",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {
+				"app_privacy_declarations_appId_unique": {
+					"columns": ["app_id"],
+					"name": "app_privacy_declarations_appId_unique",
 					"nullsNotDistinct": false
 				}
 			}
