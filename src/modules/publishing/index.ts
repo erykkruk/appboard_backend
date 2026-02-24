@@ -74,15 +74,37 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	.post(
 		"/:appId/publishing/versions/:versionId/localizations/translate",
 		async ({ body, params }) => {
-			return PublishingService.addVersionLocalizationWithTranslation(
-				params.appId,
-				params.versionId,
-				body.locale,
-				body.sourceLocale,
-			);
+			const result =
+				await PublishingService.addVersionLocalizationWithTranslation(
+					params.appId,
+					params.versionId,
+					body.locale,
+					body.sourceLocale,
+				);
+
+			if (body.copyScreenshotsFrom) {
+				try {
+					const copyResult = await PublishingService.copyScreenshots(
+						params.appId,
+						params.versionId,
+						body.copyScreenshotsFrom,
+						body.locale,
+					);
+					return { ...result, screenshotsCopied: copyResult.copied };
+				} catch {
+					return {
+						...result,
+						screenshotsCopied: 0,
+						screenshotsCopyError: true,
+					};
+				}
+			}
+
+			return result;
 		},
 		{
 			body: t.Object({
+				copyScreenshotsFrom: t.Optional(t.String({ minLength: 1 })),
 				locale: t.String({ minLength: 1 }),
 				sourceLocale: t.String({ minLength: 1 }),
 			}),
@@ -100,14 +122,35 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	.post(
 		"/:appId/publishing/versions/:versionId/localizations",
 		async ({ body, params }) => {
-			return PublishingService.addVersionLocalization(
+			const result = await PublishingService.addVersionLocalization(
 				params.appId,
 				params.versionId,
 				body.locale,
 			);
+
+			if (body.copyScreenshotsFrom) {
+				try {
+					const copyResult = await PublishingService.copyScreenshots(
+						params.appId,
+						params.versionId,
+						body.copyScreenshotsFrom,
+						body.locale,
+					);
+					return { ...result, screenshotsCopied: copyResult.copied };
+				} catch {
+					return {
+						...result,
+						screenshotsCopied: 0,
+						screenshotsCopyError: true,
+					};
+				}
+			}
+
+			return result;
 		},
 		{
 			body: t.Object({
+				copyScreenshotsFrom: t.Optional(t.String({ minLength: 1 })),
 				locale: t.String({ minLength: 1 }),
 			}),
 			detail: {
