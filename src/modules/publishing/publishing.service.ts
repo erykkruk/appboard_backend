@@ -100,6 +100,7 @@ async function processScreenshot(
 	inputBuffer: Buffer,
 	displayType: string,
 	cropParams?: CropParams,
+	targetSizeOverride?: [number, number],
 ): Promise<{ buffer: Buffer; height: number; width: number }> {
 	const image = sharp(inputBuffer);
 	const meta = await image.metadata();
@@ -135,7 +136,7 @@ async function processScreenshot(
 		}
 	}
 
-	const [targetW, targetH] = best;
+	const [targetW, targetH] = targetSizeOverride ?? best;
 
 	let pipeline: sharp.Sharp;
 
@@ -1750,6 +1751,7 @@ export class PublishingService {
 		imgWidth: number,
 		imgHeight: number,
 		parts: number,
+		skipPanoramaCheck = false,
 	) {
 		if (parts < MIN_SPLIT_PARTS || parts > MAX_SPLIT_PARTS) {
 			buildError("badRequest", {
@@ -1763,7 +1765,7 @@ export class PublishingService {
 			throw new Error("unreachable");
 		}
 
-		if (imgWidth < imgHeight * MIN_PANORAMA_RATIO) {
+		if (!skipPanoramaCheck && imgWidth < imgHeight * MIN_PANORAMA_RATIO) {
 			buildError("badRequest", {
 				info: `Image must be a panorama (width must be at least ${MIN_PANORAMA_RATIO}x height)`,
 			});
@@ -1788,7 +1790,13 @@ export class PublishingService {
 		return sizes;
 	}
 
-	static async splitPreview(displayType: string, file: File, parts: number) {
+	static async splitPreview(
+		displayType: string,
+		file: File,
+		parts: number,
+		targetWidth?: number,
+		targetHeight?: number,
+	) {
 		const rawBuffer = Buffer.from(await file.arrayBuffer());
 		const meta = await sharp(rawBuffer).metadata();
 		const originalWidth = meta.width ?? 0;
@@ -1801,10 +1809,18 @@ export class PublishingService {
 			parts,
 		);
 
-		// Pick portrait target size (screenshot parts are always portrait)
+		// Available portrait sizes for user selection
 		const portraitSizes = sizes.filter(([w, h]) => h >= w);
-		const targetSize = portraitSizes.length > 0 ? portraitSizes[0] : sizes[0];
-		const [targetWidth, targetHeight] = targetSize;
+		const availableSizes = (
+			portraitSizes.length > 0 ? portraitSizes : sizes
+		).map(([w, h]) => ({ height: h, width: w }));
+
+		// Use user-chosen size or default to first portrait size
+		if (!targetWidth || !targetHeight) {
+			const defaultSize = availableSizes[0];
+			targetWidth = defaultSize.width;
+			targetHeight = defaultSize.height;
+		}
 
 		const partWidth = Math.floor(originalWidth / parts);
 		const partHeight = originalHeight;
@@ -1842,6 +1858,7 @@ export class PublishingService {
 		const previewUrl = `data:image/png;base64,${previewBuffer.toString("base64")}`;
 
 		return {
+			availableSizes,
 			originalHeight,
 			originalWidth,
 			partHeight,
@@ -1862,8 +1879,24 @@ export class PublishingService {
 		file: File,
 		parts: number,
 		insertAt?: number,
+		targetWidth?: number,
+		targetHeight?: number,
+		cropParams?: { x: number; y: number; width: number; height: number },
 	) {
-		const rawBuffer = Buffer.from(await file.arrayBuffer());
+		let rawBuffer = Buffer.from(await file.arrayBuffer());
+
+		// If crop params provided, extract the crop region first
+		if (cropParams) {
+			rawBuffer = await sharp(rawBuffer)
+				.extract({
+					left: Math.round(cropParams.x),
+					top: Math.round(cropParams.y),
+					width: Math.round(cropParams.width),
+					height: Math.round(cropParams.height),
+				})
+				.toBuffer();
+		}
+
 		const meta = await sharp(rawBuffer).metadata();
 		const imgWidth = meta.width ?? 0;
 		const imgHeight = meta.height ?? 0;
@@ -1873,6 +1906,7 @@ export class PublishingService {
 			imgWidth,
 			imgHeight,
 			parts,
+			!!cropParams,
 		);
 
 		// Check existing screenshot count
@@ -1953,7 +1987,16 @@ export class PublishingService {
 				.extract({ height: imgHeight, left, top: 0, width })
 				.toBuffer();
 
-			const processed = await processScreenshot(partBuffer, displayType);
+			const targetOverride =
+				targetWidth && targetHeight
+					? ([targetWidth, targetHeight] as [number, number])
+					: undefined;
+			const processed = await processScreenshot(
+				partBuffer,
+				displayType,
+				undefined,
+				targetOverride,
+			);
 
 			const pngName = file.name.replace(/\.\w+$/, `_part${i + 1}.png`);
 

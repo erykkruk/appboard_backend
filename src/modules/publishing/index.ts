@@ -323,6 +323,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				body.displayType,
 				body.file,
 				body.parts,
+				body.targetWidth,
+				body.targetHeight,
 			);
 		},
 		{
@@ -330,6 +332,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				displayType: t.String({ maxLength: 100, minLength: 1 }),
 				file: screenshotFile,
 				parts: t.Numeric({ maximum: 10, minimum: 2 }),
+				targetHeight: t.Optional(t.Numeric({ maximum: 10000, minimum: 1 })),
+				targetWidth: t.Optional(t.Numeric({ maximum: 10000, minimum: 1 })),
 			}),
 			detail: {
 				description: "Preview panorama split with dimensions and overlay lines",
@@ -341,6 +345,18 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	.post(
 		"/:appId/publishing/screenshots/split-upload",
 		async ({ body, params }) => {
+			const cropParams =
+				body.cropX !== undefined &&
+				body.cropY !== undefined &&
+				body.cropWidth !== undefined &&
+				body.cropHeight !== undefined
+					? {
+							height: body.cropHeight,
+							width: body.cropWidth,
+							x: body.cropX,
+							y: body.cropY,
+						}
+					: undefined;
 			return PublishingService.splitUpload(
 				params.appId,
 				body.versionId,
@@ -349,15 +365,24 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				body.file,
 				body.parts,
 				body.insertAt,
+				body.targetWidth,
+				body.targetHeight,
+				cropParams,
 			);
 		},
 		{
 			body: t.Object({
+				cropHeight: optionalCropParam,
+				cropWidth: optionalCropParam,
+				cropX: optionalCropParam,
+				cropY: optionalCropParam,
 				displayType: t.String({ maxLength: 100, minLength: 1 }),
 				file: screenshotFile,
 				insertAt: t.Optional(t.Numeric({ minimum: 0 })),
 				language: t.String({ maxLength: 20, minLength: 1 }),
 				parts: t.Numeric({ maximum: 10, minimum: 2 }),
+				targetHeight: t.Optional(t.Numeric({ maximum: 10000, minimum: 1 })),
+				targetWidth: t.Optional(t.Numeric({ maximum: 10000, minimum: 1 })),
 				versionId: t.String({ maxLength: 200, minLength: 1 }),
 			}),
 			detail: {
