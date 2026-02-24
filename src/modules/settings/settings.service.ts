@@ -53,6 +53,10 @@ export class SettingsService {
 	static async set(key: string, value: string) {
 		const k = normalizeKey(key);
 		const isEncrypted = SENSITIVE_KEYS.includes(k);
+
+		// Never overwrite a real key with the masked placeholder
+		if (isEncrypted && value === "********") return { key: k, success: true };
+
 		const storedValue = isEncrypted ? encrypt(value) : value;
 
 		const existing = await db

@@ -1336,11 +1336,21 @@ export class PublishingService {
 			return { added: true, language: locale, translated: false };
 		}
 
-		// 6. Translate via AI
+		// 6. Get app info for contextual translation
+		const [appInfo] = await db
+			.select({ name: apps.name, platform: apps.platform })
+			.from(apps)
+			.where(eq(apps.id, appId))
+			.limit(1);
+
+		// 7. Translate via AI
 		let translations: Record<string, string>;
 		try {
 			const { AIService } = await import("@/modules/ai/ai.service");
 			const result = await AIService.translateLocalization(
+				appId,
+				appInfo?.name ?? "Unknown App",
+				appInfo?.platform ?? "ios",
 				fields,
 				sourceLocale,
 				locale,
@@ -1354,7 +1364,7 @@ export class PublishingService {
 			return { added: true, language: locale, translated: false };
 		}
 
-		// 7. Find the new localization's externalId
+		// 8. Find the new localization's externalId
 		const [newLoc] = await db
 			.select()
 			.from(versionLocalizations)
@@ -1375,7 +1385,7 @@ export class PublishingService {
 			return { added: true, language: locale, translated: false };
 		}
 
-		// 8. Save translated fields as draft
+		// 9. Save translated fields as draft
 		await PublishingService.updateVersionLocalization(
 			appId,
 			versionId,

@@ -186,6 +186,27 @@ export function getSettingKey(field: ListingField, mode: PromptMode): string {
 	return `AI_PROMPT_${mode.toUpperCase()}_${field.toUpperCase()}`;
 }
 
+export function buildTranslationFieldRules(field: string): string {
+	switch (field) {
+		case "title":
+			return `TITLE (max 30 chars): Keep the brand name unchanged. Adapt the keyword portion to the highest-value equivalent in the target market. Do NOT transliterate — find the keyword users actually search for in this language.`;
+		case "subtitle":
+			return `SUBTITLE (max 30 chars): Do NOT repeat words from the translated title. Front-load the most important keyword for the target market. Adapt the benefit statement culturally.`;
+		case "shortDescription":
+			return `SHORT DESCRIPTION (max 80 chars): Front-load the primary keyword in the first 3-4 words. Use an action verb natural in the target language + core benefit. Adapt the differentiator to resonate with the local market.`;
+		case "description":
+			return `DESCRIPTION (max 4000 chars): Preserve the HOOK-BENEFIT-PROOF-CTA structure. Adapt social proof references to the target market where possible. Maintain bullet point formatting. Weave locally relevant keywords naturally (3-5x for Android).`;
+		case "keywords":
+			return `KEYWORDS (max 100 chars): Do NOT translate 1:1. Research what users in the target market actually search for. Use singular forms only. No spaces after commas. Each keyword must be unique — never repeat words from title or subtitle.`;
+		case "promotionalText":
+			return `PROMOTIONAL TEXT (max 170 chars): Adapt urgency and excitement to the target culture. Some markets prefer understated language, others respond to bold claims. This field is NOT indexed — focus on conversion.`;
+		case "whatsNew":
+			return `WHAT'S NEW (max 4000 chars): Use positive framing ("Now 2x faster" not "Fixed slow loading"). Adapt idioms and colloquialisms to the target language. Keep bullet point structure.`;
+		default:
+			return "";
+	}
+}
+
 export function getAllDefaultPrompts(): Record<string, string> {
 	const defaults: Record<string, string> = {};
 	for (const field of LISTING_FIELDS) {

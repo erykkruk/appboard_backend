@@ -1,6 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { APP_STORE_CATEGORIES } from "@/config/const";
-import { getSettingKey, type PromptMode } from "@/modules/ai/ai.prompts";
+import {
+	buildTranslationFieldRules,
+	getSettingKey,
+	type PromptMode,
+} from "@/modules/ai/ai.prompts";
 import { AsoProfileService } from "@/modules/aso-profile/aso-profile.service";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { db } from "@/utils/db";
@@ -12,6 +16,25 @@ const log = createLogger("ai-service");
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-2.0-flash-001";
+
+function truncateToLimit(value: string, limit: number, field: string): string {
+	if (value.length <= limit) return value;
+
+	// Keywords: truncate at last comma boundary
+	if (field === "keywords") {
+		const cut = value.substring(0, limit);
+		const lastComma = cut.lastIndexOf(",");
+		return lastComma > 0 ? cut.substring(0, lastComma) : cut;
+	}
+
+	// Short fields (title, subtitle, shortDescription): truncate at last word boundary
+	const cut = value.substring(0, limit);
+	const lastSpace = cut.lastIndexOf(" ");
+	if (lastSpace > limit * 0.5) {
+		return cut.substring(0, lastSpace);
+	}
+	return cut;
+}
 
 function stripEmoji(text: string): string {
 	return text
@@ -429,6 +452,25 @@ export class AIService {
 		if (!response.ok) {
 			const errorBody = await response.text().catch(() => "Unknown error");
 			log.error({ errorBody, status: response.status }, "OpenRouter API error");
+
+			if (response.status === 402) {
+				buildError("badRequest", {
+					info: "OpenRouter API: out of credits. Top up your balance at openrouter.ai/settings/credits.",
+				});
+			}
+
+			if (response.status === 401) {
+				buildError("badRequest", {
+					info: "OpenRouter API: invalid API key. Check your key in Settings.",
+				});
+			}
+
+			if (response.status === 429) {
+				buildError("badRequest", {
+					info: "OpenRouter API: rate limit exceeded. Please wait a moment and try again.",
+				});
+			}
+
 			buildError("storeApiError", {
 				info: `OpenRouter API error: ${response.status}`,
 			});
@@ -492,7 +534,9 @@ export class AIService {
 		const cleaned = stripEmoji(content);
 		const charLimit = FIELD_CHAR_LIMITS[resolvedField];
 		const trimmedContent =
-			cleaned.length > charLimit ? cleaned.substring(0, charLimit) : cleaned;
+			cleaned.length > charLimit
+				? truncateToLimit(cleaned, charLimit, resolvedField)
+				: cleaned;
 
 		return { model, result: trimmedContent };
 	}
@@ -699,6 +743,9 @@ Generate the privacy declaration JSON array.`;
 	}
 
 	static async translateLocalization(
+		appId: string,
+		appName: string,
+		platform: string,
 		fields: Record<string, string>,
 		sourceLanguage: string,
 		targetLanguage: string,
@@ -722,30 +769,79 @@ Generate the privacy declaration JSON array.`;
 		const fieldsBlock = fieldEntries
 			.map(([key, value]) => {
 				const limit = fieldLimits[key] ?? 4000;
-				return `"${key}" (max ${limit} chars): """${value}"""`;
+				const rules = buildTranslationFieldRules(key);
+				return `"${key}" (max ${limit} chars):\n${rules ? `[Rules: ${rules}]\n` : ""}"""${value}"""`;
 			})
 			.join("\n\n");
 
-		const systemPrompt = `You are a professional translator specializing in app store content (ASO).
-Translate all provided fields from ${sourceLanguage} to ${targetLanguage}.
+		const isIos = platform === "ios";
+		const platformLabel = isIos ? "iOS (App Store)" : "Android (Google Play)";
 
-Rules:
-- Maintain marketing tone and ASO effectiveness in the target language
-- Respect character limits for each field
-- For "keywords": translate individual keywords, keep comma-separated format, no spaces after commas
-- NEVER use emoji or special Unicode symbols
-- Preserve the original structure (bullet points, line breaks, etc.)
-- Return ONLY valid JSON where keys match the input field names and values are translations
-- No explanations, no markdown, just the JSON object`;
+		const asoProfile = appId ? await AsoProfileService.get(appId) : null;
+		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
 
-		const userPrompt = `Translate the following app store listing fields from ${sourceLanguage} to ${targetLanguage}:
+		const platformRules = isIos
+			? `Platform-specific:
+- Title + Subtitle + Keywords are indexed separately — NEVER repeat words across them
+- Description is NOT indexed — optimize translated description purely for conversion
+- Keywords field: find high-volume search terms in the target language, not literal translations`
+			: `Platform-specific:
+- Title + Short Description + Long Description are ALL indexed
+- Weave primary keywords 3-5x naturally in the translated description
+- No keyword field exists — all keyword strategy goes into title, short description, and description`;
+
+		let systemPrompt = `You are an expert ASO (App Store Optimization) translator with deep knowledge of 2025-2026 store algorithms.
+
+Your job is NOT literal translation — it is market adaptation. You translate app store content so it ranks well and converts in the target market.
+
+IMPORTANT: NEVER use emoji or special Unicode symbols in any field.
+
+CRITICAL — CHARACTER LIMITS:
+- Each field has a strict character limit shown in parentheses (e.g. "max 30 chars")
+- You MUST count characters and ensure EVERY translated value fits within its limit
+- If a direct translation is too long, shorten it — use fewer words, abbreviate, or rephrase more concisely
+- NEVER exceed the character limit. A shorter, complete translation is always better than a truncated one
+
+Core principles:
+- Find what users in the target market ACTUALLY search for — do not just translate source keywords
+- Adapt marketing tone and cultural references to the target audience
+- Preserve ASO structure (hooks, benefits, CTAs) while making it natural in the target language
+- Preserve formatting (bullet points, line breaks)
+
+${platformRules}`;
+
+		if (asoContext) {
+			systemPrompt += `
+
+App context (use to maintain brand voice and tone):
+${asoContext}`;
+		}
+
+		if (asoProfile?.wordsToInclude?.length) {
+			systemPrompt += `\n\nWords/phrases to include where natural: ${asoProfile.wordsToInclude.join(", ")}`;
+		}
+		if (asoProfile?.wordsToAvoid?.length) {
+			systemPrompt += `\nWords/phrases to AVOID: ${asoProfile.wordsToAvoid.join(", ")}`;
+		}
+
+		systemPrompt +=
+			"\n\nReturn ONLY valid JSON where keys match the input field names and values are translated content. No explanations, no markdown, just the JSON object.";
+
+		const userPrompt = `App: ${appName}
+Platform: ${platformLabel}
+Translate from ${sourceLanguage} to ${targetLanguage}:
 
 ${fieldsBlock}
 
 Return ONLY a JSON object with the same keys and translated values.`;
 
 		log.info(
-			{ fieldCount: fieldEntries.length, sourceLanguage, targetLanguage },
+			{
+				appId,
+				fieldCount: fieldEntries.length,
+				sourceLanguage,
+				targetLanguage,
+			},
 			"Translating localization fields",
 		);
 
@@ -763,11 +859,10 @@ Return ONLY a JSON object with the same keys and translated values.`;
 		try {
 			const translations = JSON.parse(cleaned) as Record<string, string>;
 
-			// Enforce character limits
 			for (const [key, value] of Object.entries(translations)) {
 				const limit = fieldLimits[key];
 				if (limit && value.length > limit) {
-					translations[key] = value.substring(0, limit);
+					translations[key] = truncateToLimit(value, limit, key);
 				}
 			}
 

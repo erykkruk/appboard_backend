@@ -8,6 +8,7 @@ import {
 	suggestCategoryBody,
 	suggestKeywordsBody,
 	translateBody,
+	translateLocalizationBody,
 } from "./ai.schema";
 import { AIService } from "./ai.service";
 
@@ -42,6 +43,26 @@ export const aiController = new Elysia({ prefix: "/ai" })
 			body: translateBody,
 			detail: {
 				description: "Translate listing text",
+				tags: ["AI"],
+			},
+		},
+	)
+	.post(
+		"/translate-localization",
+		async ({ body }) => {
+			return AIService.translateLocalization(
+				body.appId,
+				body.appName,
+				body.platform,
+				body.fields,
+				body.sourceLanguage,
+				body.targetLanguage,
+			);
+		},
+		{
+			body: translateLocalizationBody,
+			detail: {
+				description: "Translate localization fields with ASO context",
 				tags: ["AI"],
 			},
 		},

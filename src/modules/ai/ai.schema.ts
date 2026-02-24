@@ -44,6 +44,15 @@ export const suggestCategoryBody = t.Object({
 	platform: t.String({ minLength: 1 }),
 });
 
+export const translateLocalizationBody = t.Object({
+	appId: t.String({ minLength: 1 }),
+	appName: t.String({ minLength: 1 }),
+	fields: t.Record(t.String(), t.String()),
+	platform: t.String({ minLength: 1 }),
+	sourceLanguage: t.String({ minLength: 1 }),
+	targetLanguage: t.String({ minLength: 1 }),
+});
+
 export const generateListingFieldBody = t.Object({
 	appId: t.String({ minLength: 1 }),
 	appName: t.String({ minLength: 1 }),
