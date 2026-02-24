@@ -304,10 +304,10 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				cropWidth: optionalCropParam,
 				cropX: optionalCropParam,
 				cropY: optionalCropParam,
-				displayType: t.String({ minLength: 1 }),
+				displayType: t.String({ maxLength: 100, minLength: 1 }),
 				file: screenshotFile,
-				language: t.String({ minLength: 1 }),
-				versionId: t.String({ minLength: 1 }),
+				language: t.String({ maxLength: 20, minLength: 1 }),
+				versionId: t.String({ maxLength: 200, minLength: 1 }),
 			}),
 			detail: {
 				description: "Upload a screenshot to App Store Connect",
@@ -327,7 +327,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			body: t.Object({
-				displayType: t.String({ minLength: 1 }),
+				displayType: t.String({ maxLength: 100, minLength: 1 }),
 				file: screenshotFile,
 				parts: t.Numeric({ maximum: 10, minimum: 2 }),
 			}),
@@ -353,12 +353,12 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			body: t.Object({
-				displayType: t.String({ minLength: 1 }),
+				displayType: t.String({ maxLength: 100, minLength: 1 }),
 				file: screenshotFile,
 				insertAt: t.Optional(t.Numeric({ minimum: 0 })),
-				language: t.String({ minLength: 1 }),
+				language: t.String({ maxLength: 20, minLength: 1 }),
 				parts: t.Numeric({ maximum: 10, minimum: 2 }),
-				versionId: t.String({ minLength: 1 }),
+				versionId: t.String({ maxLength: 200, minLength: 1 }),
 			}),
 			detail: {
 				description:
@@ -381,10 +381,10 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			body: t.Object({
-				displayType: t.Optional(t.String({ minLength: 1 })),
-				sourceLanguage: t.String({ minLength: 1 }),
-				targetLanguage: t.String({ minLength: 1 }),
-				versionId: t.String({ minLength: 1 }),
+				displayType: t.Optional(t.String({ maxLength: 100, minLength: 1 })),
+				sourceLanguage: t.String({ maxLength: 20, minLength: 1 }),
+				targetLanguage: t.String({ maxLength: 20, minLength: 1 }),
+				versionId: t.String({ maxLength: 200, minLength: 1 }),
 			}),
 			detail: {
 				description:

@@ -92,6 +92,7 @@ const MIN_SPLIT_PARTS = 2;
 const MAX_SPLIT_PARTS = 10;
 const MIN_PANORAMA_RATIO = 1.5;
 const MAX_SCREENSHOTS_PER_SET = 10;
+const MAX_PIXEL_COUNT = 100_000_000;
 
 async function processScreenshot(
 	inputBuffer: Buffer,
@@ -1763,6 +1764,13 @@ export class PublishingService {
 		if (imgWidth < imgHeight * MIN_PANORAMA_RATIO) {
 			buildError("badRequest", {
 				info: `Image must be a panorama (width must be at least ${MIN_PANORAMA_RATIO}x height)`,
+			});
+			throw new Error("unreachable");
+		}
+
+		if (imgWidth * imgHeight > MAX_PIXEL_COUNT) {
+			buildError("badRequest", {
+				info: `Image too large: ${imgWidth}x${imgHeight} exceeds maximum of ${MAX_PIXEL_COUNT} pixels`,
 			});
 			throw new Error("unreachable");
 		}
