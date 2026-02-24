@@ -23,6 +23,22 @@ async function createTestImage(
 		.toBuffer();
 }
 
+async function expectBadRequest(
+	promise: Promise<unknown>,
+	infoPattern: RegExp,
+) {
+	try {
+		await promise;
+		throw new Error("Expected rejection but promise resolved");
+	} catch (err: unknown) {
+		const response = (
+			err as { response?: { code?: string; data?: { info?: string } } }
+		)?.response;
+		expect(response?.code).toBe("BAD_REQUEST");
+		expect(response?.data?.info).toMatch(infoPattern);
+	}
+}
+
 describe("Screenshot split-preview", () => {
 	test("Returns correct dimensions and suggested parts for a panorama", async () => {
 		// Create a panorama: 6000x1000 (6:1 ratio)
@@ -86,23 +102,23 @@ describe("Screenshot split-preview", () => {
 	});
 
 	test("Rejects non-panorama image (portrait)", async () => {
-		// Create a portrait image (1000x2000)
 		const portraitBuffer = await createTestImage(1000, 2000);
 		const file = createFileFromBuffer(portraitBuffer, "portrait.png");
 
-		await expect(
+		await expectBadRequest(
 			PublishingService.splitPreview("APP_IPHONE_65", file, 3),
-		).rejects.toThrow();
+			/panorama/i,
+		);
 	});
 
 	test("Rejects non-panorama image (nearly square)", async () => {
-		// width < height * 1.5 → not a panorama
 		const squareBuffer = await createTestImage(1400, 1000);
 		const file = createFileFromBuffer(squareBuffer, "square.png");
 
-		await expect(
+		await expectBadRequest(
 			PublishingService.splitPreview("APP_IPHONE_65", file, 3),
-		).rejects.toThrow();
+			/panorama/i,
+		);
 	});
 
 	test("Accepts image exactly at panorama threshold", async () => {
@@ -124,27 +140,56 @@ describe("Screenshot split-preview", () => {
 		const panoramaBuffer = await createTestImage(3000, 1000);
 		const file = createFileFromBuffer(panoramaBuffer, "panorama.png");
 
-		await expect(
+		await expectBadRequest(
 			PublishingService.splitPreview("APP_IPHONE_65", file, 1),
-		).rejects.toThrow();
+			/Parts must be between/,
+		);
 	});
 
 	test("Rejects parts above maximum (11)", async () => {
 		const panoramaBuffer = await createTestImage(3000, 1000);
 		const file = createFileFromBuffer(panoramaBuffer, "panorama.png");
 
-		await expect(
+		await expectBadRequest(
 			PublishingService.splitPreview("APP_IPHONE_65", file, 11),
-		).rejects.toThrow();
+			/Parts must be between/,
+		);
 	});
 
 	test("Rejects unknown display type", async () => {
 		const panoramaBuffer = await createTestImage(3000, 1000);
 		const file = createFileFromBuffer(panoramaBuffer, "panorama.png");
 
-		await expect(
+		await expectBadRequest(
 			PublishingService.splitPreview("UNKNOWN_TYPE", file, 3),
-		).rejects.toThrow();
+			/Unknown display type/,
+		);
+	});
+
+	test("Rejects image exceeding MAX_PIXEL_COUNT", async () => {
+		// 15000x7000 = 105,000,000 pixels > MAX_PIXEL_COUNT (100,000,000)
+		// Must still be a panorama (width >= height * 1.5)
+		const hugeBuffer = await createTestImage(15000, 7000);
+		const file = createFileFromBuffer(hugeBuffer, "huge.png");
+
+		await expectBadRequest(
+			PublishingService.splitPreview("APP_IPHONE_65", file, 3),
+			/too large/i,
+		);
+	});
+
+	test("Accepts image just under MAX_PIXEL_COUNT", async () => {
+		// 12000x8000 = 96,000,000 pixels < 100,000,000, and 12000/8000 = 1.5 (panorama threshold)
+		const largeBuffer = await createTestImage(12000, 8000);
+		const file = createFileFromBuffer(largeBuffer, "large.png");
+
+		const result = await PublishingService.splitPreview(
+			"APP_IPHONE_65",
+			file,
+			3,
+		);
+		expect(result.originalWidth).toBe(12000);
+		expect(result.originalHeight).toBe(8000);
 	});
 
 	test("Parts at minimum (2) and maximum (10) work correctly", async () => {

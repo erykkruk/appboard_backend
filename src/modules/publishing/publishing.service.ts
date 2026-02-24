@@ -93,6 +93,8 @@ const MAX_SPLIT_PARTS = 10;
 const MIN_PANORAMA_RATIO = 1.5;
 const MAX_SCREENSHOTS_PER_SET = 10;
 const MAX_PIXEL_COUNT = 100_000_000;
+const FETCH_TIMEOUT_MS = 30_000;
+const MAX_DOWNLOAD_SIZE = 50 * 1024 * 1024; // 50 MB
 
 async function processScreenshot(
 	inputBuffer: Buffer,
@@ -2140,8 +2142,23 @@ export class PublishingService {
 					.replace("{h}", String(imageAsset.height ?? 0))
 					.replace("{f}", "png");
 
-				// Download the screenshot image
-				const response = await fetch(url);
+				// Download the screenshot image with timeout and size limit
+				let response: Response;
+				try {
+					response = await fetch(url, {
+						signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+					});
+				} catch (err) {
+					log.warn(
+						{
+							error: err instanceof Error ? err.message : String(err),
+							screenshotId: screenshot.id,
+							url,
+						},
+						"Failed to fetch source screenshot (timeout or network error), skipping",
+					);
+					continue;
+				}
 				if (!response.ok) {
 					log.warn(
 						{ screenshotId: screenshot.id, status: response.status, url },
@@ -2150,7 +2167,33 @@ export class PublishingService {
 					continue;
 				}
 
+				const contentLength = Number(
+					response.headers.get("content-length") ?? 0,
+				);
+				if (contentLength > MAX_DOWNLOAD_SIZE) {
+					log.warn(
+						{
+							contentLength,
+							maxSize: MAX_DOWNLOAD_SIZE,
+							screenshotId: screenshot.id,
+						},
+						"Source screenshot exceeds size limit, skipping",
+					);
+					continue;
+				}
+
 				const imageBuffer = Buffer.from(await response.arrayBuffer());
+				if (imageBuffer.length > MAX_DOWNLOAD_SIZE) {
+					log.warn(
+						{
+							actualSize: imageBuffer.length,
+							maxSize: MAX_DOWNLOAD_SIZE,
+							screenshotId: screenshot.id,
+						},
+						"Downloaded screenshot exceeds size limit, skipping",
+					);
+					continue;
+				}
 				const fileName = (attrs.fileName as string) ?? "screenshot.png";
 
 				// Create and upload to target
