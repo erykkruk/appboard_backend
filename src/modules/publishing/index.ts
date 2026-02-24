@@ -271,6 +271,58 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			params: appIdParams,
 		},
 	)
+	.post(
+		"/:appId/publishing/screenshots/split-preview",
+		async ({ body }) => {
+			return PublishingService.splitPreview(
+				body.displayType,
+				body.file,
+				body.parts,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.String({ minLength: 1 }),
+				file: t.File(),
+				parts: t.Numeric({ maximum: 10, minimum: 2 }),
+			}),
+			detail: {
+				description: "Preview panorama split with dimensions and overlay lines",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.post(
+		"/:appId/publishing/screenshots/split-upload",
+		async ({ body, params }) => {
+			return PublishingService.splitUpload(
+				params.appId,
+				body.versionId,
+				body.language,
+				body.displayType,
+				body.file,
+				body.parts,
+				body.insertAt,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.String({ minLength: 1 }),
+				file: t.File(),
+				insertAt: t.Optional(t.Numeric()),
+				language: t.String({ minLength: 1 }),
+				parts: t.Numeric({ maximum: 10, minimum: 2 }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+			detail: {
+				description:
+					"Split a panorama image into parts and upload each as a screenshot",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
 	.delete(
 		"/:appId/publishing/screenshots/:screenshotId",
 		async ({ params }) => {

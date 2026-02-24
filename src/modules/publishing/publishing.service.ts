@@ -88,6 +88,11 @@ interface CropParams {
 	height: number;
 }
 
+const MIN_SPLIT_PARTS = 2;
+const MAX_SPLIT_PARTS = 10;
+const MIN_PANORAMA_RATIO = 1.5;
+const MAX_SCREENSHOTS_PER_SET = 10;
+
 async function processScreenshot(
 	inputBuffer: Buffer,
 	displayType: string,
@@ -1735,6 +1740,250 @@ export class PublishingService {
 			});
 			throw new Error("unreachable");
 		}
+	}
+
+	static async splitPreview(displayType: string, file: File, parts: number) {
+		if (parts < MIN_SPLIT_PARTS || parts > MAX_SPLIT_PARTS) {
+			buildError("badRequest", {
+				info: `Parts must be between ${MIN_SPLIT_PARTS} and ${MAX_SPLIT_PARTS}`,
+			});
+		}
+
+		const rawBuffer = Buffer.from(await file.arrayBuffer());
+		const image = sharp(rawBuffer);
+		const meta = await image.metadata();
+		const originalWidth = meta.width ?? 0;
+		const originalHeight = meta.height ?? 0;
+
+		if (originalWidth === 0 || originalHeight === 0) {
+			buildError("badRequest", { info: "Could not read image dimensions" });
+		}
+
+		if (originalWidth < originalHeight * MIN_PANORAMA_RATIO) {
+			buildError("badRequest", {
+				info: `Image must be a panorama (width must be at least ${MIN_PANORAMA_RATIO}x height)`,
+			});
+		}
+
+		const sizes = REQUIRED_SIZES[displayType];
+		if (!sizes?.length) {
+			buildError("badRequest", {
+				info: `Unknown display type: ${displayType}`,
+			});
+		}
+
+		// Pick portrait target size (screenshot parts are always portrait)
+		const portraitSizes = sizes.filter(([w, h]) => h >= w);
+		const targetSize = portraitSizes.length > 0 ? portraitSizes[0] : sizes[0];
+		const [targetWidth, targetHeight] = targetSize;
+
+		const partWidth = Math.floor(originalWidth / parts);
+		const partHeight = originalHeight;
+
+		// Auto-detect suggested parts based on target aspect ratio
+		const targetAspect = targetWidth / targetHeight;
+		const suggestedParts = Math.max(
+			MIN_SPLIT_PARTS,
+			Math.min(
+				MAX_SPLIT_PARTS,
+				Math.round(originalWidth / (originalHeight * targetAspect)),
+			),
+		);
+
+		// Generate preview with split lines overlay using sharp composite
+		const svgLines = Array.from({ length: parts - 1 }, (_, i) => {
+			const x = Math.round((i + 1) * partWidth);
+			return `<line x1="${x}" y1="0" x2="${x}" y2="${originalHeight}" stroke="white" stroke-width="4" stroke-dasharray="20,10" />`;
+		}).join("");
+
+		const svgOverlay = Buffer.from(
+			`<svg width="${originalWidth}" height="${originalHeight}">${svgLines}</svg>`,
+		);
+
+		const previewBuffer = await sharp(rawBuffer)
+			.composite([{ input: svgOverlay, left: 0, top: 0 }])
+			.resize(Math.min(originalWidth, 2000))
+			.png({ compressionLevel: 8 })
+			.toBuffer();
+
+		const previewUrl = `data:image/png;base64,${previewBuffer.toString("base64")}`;
+
+		return {
+			originalHeight,
+			originalWidth,
+			partHeight,
+			parts,
+			partWidth,
+			previewUrl,
+			suggestedParts,
+			targetHeight,
+			targetWidth,
+		};
+	}
+
+	static async splitUpload(
+		appId: string,
+		versionId: string,
+		language: string,
+		displayType: string,
+		file: File,
+		parts: number,
+		insertAt?: number,
+	) {
+		if (parts < MIN_SPLIT_PARTS || parts > MAX_SPLIT_PARTS) {
+			buildError("badRequest", {
+				info: `Parts must be between ${MIN_SPLIT_PARTS} and ${MAX_SPLIT_PARTS}`,
+			});
+		}
+
+		const rawBuffer = Buffer.from(await file.arrayBuffer());
+		const image = sharp(rawBuffer);
+		const meta = await image.metadata();
+		const imgW = meta.width ?? 0;
+		const imgH = meta.height ?? 0;
+
+		if (imgW === 0 || imgH === 0) {
+			buildError("badRequest", { info: "Could not read image dimensions" });
+		}
+
+		if (imgW < imgH * MIN_PANORAMA_RATIO) {
+			buildError("badRequest", {
+				info: `Image must be a panorama (width must be at least ${MIN_PANORAMA_RATIO}x height)`,
+			});
+		}
+
+		// Validate display type
+		const sizes = REQUIRED_SIZES[displayType];
+		if (!sizes?.length) {
+			buildError("badRequest", {
+				info: `Unknown display type: ${displayType}`,
+			});
+		}
+
+		// Check existing screenshot count
+		const app = await PublishingService.getAppWithStore(appId);
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Screenshots are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const client = await createAppStoreClient(credentials);
+
+		// Find localization
+		const { data: versionLocs } = await client.readAll(
+			`appStoreVersions/${versionId}/appStoreVersionLocalizations`,
+		);
+		const loc = ((versionLocs ?? []) as ApiResource[]).find(
+			(l) => l.attributes.locale === language,
+		);
+		if (!loc) {
+			buildError("notFound", {
+				info: `No localization found for language "${language}"`,
+			});
+			throw new Error("unreachable");
+		}
+
+		// Find or create screenshot set
+		const { data: sets } = await client.readAll(
+			`appStoreVersionLocalizations/${loc.id}/appScreenshotSets`,
+		);
+		let screenshotSet = ((sets ?? []) as ApiResource[]).find(
+			(s) => s.attributes.screenshotDisplayType === displayType,
+		);
+
+		if (!screenshotSet) {
+			screenshotSet = (await client.create({
+				attributes: { screenshotDisplayType: displayType },
+				relationships: {
+					appStoreVersionLocalization: loc,
+				},
+				type: "appScreenshotSets",
+			})) as unknown as ApiResource;
+		}
+
+		// Check existing count
+		const { data: existingScreenshots } = await client.readAll(
+			`appScreenshotSets/${screenshotSet.id}/appScreenshots`,
+		);
+		const existingCount = ((existingScreenshots ?? []) as ApiResource[]).length;
+
+		if (existingCount + parts > MAX_SCREENSHOTS_PER_SET) {
+			buildError("badRequest", {
+				info: `Cannot add ${parts} screenshots: ${existingCount} already exist, maximum is ${MAX_SCREENSHOTS_PER_SET}`,
+			});
+		}
+
+		// Split and upload each part
+		const partWidth = Math.floor(imgW / parts);
+		const screenshotIds: string[] = [];
+
+		for (let i = 0; i < parts; i++) {
+			const left = i * partWidth;
+			// Last part takes remaining width to avoid rounding gaps
+			const width = i === parts - 1 ? imgW - left : partWidth;
+
+			const partBuffer = await sharp(rawBuffer)
+				.extract({ height: imgH, left, top: 0, width })
+				.toBuffer();
+
+			const processed = await processScreenshot(partBuffer, displayType);
+
+			const pngName = file.name.replace(/\.\w+$/, `_part${i + 1}.png`);
+
+			const screenshot = (await client.create({
+				attributes: {
+					fileName: pngName,
+					fileSize: processed.buffer.length,
+				},
+				relationships: {
+					appScreenshotSet: screenshotSet,
+				},
+				type: "appScreenshots",
+			})) as unknown as ApiResource;
+
+			await client.uploadAsset(screenshot, processed.buffer);
+			await client.pollForUploadSuccess(
+				`appScreenshots/${screenshot.id}`,
+				"screenshot",
+			);
+
+			screenshotIds.push(screenshot.id);
+		}
+
+		// If insertAt is specified, reorder to place new screenshots at the right position
+		if (insertAt !== undefined && existingCount > 0) {
+			const existingIds = ((existingScreenshots ?? []) as ApiResource[]).map(
+				(s) => s.id,
+			);
+			const finalOrder = [
+				...existingIds.slice(0, insertAt),
+				...screenshotIds,
+				...existingIds.slice(insertAt),
+			];
+
+			const url = `appScreenshotSets/${screenshotSet.id}/relationships/appScreenshots`;
+			await client.postJson(
+				url,
+				{ data: finalOrder.map((id) => ({ id, type: "appScreenshots" })) },
+				{ method: "PATCH" },
+			);
+		}
+
+		log.info(
+			{
+				appId,
+				displayType,
+				language,
+				parts,
+				screenshotIds,
+			},
+			"Split-uploaded panorama screenshots",
+		);
+
+		return { screenshotIds, uploaded: parts };
 	}
 
 	static async reorderScreenshots(
