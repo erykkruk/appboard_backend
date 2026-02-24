@@ -323,6 +323,32 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			params: appIdParams,
 		},
 	)
+	.post(
+		"/:appId/publishing/screenshots/copy",
+		async ({ body, params }) => {
+			return PublishingService.copyScreenshots(
+				params.appId,
+				body.versionId,
+				body.sourceLanguage,
+				body.targetLanguage,
+				body.displayType,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.Optional(t.String({ minLength: 1 })),
+				sourceLanguage: t.String({ minLength: 1 }),
+				targetLanguage: t.String({ minLength: 1 }),
+				versionId: t.String({ minLength: 1 }),
+			}),
+			detail: {
+				description:
+					"Copy screenshots from one language to another within a version",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
 	.delete(
 		"/:appId/publishing/screenshots/:screenshotId",
 		async ({ params }) => {

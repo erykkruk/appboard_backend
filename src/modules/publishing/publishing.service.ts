@@ -1986,6 +1986,180 @@ export class PublishingService {
 		return { screenshotIds, uploaded: parts };
 	}
 
+	static async copyScreenshots(
+		appId: string,
+		versionId: string,
+		sourceLanguage: string,
+		targetLanguage: string,
+		displayType?: string,
+	) {
+		const app = await PublishingService.getAppWithStore(appId);
+
+		if (app.store.type !== "app_store" || !app.store.credentials) {
+			buildError("badRequest", {
+				info: "Screenshots are only available for App Store apps",
+			});
+			throw new Error("unreachable");
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const client = await createAppStoreClient(credentials);
+
+		// Get localizations
+		const { data: versionLocs } = await client.readAll(
+			`appStoreVersions/${versionId}/appStoreVersionLocalizations`,
+		);
+		const allLocs = (versionLocs ?? []) as ApiResource[];
+
+		const sourceLoc = allLocs.find(
+			(l) => l.attributes.locale === sourceLanguage,
+		);
+		const targetLoc = allLocs.find(
+			(l) => l.attributes.locale === targetLanguage,
+		);
+
+		if (!sourceLoc) {
+			buildError("notFound", {
+				info: `Source language "${sourceLanguage}" not found`,
+			});
+			throw new Error("unreachable");
+		}
+		if (!targetLoc) {
+			buildError("notFound", {
+				info: `Target language "${targetLanguage}" not found`,
+			});
+			throw new Error("unreachable");
+		}
+
+		// Get source screenshot sets
+		const { data: sourceSets } = await client.readAll(
+			`appStoreVersionLocalizations/${sourceLoc.id}/appScreenshotSets`,
+		);
+		const allSourceSets = (sourceSets ?? []) as ApiResource[];
+
+		// Filter by displayType if specified
+		const setsToProcess = displayType
+			? allSourceSets.filter(
+					(s) => s.attributes.screenshotDisplayType === displayType,
+				)
+			: allSourceSets;
+
+		if (setsToProcess.length === 0) {
+			buildError("badRequest", {
+				info: `No screenshots found for source language "${sourceLanguage}"`,
+			});
+		}
+
+		// Check target doesn't already have screenshots for the same display types
+		const { data: targetSets } = await client.readAll(
+			`appStoreVersionLocalizations/${targetLoc.id}/appScreenshotSets`,
+		);
+		const targetDisplayTypes = new Set(
+			((targetSets ?? []) as ApiResource[]).map(
+				(s) => s.attributes.screenshotDisplayType as string,
+			),
+		);
+
+		let copied = 0;
+
+		for (const sourceSet of setsToProcess) {
+			const dt = sourceSet.attributes.screenshotDisplayType as string;
+
+			// Get source screenshots
+			const { data: sourceScreenshots } = await client.readAll(
+				`appScreenshotSets/${sourceSet.id}/appScreenshots`,
+			);
+			const screenshots = (sourceScreenshots ?? []) as ApiResource[];
+
+			if (screenshots.length === 0) continue;
+
+			// Find or create target screenshot set
+			let targetSet: ApiResource;
+			if (targetDisplayTypes.has(dt)) {
+				const existing = ((targetSets ?? []) as ApiResource[]).find(
+					(s) => s.attributes.screenshotDisplayType === dt,
+				);
+				if (!existing) continue;
+
+				// Check if target set already has screenshots
+				const { data: existingTargetScreenshots } = await client.readAll(
+					`appScreenshotSets/${existing.id}/appScreenshots`,
+				);
+				if (((existingTargetScreenshots ?? []) as ApiResource[]).length > 0) {
+					log.warn(
+						{ appId, displayType: dt, targetLanguage },
+						"Target already has screenshots for this display type, skipping",
+					);
+					continue;
+				}
+				targetSet = existing;
+			} else {
+				targetSet = (await client.create({
+					attributes: { screenshotDisplayType: dt },
+					relationships: {
+						appStoreVersionLocalization: targetLoc,
+					},
+					type: "appScreenshotSets",
+				})) as unknown as ApiResource;
+			}
+
+			// Copy each screenshot: download from URL → re-upload
+			for (const screenshot of screenshots) {
+				const attrs = screenshot.attributes;
+				const imageAsset = attrs.imageAsset as
+					| Record<string, unknown>
+					| undefined;
+
+				if (!imageAsset?.templateUrl) continue;
+
+				const url = (imageAsset.templateUrl as string)
+					.replace("{w}", String(imageAsset.width ?? 0))
+					.replace("{h}", String(imageAsset.height ?? 0))
+					.replace("{f}", "png");
+
+				// Download the screenshot image
+				const response = await fetch(url);
+				if (!response.ok) {
+					log.warn(
+						{ screenshotId: screenshot.id, status: response.status, url },
+						"Failed to download source screenshot, skipping",
+					);
+					continue;
+				}
+
+				const imageBuffer = Buffer.from(await response.arrayBuffer());
+				const fileName = (attrs.fileName as string) ?? "screenshot.png";
+
+				// Create and upload to target
+				const newScreenshot = (await client.create({
+					attributes: {
+						fileName,
+						fileSize: imageBuffer.length,
+					},
+					relationships: {
+						appScreenshotSet: targetSet,
+					},
+					type: "appScreenshots",
+				})) as unknown as ApiResource;
+
+				await client.uploadAsset(newScreenshot, imageBuffer);
+				await client.pollForUploadSuccess(
+					`appScreenshots/${newScreenshot.id}`,
+					"screenshot",
+				);
+
+				copied++;
+			}
+		}
+
+		log.info(
+			{ appId, copied, sourceLanguage, targetLanguage },
+			"Copied screenshots between languages",
+		);
+
+		return { copied };
+	}
+
 	static async reorderScreenshots(
 		appId: string,
 		screenshotSetId: string,
