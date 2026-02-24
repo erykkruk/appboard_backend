@@ -1742,27 +1742,29 @@ export class PublishingService {
 		}
 	}
 
-	static async splitPreview(displayType: string, file: File, parts: number) {
+	private static validateSplitParams(
+		displayType: string,
+		imgWidth: number,
+		imgHeight: number,
+		parts: number,
+	) {
 		if (parts < MIN_SPLIT_PARTS || parts > MAX_SPLIT_PARTS) {
 			buildError("badRequest", {
 				info: `Parts must be between ${MIN_SPLIT_PARTS} and ${MAX_SPLIT_PARTS}`,
 			});
+			throw new Error("unreachable");
 		}
 
-		const rawBuffer = Buffer.from(await file.arrayBuffer());
-		const image = sharp(rawBuffer);
-		const meta = await image.metadata();
-		const originalWidth = meta.width ?? 0;
-		const originalHeight = meta.height ?? 0;
-
-		if (originalWidth === 0 || originalHeight === 0) {
+		if (imgWidth === 0 || imgHeight === 0) {
 			buildError("badRequest", { info: "Could not read image dimensions" });
+			throw new Error("unreachable");
 		}
 
-		if (originalWidth < originalHeight * MIN_PANORAMA_RATIO) {
+		if (imgWidth < imgHeight * MIN_PANORAMA_RATIO) {
 			buildError("badRequest", {
 				info: `Image must be a panorama (width must be at least ${MIN_PANORAMA_RATIO}x height)`,
 			});
+			throw new Error("unreachable");
 		}
 
 		const sizes = REQUIRED_SIZES[displayType];
@@ -1770,7 +1772,24 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Unknown display type: ${displayType}`,
 			});
+			throw new Error("unreachable");
 		}
+
+		return sizes;
+	}
+
+	static async splitPreview(displayType: string, file: File, parts: number) {
+		const rawBuffer = Buffer.from(await file.arrayBuffer());
+		const meta = await sharp(rawBuffer).metadata();
+		const originalWidth = meta.width ?? 0;
+		const originalHeight = meta.height ?? 0;
+
+		const sizes = PublishingService.validateSplitParams(
+			displayType,
+			originalWidth,
+			originalHeight,
+			parts,
+		);
 
 		// Pick portrait target size (screenshot parts are always portrait)
 		const portraitSizes = sizes.filter(([w, h]) => h >= w);
@@ -1834,35 +1853,17 @@ export class PublishingService {
 		parts: number,
 		insertAt?: number,
 	) {
-		if (parts < MIN_SPLIT_PARTS || parts > MAX_SPLIT_PARTS) {
-			buildError("badRequest", {
-				info: `Parts must be between ${MIN_SPLIT_PARTS} and ${MAX_SPLIT_PARTS}`,
-			});
-		}
-
 		const rawBuffer = Buffer.from(await file.arrayBuffer());
-		const image = sharp(rawBuffer);
-		const meta = await image.metadata();
-		const imgW = meta.width ?? 0;
-		const imgH = meta.height ?? 0;
+		const meta = await sharp(rawBuffer).metadata();
+		const imgWidth = meta.width ?? 0;
+		const imgHeight = meta.height ?? 0;
 
-		if (imgW === 0 || imgH === 0) {
-			buildError("badRequest", { info: "Could not read image dimensions" });
-		}
-
-		if (imgW < imgH * MIN_PANORAMA_RATIO) {
-			buildError("badRequest", {
-				info: `Image must be a panorama (width must be at least ${MIN_PANORAMA_RATIO}x height)`,
-			});
-		}
-
-		// Validate display type
-		const sizes = REQUIRED_SIZES[displayType];
-		if (!sizes?.length) {
-			buildError("badRequest", {
-				info: `Unknown display type: ${displayType}`,
-			});
-		}
+		PublishingService.validateSplitParams(
+			displayType,
+			imgWidth,
+			imgHeight,
+			parts,
+		);
 
 		// Check existing screenshot count
 		const app = await PublishingService.getAppWithStore(appId);
@@ -1918,19 +1919,28 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Cannot add ${parts} screenshots: ${existingCount} already exist, maximum is ${MAX_SCREENSHOTS_PER_SET}`,
 			});
+			throw new Error("unreachable");
+		}
+
+		// Validate insertAt bounds
+		if (insertAt !== undefined && (insertAt < 0 || insertAt > existingCount)) {
+			buildError("badRequest", {
+				info: `insertAt must be between 0 and ${existingCount}`,
+			});
+			throw new Error("unreachable");
 		}
 
 		// Split and upload each part
-		const partWidth = Math.floor(imgW / parts);
+		const partWidth = Math.floor(imgWidth / parts);
 		const screenshotIds: string[] = [];
 
 		for (let i = 0; i < parts; i++) {
 			const left = i * partWidth;
 			// Last part takes remaining width to avoid rounding gaps
-			const width = i === parts - 1 ? imgW - left : partWidth;
+			const width = i === parts - 1 ? imgWidth - left : partWidth;
 
 			const partBuffer = await sharp(rawBuffer)
-				.extract({ height: imgH, left, top: 0, width })
+				.extract({ height: imgHeight, left, top: 0, width })
 				.toBuffer();
 
 			const processed = await processScreenshot(partBuffer, displayType);
@@ -2052,6 +2062,7 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `No screenshots found for source language "${sourceLanguage}"`,
 			});
+			throw new Error("unreachable");
 		}
 
 		// Check target doesn't already have screenshots for the same display types

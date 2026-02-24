@@ -1,9 +1,35 @@
 import Elysia, { t } from "elysia";
 import { PublishingService } from "./publishing.service";
 
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
 const appIdParams = t.Object({
 	appId: t.String({ format: "uuid" }),
 });
+
+const screenshotFile = t.File({ maxSize: MAX_FILE_SIZE });
+const optionalCropParam = t.Optional(t.Numeric({ maximum: 20000, minimum: 0 }));
+
+async function withScreenshotCopy<T extends Record<string, unknown>>(
+	result: T,
+	appId: string,
+	versionId: string,
+	copyFrom: string | undefined,
+	targetLocale: string,
+): Promise<T & { screenshotsCopied?: number; screenshotsCopyError?: boolean }> {
+	if (!copyFrom) return result;
+	try {
+		const copyResult = await PublishingService.copyScreenshots(
+			appId,
+			versionId,
+			copyFrom,
+			targetLocale,
+		);
+		return { ...result, screenshotsCopied: copyResult.copied };
+	} catch {
+		return { ...result, screenshotsCopied: 0, screenshotsCopyError: true };
+	}
+}
 
 export const publishingController = new Elysia({ prefix: "/apps" })
 	.get(
@@ -82,25 +108,13 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 					body.sourceLocale,
 				);
 
-			if (body.copyScreenshotsFrom) {
-				try {
-					const copyResult = await PublishingService.copyScreenshots(
-						params.appId,
-						params.versionId,
-						body.copyScreenshotsFrom,
-						body.locale,
-					);
-					return { ...result, screenshotsCopied: copyResult.copied };
-				} catch {
-					return {
-						...result,
-						screenshotsCopied: 0,
-						screenshotsCopyError: true,
-					};
-				}
-			}
-
-			return result;
+			return withScreenshotCopy(
+				result,
+				params.appId,
+				params.versionId,
+				body.copyScreenshotsFrom,
+				body.locale,
+			);
 		},
 		{
 			body: t.Object({
@@ -128,25 +142,13 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				body.locale,
 			);
 
-			if (body.copyScreenshotsFrom) {
-				try {
-					const copyResult = await PublishingService.copyScreenshots(
-						params.appId,
-						params.versionId,
-						body.copyScreenshotsFrom,
-						body.locale,
-					);
-					return { ...result, screenshotsCopied: copyResult.copied };
-				} catch {
-					return {
-						...result,
-						screenshotsCopied: 0,
-						screenshotsCopyError: true,
-					};
-				}
-			}
-
-			return result;
+			return withScreenshotCopy(
+				result,
+				params.appId,
+				params.versionId,
+				body.copyScreenshotsFrom,
+				body.locale,
+			);
 		},
 		{
 			body: t.Object({
@@ -257,12 +259,12 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			body: t.Object({
-				cropHeight: t.Optional(t.Numeric()),
-				cropWidth: t.Optional(t.Numeric()),
-				cropX: t.Optional(t.Numeric()),
-				cropY: t.Optional(t.Numeric()),
+				cropHeight: optionalCropParam,
+				cropWidth: optionalCropParam,
+				cropX: optionalCropParam,
+				cropY: optionalCropParam,
 				displayType: t.String({ minLength: 1 }),
-				file: t.File(),
+				file: screenshotFile,
 			}),
 			detail: {
 				description:
@@ -298,12 +300,12 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			body: t.Object({
-				cropHeight: t.Optional(t.Numeric()),
-				cropWidth: t.Optional(t.Numeric()),
-				cropX: t.Optional(t.Numeric()),
-				cropY: t.Optional(t.Numeric()),
+				cropHeight: optionalCropParam,
+				cropWidth: optionalCropParam,
+				cropX: optionalCropParam,
+				cropY: optionalCropParam,
 				displayType: t.String({ minLength: 1 }),
-				file: t.File(),
+				file: screenshotFile,
 				language: t.String({ minLength: 1 }),
 				versionId: t.String({ minLength: 1 }),
 			}),
@@ -326,7 +328,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		{
 			body: t.Object({
 				displayType: t.String({ minLength: 1 }),
-				file: t.File(),
+				file: screenshotFile,
 				parts: t.Numeric({ maximum: 10, minimum: 2 }),
 			}),
 			detail: {
@@ -352,8 +354,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		{
 			body: t.Object({
 				displayType: t.String({ minLength: 1 }),
-				file: t.File(),
-				insertAt: t.Optional(t.Numeric()),
+				file: screenshotFile,
+				insertAt: t.Optional(t.Numeric({ minimum: 0 })),
 				language: t.String({ minLength: 1 }),
 				parts: t.Numeric({ maximum: 10, minimum: 2 }),
 				versionId: t.String({ minLength: 1 }),
