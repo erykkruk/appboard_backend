@@ -34,8 +34,13 @@ async function expectBadRequest(
 		const response = (
 			err as { response?: { code?: string; data?: { info?: string } } }
 		)?.response;
-		expect(response?.code).toBe("BAD_REQUEST");
-		expect(response?.data?.info).toMatch(infoPattern);
+		if (!response?.code) {
+			throw new Error(
+				`Expected buildError BAD_REQUEST but got: ${JSON.stringify(err)}`,
+			);
+		}
+		expect(response.code).toBe("BAD_REQUEST");
+		expect(response.data?.info).toMatch(infoPattern);
 	}
 }
 
@@ -176,6 +181,22 @@ describe("Screenshot split-preview", () => {
 			PublishingService.splitPreview("APP_IPHONE_65", file, 3),
 			/too large/i,
 		);
+	});
+
+	test("Accepts image at exactly MAX_PIXEL_COUNT boundary", async () => {
+		// 12500x8000 = 100,000,000 pixels = MAX_PIXEL_COUNT exactly
+		// Condition is > (not >=), so exactly at limit should pass
+		// 12500/8000 = 1.5625 > 1.5 → panorama ratio OK
+		const exactBuffer = await createTestImage(12500, 8000);
+		const file = createFileFromBuffer(exactBuffer, "exact.png");
+
+		const result = await PublishingService.splitPreview(
+			"APP_IPHONE_65",
+			file,
+			3,
+		);
+		expect(result.originalWidth).toBe(12500);
+		expect(result.originalHeight).toBe(8000);
 	});
 
 	test("Accepts image just under MAX_PIXEL_COUNT", async () => {

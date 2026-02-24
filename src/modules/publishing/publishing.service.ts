@@ -2142,6 +2142,28 @@ export class PublishingService {
 					.replace("{h}", String(imageAsset.height ?? 0))
 					.replace("{f}", "png");
 
+				// Validate URL scheme to prevent SSRF
+				let parsedUrl: URL;
+				try {
+					parsedUrl = new URL(url);
+				} catch {
+					log.warn(
+						{ screenshotId: screenshot.id, url },
+						"Invalid screenshot URL, skipping",
+					);
+					continue;
+				}
+				if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+					log.warn(
+						{
+							protocol: parsedUrl.protocol,
+							screenshotId: screenshot.id,
+						},
+						"Blocked non-HTTP(S) screenshot URL, skipping",
+					);
+					continue;
+				}
+
 				// Download the screenshot image with timeout and size limit
 				let response: Response;
 				try {
