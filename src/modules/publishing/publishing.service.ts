@@ -1800,8 +1800,12 @@ export class PublishingService {
 			`<svg width="${originalWidth}" height="${originalHeight}">${svgLines}</svg>`,
 		);
 
-		const previewBuffer = await sharp(rawBuffer)
+		// Composite SVG onto original, then resize for smaller output
+		const composited = await sharp(rawBuffer)
 			.composite([{ input: svgOverlay, left: 0, top: 0 }])
+			.toBuffer();
+
+		const previewBuffer = await sharp(composited)
 			.resize(Math.min(originalWidth, 2000))
 			.png({ compressionLevel: 8 })
 			.toBuffer();
