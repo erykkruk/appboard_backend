@@ -221,10 +221,9 @@ describe("Age Rating module", () => {
 		// Use a non-existent but valid UUID
 		const fakeAppId = "00000000-0000-0000-0000-000000000000";
 		const res = await app.handle(
-			authRequest(
-				`http://localhost/api/apps/${fakeAppId}/age-rating/publish`,
-				{ method: "POST" },
-			),
+			authRequest(`http://localhost/api/apps/${fakeAppId}/age-rating/publish`, {
+				method: "POST",
+			}),
 		);
 
 		expect(res.status).toBe(404);
@@ -232,10 +231,9 @@ describe("Age Rating module", () => {
 
 	it("POST with invalid appId returns 422", async () => {
 		const res = await app.handle(
-			authRequest(
-				"http://localhost/api/apps/not-a-uuid/age-rating/publish",
-				{ method: "POST" },
-			),
+			authRequest("http://localhost/api/apps/not-a-uuid/age-rating/publish", {
+				method: "POST",
+			}),
 		);
 		expect(res.status).toBe(422);
 	});

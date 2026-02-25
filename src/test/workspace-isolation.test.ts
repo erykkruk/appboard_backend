@@ -5,12 +5,7 @@ import { appsController } from "@/modules/apps";
 import { listingsController } from "@/modules/listings";
 import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
-import {
-	authGuard,
-	authRequest,
-	authRequestB,
-	cleanupStores,
-} from "./setup";
+import { authGuard, authRequest, authRequestB, cleanupStores } from "./setup";
 
 /**
  * Workspace isolation tests — verify that user B cannot access

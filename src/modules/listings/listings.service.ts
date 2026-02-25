@@ -671,16 +671,15 @@ export class ListingsService {
 		const results: Record<string, { model: string; fields: string[] }> = {};
 
 		for (const targetLang of targetLanguages) {
-			const { model, translations } =
-				await AIService.translateLocalization(
-					workspaceId,
-					appId,
-					app.name,
-					app.platform,
-					aiFields,
-					sourceLanguage,
-					targetLang,
-				);
+			const { model, translations } = await AIService.translateLocalization(
+				workspaceId,
+				appId,
+				app.name,
+				app.platform,
+				aiFields,
+				sourceLanguage,
+				targetLang,
+			);
 
 			// Convert AI field names back to DB columns and save
 			const dbData: Record<string, string> = {};
@@ -729,8 +728,9 @@ export class ListingsService {
 		const dbField = AI_TO_DB_FIELD[field] ?? field;
 		const aiField = DB_TO_AI_FIELD[dbField] ?? field;
 
-		const sourceValue =
-			sourceListing[dbField as keyof typeof sourceListing] as string | null;
+		const sourceValue = sourceListing[dbField as keyof typeof sourceListing] as
+			| string
+			| null;
 		if (!sourceValue) {
 			buildError("badRequest", {
 				info: `Field "${field}" is empty in source language "${sourceLanguage}"`,
@@ -751,16 +751,15 @@ export class ListingsService {
 		const results: Record<string, { model: string; value: string }> = {};
 
 		for (const targetLang of targetLanguages) {
-			const { model, translations } =
-				await AIService.translateLocalization(
-					workspaceId,
-					appId,
-					app.name,
-					app.platform,
-					aiFields,
-					sourceLanguage,
-					targetLang,
-				);
+			const { model, translations } = await AIService.translateLocalization(
+				workspaceId,
+				appId,
+				app.name,
+				app.platform,
+				aiFields,
+				sourceLanguage,
+				targetLang,
+			);
 
 			const translatedValue = translations[aiField];
 			if (translatedValue) {

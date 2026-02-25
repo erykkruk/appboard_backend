@@ -162,9 +162,7 @@ describe("Settings module", () => {
 		// Read it back multiple times to verify persistence
 		for (let i = 0; i < 3; i++) {
 			const res = await app
-				.handle(
-					authRequest("http://localhost/api/settings/OPENROUTER_API_KEY"),
-				)
+				.handle(authRequest("http://localhost/api/settings/OPENROUTER_API_KEY"))
 				.then((r) => r.json());
 
 			expect(res.setting.value).toBe("persist-test-key-999");
@@ -239,9 +237,7 @@ describe("Settings module", () => {
 			);
 
 			const resA = await app
-				.handle(
-					authRequest("http://localhost/api/settings/OPENROUTER_API_KEY"),
-				)
+				.handle(authRequest("http://localhost/api/settings/OPENROUTER_API_KEY"))
 				.then((r) => r.json());
 			const resB = await app
 				.handle(

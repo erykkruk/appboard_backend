@@ -141,8 +141,6 @@ export async function cleanupSettings(
 	for (const key of keys) {
 		await db
 			.delete(settings)
-			.where(
-				and(eq(settings.workspaceId, workspaceId), eq(settings.key, key)),
-			);
+			.where(and(eq(settings.workspaceId, workspaceId), eq(settings.key, key)));
 	}
 }
