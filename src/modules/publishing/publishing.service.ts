@@ -1,4 +1,4 @@
-import { and, eq, notInArray } from "drizzle-orm";
+import { and, desc, eq, notInArray } from "drizzle-orm";
 import type { ApiResource } from "node-app-store-connect-api";
 import sharp from "sharp";
 import type { StoreType } from "@/config/const";
@@ -2453,7 +2453,74 @@ export class PublishingService {
 			"Created new version",
 		);
 
-		return result;
+		// Auto-copy languages from the previous version
+		const copiedLanguages: string[] = [];
+
+		if (result.versionId) {
+			const previousVersions = await db
+				.select()
+				.from(appVersions)
+				.where(eq(appVersions.appId, appId))
+				.orderBy(desc(appVersions.createdAt))
+				.limit(1);
+
+			if (previousVersions.length > 0) {
+				const prevLocs = await db
+					.select({ language: versionLocalizations.language })
+					.from(versionLocalizations)
+					.where(
+						and(
+							eq(versionLocalizations.versionId, previousVersions[0].id),
+							eq(versionLocalizations.source, "remote"),
+						),
+					);
+
+				if (credentials.keyId) {
+					// Real ASC credentials — create localizations on ASC
+					const client = await createAppStoreClient(credentials);
+
+					for (const loc of prevLocs) {
+						try {
+							await client.create({
+								attributes: { locale: loc.language },
+								relationships: {
+									appStoreVersion: {
+										id: result.versionId,
+										type: "appStoreVersions",
+									},
+								},
+								type: "appStoreVersionLocalizations",
+							});
+							copiedLanguages.push(loc.language);
+						} catch (err) {
+							log.warn(
+								{ err, locale: loc.language },
+								"Failed to copy locale to new version",
+							);
+						}
+					}
+				} else {
+					// Mock mode — just report which languages would be copied
+					for (const loc of prevLocs) {
+						copiedLanguages.push(loc.language);
+					}
+				}
+
+				if (copiedLanguages.length > 0 && credentials.keyId) {
+					await PublishingService.syncVersions(appId);
+					log.info(
+						{ appId, copiedLanguages, count: copiedLanguages.length },
+						"Copied languages to new version",
+					);
+				}
+			}
+		}
+
+		return {
+			copiedLanguages,
+			state: result.state,
+			versionString: result.versionString,
+		};
 	}
 
 	static async submitForReview(appId: string) {

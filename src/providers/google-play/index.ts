@@ -49,7 +49,7 @@ export class GooglePlayProvider implements StoreProvider {
 	async createVersion(
 		_appId: string,
 		_versionString: string,
-	): Promise<{ state: string; versionString: string }> {
+	): Promise<{ state: string; versionId?: string; versionString: string }> {
 		// Google Play does not require manual version creation
 		return { state: "inProgress", versionString: _versionString };
 	}

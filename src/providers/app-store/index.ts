@@ -104,9 +104,13 @@ export class AppStoreProvider implements StoreProvider {
 	async createVersion(
 		appId: string,
 		versionString: string,
-	): Promise<{ state: string; versionString: string }> {
+	): Promise<{ state: string; versionId?: string; versionString: string }> {
 		if (this.isMock) {
-			return { state: "PREPARE_FOR_SUBMISSION", versionString };
+			return {
+				state: "PREPARE_FOR_SUBMISSION",
+				versionId: `mock-version-${Date.now()}`,
+				versionString,
+			};
 		}
 
 		const { create } = await createAppStoreClient(this.credentials);
@@ -125,7 +129,7 @@ export class AppStoreProvider implements StoreProvider {
 
 		log.info({ appId, state, versionString }, "Created new App Store version");
 
-		return { state, versionString };
+		return { state, versionId: result.data.id, versionString };
 	}
 
 	async getLatestVersion(appId: string): Promise<VersionData | null> {

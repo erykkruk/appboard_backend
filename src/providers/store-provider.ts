@@ -32,7 +32,7 @@ export interface StoreProvider {
 	createVersion(
 		appId: string,
 		versionString: string,
-	): Promise<{ state: string; versionString: string }>;
+	): Promise<{ state: string; versionId?: string; versionString: string }>;
 	getLatestVersion(appId: string): Promise<VersionData | null>;
 	updateAgeRating(
 		appId: string,
