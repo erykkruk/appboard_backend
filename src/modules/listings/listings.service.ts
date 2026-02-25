@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { APP_STORE_CATEGORIES, type StoreType } from "@/config/const";
+import { AIService } from "@/modules/ai/ai.service";
 import { createProvider } from "@/providers";
 import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
@@ -17,6 +18,36 @@ const LISTING_FIELDS = [
 	"promoText",
 	"shortDesc",
 	"supportUrl",
+	"title",
+	"whatsNew",
+] as const;
+
+// Mapping: DB column → AI field name (for translateLocalization)
+const DB_TO_AI_FIELD: Record<string, string> = {
+	fullDesc: "description",
+	keywords: "keywords",
+	promoText: "promotionalText",
+	shortDesc: "shortDescription",
+	title: "title",
+	whatsNew: "whatsNew",
+};
+
+// Reverse mapping: AI field name → DB column
+const AI_TO_DB_FIELD: Record<string, string> = {
+	description: "fullDesc",
+	keywords: "keywords",
+	promotionalText: "promoText",
+	shortDescription: "shortDesc",
+	title: "title",
+	whatsNew: "whatsNew",
+};
+
+// Translatable fields (excludes URL fields which shouldn't be translated)
+const TRANSLATABLE_FIELDS = [
+	"fullDesc",
+	"keywords",
+	"promoText",
+	"shortDesc",
 	"title",
 	"whatsNew",
 ] as const;
@@ -604,6 +635,204 @@ export class ListingsService {
 
 		log.info({ appId }, "Categories published to store");
 		return { success: true };
+	}
+
+	static async translateFromLanguage(
+		workspaceId: string,
+		appId: string,
+		sourceLanguage: string,
+	): Promise<{
+		translated: number;
+		results: Record<string, { model: string; fields: string[] }>;
+	}> {
+		const app = await ListingsService.getAppWithStore(appId);
+
+		// Get source listing (prefer draft, fallback to remote)
+		const sourceListing = await ListingsService.getSourceListing(
+			appId,
+			sourceLanguage,
+		);
+
+		// Build AI fields from source listing
+		const aiFields = ListingsService.buildAiFields(sourceListing);
+		if (Object.keys(aiFields).length === 0) {
+			return { results: {}, translated: 0 };
+		}
+
+		// Get all distinct languages for this app (excluding source)
+		const targetLanguages = await ListingsService.getOtherLanguages(
+			appId,
+			sourceLanguage,
+		);
+		if (targetLanguages.length === 0) {
+			return { results: {}, translated: 0 };
+		}
+
+		const results: Record<string, { model: string; fields: string[] }> = {};
+
+		for (const targetLang of targetLanguages) {
+			const { model, translations } =
+				await AIService.translateLocalization(
+					workspaceId,
+					appId,
+					app.name,
+					app.platform,
+					aiFields,
+					sourceLanguage,
+					targetLang,
+				);
+
+			// Convert AI field names back to DB columns and save
+			const dbData: Record<string, string> = {};
+			for (const [aiField, value] of Object.entries(translations)) {
+				const dbField = AI_TO_DB_FIELD[aiField];
+				if (dbField && value) {
+					dbData[dbField] = value;
+				}
+			}
+
+			if (Object.keys(dbData).length > 0) {
+				await ListingsService.updateDraft(appId, targetLang, dbData);
+				results[targetLang] = {
+					fields: Object.keys(translations),
+					model,
+				};
+			}
+		}
+
+		log.info(
+			{ appId, sourceLanguage, targetCount: targetLanguages.length },
+			"Translated all languages from source",
+		);
+
+		return { results, translated: Object.keys(results).length };
+	}
+
+	static async translateFieldFromLanguage(
+		workspaceId: string,
+		appId: string,
+		sourceLanguage: string,
+		field: string,
+	): Promise<{
+		translated: number;
+		results: Record<string, { model: string; value: string }>;
+	}> {
+		const app = await ListingsService.getAppWithStore(appId);
+
+		// Get source listing
+		const sourceListing = await ListingsService.getSourceListing(
+			appId,
+			sourceLanguage,
+		);
+
+		// Validate the field exists and has a value
+		const dbField = AI_TO_DB_FIELD[field] ?? field;
+		const aiField = DB_TO_AI_FIELD[dbField] ?? field;
+
+		const sourceValue =
+			sourceListing[dbField as keyof typeof sourceListing] as string | null;
+		if (!sourceValue) {
+			buildError("badRequest", {
+				info: `Field "${field}" is empty in source language "${sourceLanguage}"`,
+			});
+		}
+
+		const aiFields: Record<string, string> = { [aiField]: sourceValue! };
+
+		// Get all distinct languages for this app (excluding source)
+		const targetLanguages = await ListingsService.getOtherLanguages(
+			appId,
+			sourceLanguage,
+		);
+		if (targetLanguages.length === 0) {
+			return { results: {}, translated: 0 };
+		}
+
+		const results: Record<string, { model: string; value: string }> = {};
+
+		for (const targetLang of targetLanguages) {
+			const { model, translations } =
+				await AIService.translateLocalization(
+					workspaceId,
+					appId,
+					app.name,
+					app.platform,
+					aiFields,
+					sourceLanguage,
+					targetLang,
+				);
+
+			const translatedValue = translations[aiField];
+			if (translatedValue) {
+				const saveField = AI_TO_DB_FIELD[aiField] ?? aiField;
+				await ListingsService.updateDraft(appId, targetLang, {
+					[saveField]: translatedValue,
+				});
+				results[targetLang] = { model, value: translatedValue };
+			}
+		}
+
+		log.info(
+			{
+				appId,
+				field: aiField,
+				sourceLanguage,
+				targetCount: targetLanguages.length,
+			},
+			"Translated field to all languages",
+		);
+
+		return { results, translated: Object.keys(results).length };
+	}
+
+	private static async getSourceListing(appId: string, language: string) {
+		const result = await db
+			.select()
+			.from(listings)
+			.where(and(eq(listings.appId, appId), eq(listings.language, language)));
+
+		const draft = result.find((l) => l.source === "draft");
+		const remote = result.find((l) => l.source === "remote");
+		const sourceListing = draft ?? remote;
+
+		if (!sourceListing) {
+			buildError("notFound", {
+				info: `No listing found for language "${language}"`,
+			});
+			throw new Error("unreachable");
+		}
+
+		return sourceListing;
+	}
+
+	private static buildAiFields(
+		listing: Record<string, unknown>,
+	): Record<string, string> {
+		const aiFields: Record<string, string> = {};
+		for (const dbField of TRANSLATABLE_FIELDS) {
+			const value = listing[dbField] as string | null;
+			if (value?.trim()) {
+				const aiField = DB_TO_AI_FIELD[dbField];
+				if (aiField) {
+					aiFields[aiField] = value;
+				}
+			}
+		}
+		return aiFields;
+	}
+
+	private static async getOtherLanguages(
+		appId: string,
+		excludeLanguage: string,
+	): Promise<string[]> {
+		const allListings = await db
+			.select({ language: listings.language })
+			.from(listings)
+			.where(eq(listings.appId, appId));
+
+		const languages = new Set(allListings.map((l) => l.language));
+		languages.delete(excludeLanguage);
+		return [...languages];
 	}
 
 	private static async getAppWithStore(appId: string) {

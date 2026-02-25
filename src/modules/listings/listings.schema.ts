@@ -29,3 +29,15 @@ export const updateCategoriesBody = t.Object({
 	primaryCategory: t.String({ maxLength: 100, minLength: 1 }),
 	secondaryCategory: t.Optional(t.String({ maxLength: 100 })),
 });
+
+export const translateFieldBody = t.Object({
+	field: t.Union([
+		t.Literal("title"),
+		t.Literal("subtitle"),
+		t.Literal("shortDescription"),
+		t.Literal("description"),
+		t.Literal("keywords"),
+		t.Literal("promotionalText"),
+		t.Literal("whatsNew"),
+	]),
+});

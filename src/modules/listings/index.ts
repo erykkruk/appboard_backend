@@ -4,6 +4,7 @@ import {
 	exportQuery,
 	listingLanguageParams,
 	listingParams,
+	translateFieldBody,
 	updateCategoriesBody,
 	updateListingBody,
 } from "./listings.schema";
@@ -151,6 +152,46 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 				tags: ["Listings"],
 			},
 			params: listingParams,
+		},
+	)
+	.post(
+		"/:appId/listings/translate-from/:language",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return ListingsService.translateFromLanguage(
+				workspaceId!,
+				params.appId,
+				params.language,
+			);
+		},
+		{
+			detail: {
+				description:
+					"Translate all listing fields from source language to all other languages",
+				tags: ["Listings"],
+			},
+			params: listingLanguageParams,
+		},
+	)
+	.post(
+		"/:appId/listings/translate-field-from/:language",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return ListingsService.translateFieldFromLanguage(
+				workspaceId!,
+				params.appId,
+				params.language,
+				body.field,
+			);
+		},
+		{
+			body: translateFieldBody,
+			detail: {
+				description:
+					"Translate a single listing field from source language to all other languages",
+				tags: ["Listings"],
+			},
+			params: listingLanguageParams,
 		},
 	)
 	.get(
