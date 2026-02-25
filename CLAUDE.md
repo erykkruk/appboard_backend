@@ -96,6 +96,23 @@ buildError("notFound", { info: "App not found" });
 
 All errors are typed via the `errors` object. Never throw raw errors.
 
+## Multi-tenancy (Workspace Scoping)
+
+All data is workspace-scoped. Every endpoint MUST operate within the authenticated user's workspace context.
+
+- Auth guard (`src/modules/auth/index.ts`) derives `userId` + `workspaceId` from request
+- Every store-scoped endpoint must call `verifyStoreOwnership(storeId, workspaceId!)`
+- Every app-scoped endpoint must call `verifyAppOwnership(appId, workspaceId!)` (joins through stores)
+- Service methods that query data MUST filter by `workspaceId` — never return cross-workspace results
+- Settings use `(workspaceId, key)` unique constraint — same key can exist per workspace
+
+### Testing workspace context
+- ALL tests MUST run authenticated via `authRequest()` from `test/setup.ts` (workspace A)
+- Use `authRequestB()` for cross-workspace isolation tests (workspace B)
+- `seedTestStore()` accepts optional `workspaceId` (defaults to workspace A)
+- When writing new tests: always verify that workspace B cannot access workspace A resources
+- Integration tests should cover the full flow: connect → sync → save → publish
+
 ## Anti-patterns
 
 - NEVER use `console.log` — use `createLogger()` from `@/utils/logger`
@@ -104,6 +121,8 @@ All errors are typed via the `errors` object. Never throw raw errors.
 - NEVER use raw SQL — use Drizzle ORM
 - NEVER store credentials unencrypted — use `encrypt()`/`decrypt()` from `@/utils/crypto`
 - NEVER use `any` type
+- NEVER skip workspace scoping — every endpoint MUST use `workspaceId` from auth guard
+- NEVER write tests without auth context — always use `authRequest()` or `authRequestB()`
 
 ## Best Practices
 
@@ -117,11 +136,12 @@ All errors are typed via the `errors` object. Never throw raw errors.
 ## New Feature Checklist
 
 1. Create module directory under `src/modules/{feature}/`
-2. Define service class with business logic
-3. Define Elysia controller with routes
+2. Define service class with business logic — pass `workspaceId` to all queries
+3. Define Elysia controller with routes — call `verifyAppOwnership` or `verifyStoreOwnership`
 4. Register controller in `src/index.ts` under `/api` group
-5. Write tests in `src/test/` or `src/modules/{feature}/`
-6. Run `bun test` and `bunx biome check --write .`
+5. Write tests in `src/test/` — use `authRequest()` for workspace A, test isolation with `authRequestB()`
+6. Include workspace isolation tests (workspace B cannot access workspace A resources)
+7. Run `bun test` and `bunx biome check --write .`
 
 ## Ports
 

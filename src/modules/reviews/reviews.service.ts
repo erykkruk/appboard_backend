@@ -67,6 +67,11 @@ export class ReviewsService {
 			}
 		}
 
+		await db
+			.update(apps)
+			.set({ lastSyncedAt: new Date() })
+			.where(eq(apps.id, appId));
+
 		log.info({ appId, count: fetched.length }, "Reviews synced from store");
 		return { synced: fetched.length };
 	}

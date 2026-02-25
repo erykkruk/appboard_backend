@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Elysia } from "elysia";
 import { publishingController } from "@/modules/publishing";
+import { authGuard, authRequest } from "@/test/setup";
 
 /**
  * Tests for the screenshot copy endpoint.
@@ -8,15 +9,15 @@ import { publishingController } from "@/modules/publishing";
  * we test validation logic: missing params, invalid UUIDs, non-existent apps.
  */
 describe("Screenshot copy endpoint validation", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app.use(publishingController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(publishingController));
 
 	const fakeAppId = "00000000-0000-0000-0000-000000000000";
 
 	test("POST /screenshots/copy returns 404 for non-existent app", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/copy`,
 				{
 					body: JSON.stringify({
@@ -35,7 +36,7 @@ describe("Screenshot copy endpoint validation", () => {
 
 	test("POST /screenshots/copy requires sourceLanguage", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/copy`,
 				{
 					body: JSON.stringify({
@@ -54,7 +55,7 @@ describe("Screenshot copy endpoint validation", () => {
 
 	test("POST /screenshots/copy requires targetLanguage", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/copy`,
 				{
 					body: JSON.stringify({
@@ -72,7 +73,7 @@ describe("Screenshot copy endpoint validation", () => {
 
 	test("POST /screenshots/copy requires versionId", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/copy`,
 				{
 					body: JSON.stringify({
@@ -90,7 +91,7 @@ describe("Screenshot copy endpoint validation", () => {
 
 	test("POST /screenshots/copy rejects invalid appId format", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				"http://localhost/api/apps/not-a-uuid/publishing/screenshots/copy",
 				{
 					body: JSON.stringify({
@@ -109,9 +110,9 @@ describe("Screenshot copy endpoint validation", () => {
 });
 
 describe("Screenshot split-upload endpoint validation", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app.use(publishingController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(publishingController));
 
 	const fakeAppId = "00000000-0000-0000-0000-000000000000";
 
@@ -127,7 +128,7 @@ describe("Screenshot split-upload endpoint validation", () => {
 		formData.append("parts", "3");
 
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/split-upload`,
 				{
 					body: formData,
@@ -153,7 +154,7 @@ describe("Screenshot split-upload endpoint validation", () => {
 		formData.append("parts", "3");
 
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				"http://localhost/api/apps/not-a-uuid/publishing/screenshots/split-upload",
 				{
 					body: formData,
@@ -167,9 +168,9 @@ describe("Screenshot split-upload endpoint validation", () => {
 });
 
 describe("Screenshot split-preview endpoint validation", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app.use(publishingController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(publishingController));
 
 	const fakeAppId = "00000000-0000-0000-0000-000000000000";
 
@@ -183,7 +184,7 @@ describe("Screenshot split-preview endpoint validation", () => {
 		formData.append("parts", "3");
 
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				"http://localhost/api/apps/not-a-uuid/publishing/screenshots/split-preview",
 				{
 					body: formData,
@@ -201,7 +202,7 @@ describe("Screenshot split-preview endpoint validation", () => {
 		formData.append("parts", "3");
 
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/split-preview`,
 				{
 					body: formData,
@@ -222,7 +223,7 @@ describe("Screenshot split-preview endpoint validation", () => {
 		formData.append("parts", "3");
 
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/split-preview`,
 				{
 					body: formData,
@@ -243,7 +244,7 @@ describe("Screenshot split-preview endpoint validation", () => {
 		formData.append("displayType", "APP_IPHONE_65");
 
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/screenshots/split-preview`,
 				{
 					body: formData,
@@ -257,15 +258,15 @@ describe("Screenshot split-preview endpoint validation", () => {
 });
 
 describe("Add localization with copyScreenshotsFrom validation", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app.use(publishingController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(publishingController));
 
 	const fakeAppId = "00000000-0000-0000-0000-000000000000";
 
 	test("POST /localizations accepts copyScreenshotsFrom parameter", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/versions/v1/localizations`,
 				{
 					body: JSON.stringify({
@@ -284,7 +285,7 @@ describe("Add localization with copyScreenshotsFrom validation", () => {
 
 	test("POST /localizations/translate accepts copyScreenshotsFrom parameter", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/apps/${fakeAppId}/publishing/versions/v1/localizations/translate`,
 				{
 					body: JSON.stringify({

@@ -1,10 +1,12 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { storesController } from "@/modules/stores";
-import { cleanupStores } from "./setup";
+import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("Stores module", () => {
-	const app = new Elysia().group("/api", (app) => app.use(storesController));
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(storesController));
 	let createdStoreId: string;
 
 	afterAll(async () => {
@@ -14,7 +16,7 @@ describe("Stores module", () => {
 	it("POST /api/stores/connect creates a mock store", async () => {
 		const response = await app
 			.handle(
-				new Request("http://localhost/api/stores/connect", {
+				authRequest("http://localhost/api/stores/connect", {
 					body: JSON.stringify({
 						credentials: { mock: true, type: "mock" },
 						name: "Test Google Play",
@@ -35,7 +37,7 @@ describe("Stores module", () => {
 
 	it("GET /api/stores lists connected stores", async () => {
 		const response = await app
-			.handle(new Request("http://localhost/api/stores"))
+			.handle(authRequest("http://localhost/api/stores"))
 			.then((res) => res.json());
 
 		expect(response.stores).toBeArray();
@@ -50,7 +52,7 @@ describe("Stores module", () => {
 	it("POST /api/stores/:storeId/sync syncs apps from store", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/stores/${createdStoreId}/sync`, {
+				authRequest(`http://localhost/api/stores/${createdStoreId}/sync`, {
 					method: "POST",
 				}),
 			)
@@ -62,7 +64,7 @@ describe("Stores module", () => {
 	it("DELETE /api/stores/:storeId disconnects a store", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/stores/${createdStoreId}`, {
+				authRequest(`http://localhost/api/stores/${createdStoreId}`, {
 					method: "DELETE",
 				}),
 			)
@@ -75,7 +77,7 @@ describe("Stores module", () => {
 
 	it("DELETE /api/stores/:storeId returns 404 for non-existent store", async () => {
 		const res = await app.handle(
-			new Request(
+			authRequest(
 				`http://localhost/api/stores/00000000-0000-0000-0000-000000000000`,
 				{ method: "DELETE" },
 			),

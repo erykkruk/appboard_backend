@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ageRatingParams, upsertAgeRatingBody } from "./age-rating.schema";
 import { AgeRatingService } from "./age-rating.service";
 import { AGE_RATING_PRESETS } from "./age-rating.templates";
@@ -21,7 +22,8 @@ export const ageRatingController = new Elysia({
 })
 	.get(
 		"/",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const rating = await AgeRatingService.get(params.appId);
 			return { ageRating: rating };
 		},
@@ -35,14 +37,29 @@ export const ageRatingController = new Elysia({
 	)
 	.put(
 		"/",
-		async ({ params, body }) => {
+		async ({ params, body, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const rating = await AgeRatingService.upsert(params.appId, body);
 			return { ageRating: rating };
 		},
 		{
 			body: upsertAgeRatingBody,
 			detail: {
-				description: "Create or update age rating",
+				description: "Auto-save age rating to local DB",
+				tags: ["Age Rating"],
+			},
+			params: ageRatingParams,
+		},
+	)
+	.post(
+		"/publish",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return AgeRatingService.publish(params.appId);
+		},
+		{
+			detail: {
+				description: "Publish age rating to store",
 				tags: ["Age Rating"],
 			},
 			params: ageRatingParams,

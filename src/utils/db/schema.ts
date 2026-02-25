@@ -18,6 +18,80 @@ const timeColumns = {
 		.$onUpdate(() => new Date()),
 };
 
+// ── Better Auth tables ──────────────────────────────────────────────
+
+export const user = pgTable("user", {
+	id: text().primaryKey(),
+	...timeColumns,
+	email: varchar({ length: 255 }).notNull().unique(),
+	emailVerified: boolean().notNull().default(false),
+	image: varchar({ length: 1024 }),
+	name: varchar({ length: 255 }).notNull(),
+});
+
+export const session = pgTable("session", {
+	id: text().primaryKey(),
+	...timeColumns,
+	expiresAt: timestamp().notNull(),
+	ipAddress: varchar({ length: 255 }),
+	token: text().notNull().unique(),
+	userAgent: text(),
+	userId: text()
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const account = pgTable("account", {
+	id: text().primaryKey(),
+	...timeColumns,
+	accessToken: text(),
+	accessTokenExpiresAt: timestamp(),
+	accountId: text().notNull(),
+	idToken: text(),
+	password: text(),
+	providerId: text().notNull(),
+	refreshToken: text(),
+	refreshTokenExpiresAt: timestamp(),
+	scope: text(),
+	userId: text()
+		.notNull()
+		.references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const verification = pgTable("verification", {
+	id: text().primaryKey(),
+	...timeColumns,
+	expiresAt: timestamp().notNull(),
+	identifier: text().notNull(),
+	value: text().notNull(),
+});
+
+// ── Workspace tables ────────────────────────────────────────────────
+
+export const workspaces = pgTable("workspaces", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	name: varchar({ length: 255 }).notNull(),
+});
+
+export const workspaceMembers = pgTable(
+	"workspace_members",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		role: varchar({ length: 20 }).notNull().default("owner"),
+		userId: text()
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [unique().on(t.workspaceId, t.userId)],
+);
+
+// ── Domain tables ───────────────────────────────────────────────────
+
 export const stores = pgTable("stores", {
 	id: uuid().defaultRandom().primaryKey(),
 	...timeColumns,
@@ -26,6 +100,9 @@ export const stores = pgTable("stores", {
 	name: varchar({ length: 255 }).notNull(),
 	status: varchar({ length: 50 }).notNull().default("disconnected"),
 	type: varchar({ length: 50 }).notNull(),
+	workspaceId: uuid()
+		.notNull()
+		.references(() => workspaces.id, { onDelete: "cascade" }),
 });
 
 export const apps = pgTable("apps", {
@@ -46,13 +123,20 @@ export const apps = pgTable("apps", {
 		.references(() => stores.id, { onDelete: "cascade" }),
 });
 
-export const settings = pgTable("settings", {
-	id: uuid().defaultRandom().primaryKey(),
-	...timeColumns,
-	isEncrypted: boolean().notNull().default(false),
-	key: varchar({ length: 255 }).notNull().unique(),
-	value: text(),
-});
+export const settings = pgTable(
+	"settings",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		isEncrypted: boolean().notNull().default(false),
+		key: varchar({ length: 255 }).notNull(),
+		value: text(),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [unique().on(t.workspaceId, t.key)],
+);
 
 export const listings = pgTable(
 	"listings",
@@ -287,6 +371,7 @@ export const appAgeRatings = pgTable("app_age_ratings", {
 });
 
 export const schema = {
+	account,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
@@ -297,7 +382,12 @@ export const schema = {
 	listingHistory,
 	listings,
 	reviews,
+	session,
 	settings,
 	stores,
+	user,
+	verification,
 	versionLocalizations,
+	workspaceMembers,
+	workspaces,
 };

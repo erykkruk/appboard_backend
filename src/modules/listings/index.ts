@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	exportQuery,
 	listingLanguageParams,
@@ -11,7 +12,8 @@ import { ListingsService } from "./listings.service";
 export const listingsController = new Elysia({ prefix: "/apps" })
 	.get(
 		"/:appId/listings/template",
-		({ params, query, set }) => {
+		async ({ params, query, set, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const format = query.format;
 			const content = ListingsService.generateTemplate(format);
 			const ext = format === "json" ? "json" : "csv";
@@ -33,7 +35,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/listings/export",
-		async ({ params, query, set }) => {
+		async ({ params, query, set, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const format = query.format;
 			const content = await ListingsService.exportListings(
 				params.appId,
@@ -58,7 +61,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/listings/import",
-		async ({ params, body }) => {
+		async ({ params, body, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ListingsService.importListings(params.appId, body.file);
 		},
 		{
@@ -74,7 +78,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/listings",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const result = await ListingsService.getAll(params.appId);
 			return { listings: result };
 		},
@@ -88,7 +93,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/listings/:language",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ListingsService.getByLanguage(params.appId, params.language);
 		},
 		{
@@ -101,7 +107,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.put(
 		"/:appId/listings/:language",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const draft = await ListingsService.updateDraft(
 				params.appId,
 				params.language,
@@ -112,7 +119,7 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 		{
 			body: updateListingBody,
 			detail: {
-				description: "Update listing draft",
+				description: "Auto-save listing draft to local DB",
 				tags: ["Listings"],
 			},
 			params: listingLanguageParams,
@@ -120,7 +127,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/listings/publish",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ListingsService.publish(params.appId);
 		},
 		{
@@ -133,7 +141,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/listings/sync",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ListingsService.syncFromStore(params.appId);
 		},
 		{
@@ -146,7 +155,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/listings/categories",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ListingsService.getCategories(params.appId);
 		},
 		{
@@ -159,7 +169,8 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 	)
 	.put(
 		"/:appId/listings/categories",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ListingsService.updateCategories(
 				params.appId,
 				body.primaryCategory,
@@ -169,7 +180,21 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 		{
 			body: updateCategoriesBody,
 			detail: {
-				description: "Update app categories (push to store)",
+				description: "Auto-save categories to local DB",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+		},
+	)
+	.post(
+		"/:appId/listings/categories/publish",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return ListingsService.publishCategories(params.appId);
+		},
+		{
+			detail: {
+				description: "Publish categories to store",
 				tags: ["Listings"],
 			},
 			params: listingParams,

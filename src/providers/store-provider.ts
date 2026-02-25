@@ -44,6 +44,10 @@ export interface StoreProvider {
 		primaryCategory: string,
 		secondaryCategory?: string,
 	): Promise<void>;
+	updatePrivacyDeclaration(
+		appId: string,
+		data: PrivacyDeclarationData,
+	): Promise<void>;
 }
 
 export interface AppData {
@@ -93,6 +97,19 @@ export interface AssetMetadata {
 	assetType: string;
 	deviceType: string;
 	fileName?: string;
+}
+
+export interface PrivacyDeclarationData {
+	dataCollections: Array<{
+		category: string;
+		dataType: string;
+		linked: boolean;
+		purposes: string[];
+		tracking: boolean;
+	}>;
+	privacyPolicyUrl: string | null;
+	trackingDomains: string[] | null;
+	trackingEnabled: boolean;
 }
 
 export interface ReviewData {

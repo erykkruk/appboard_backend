@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { settingsController } from "@/modules/settings";
-import { cleanupSettings } from "./setup";
+import { authGuard, authRequest, cleanupSettings } from "./setup";
 
 const TEST_KEYS = [
 	"APP_THEME",
@@ -11,7 +11,9 @@ const TEST_KEYS = [
 ];
 
 describe("Settings module", () => {
-	const app = new Elysia().group("/api", (app) => app.use(settingsController));
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(settingsController));
 
 	afterAll(async () => {
 		await cleanupSettings(TEST_KEYS);
@@ -20,7 +22,7 @@ describe("Settings module", () => {
 	it("PUT /api/settings/:key sets a setting", async () => {
 		const response = await app
 			.handle(
-				new Request("http://localhost/api/settings/APP_THEME", {
+				authRequest("http://localhost/api/settings/APP_THEME", {
 					body: JSON.stringify({ value: "dark" }),
 					headers: { "Content-Type": "application/json" },
 					method: "PUT",
@@ -34,7 +36,7 @@ describe("Settings module", () => {
 
 	it("GET /api/settings/:key gets a setting", async () => {
 		const response = await app
-			.handle(new Request("http://localhost/api/settings/APP_THEME"))
+			.handle(authRequest("http://localhost/api/settings/APP_THEME"))
 			.then((res) => res.json());
 
 		expect(response.setting).toBeDefined();
@@ -44,7 +46,7 @@ describe("Settings module", () => {
 
 	it("GET /api/settings lists all settings", async () => {
 		const response = await app
-			.handle(new Request("http://localhost/api/settings"))
+			.handle(authRequest("http://localhost/api/settings"))
 			.then((res) => res.json());
 
 		expect(response.settings).toBeArray();
@@ -54,7 +56,7 @@ describe("Settings module", () => {
 	it("PATCH /api/settings updates multiple settings", async () => {
 		const response = await app
 			.handle(
-				new Request("http://localhost/api/settings", {
+				authRequest("http://localhost/api/settings", {
 					body: JSON.stringify({
 						FEATURE_FLAG_A: "enabled",
 						FEATURE_FLAG_B: "disabled",
@@ -70,7 +72,7 @@ describe("Settings module", () => {
 
 	it("PUT /api/settings/OPENROUTER_API_KEY encrypts sensitive values", async () => {
 		await app.handle(
-			new Request("http://localhost/api/settings/OPENROUTER_API_KEY", {
+			authRequest("http://localhost/api/settings/OPENROUTER_API_KEY", {
 				body: JSON.stringify({ value: "test-key-12345" }),
 				headers: { "Content-Type": "application/json" },
 				method: "PUT",
@@ -79,7 +81,7 @@ describe("Settings module", () => {
 
 		// The list endpoint should mask encrypted values
 		const listRes = await app
-			.handle(new Request("http://localhost/api/settings"))
+			.handle(authRequest("http://localhost/api/settings"))
 			.then((res) => res.json());
 
 		const apiKeySetting = listRes.settings.find(
@@ -91,7 +93,7 @@ describe("Settings module", () => {
 
 		// The get endpoint should decrypt it
 		const getRes = await app
-			.handle(new Request("http://localhost/api/settings/OPENROUTER_API_KEY"))
+			.handle(authRequest("http://localhost/api/settings/OPENROUTER_API_KEY"))
 			.then((res) => res.json());
 
 		expect(getRes.setting.value).toBe("test-key-12345");

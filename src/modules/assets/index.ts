@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	assetIdParams,
 	assetParams,
@@ -11,7 +12,8 @@ import { AssetsService } from "./assets.service";
 export const assetsController = new Elysia({ prefix: "/apps" })
 	.get(
 		"/:appId/assets",
-		async ({ params, query }) => {
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const result = await AssetsService.getAll(params.appId, {
 				assetType: query.assetType,
 				deviceType: query.deviceType,
@@ -30,7 +32,8 @@ export const assetsController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/assets/upload",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const fileBuffer = Buffer.from(await body.file.arrayBuffer());
 			const asset = await AssetsService.upload(
 				params.appId,
@@ -51,7 +54,8 @@ export const assetsController = new Elysia({ prefix: "/apps" })
 	)
 	.delete(
 		"/:appId/assets/:assetId",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return AssetsService.deleteAsset(params.appId, params.assetId);
 		},
 		{
@@ -61,7 +65,8 @@ export const assetsController = new Elysia({ prefix: "/apps" })
 	)
 	.patch(
 		"/:appId/assets/reorder",
-		async ({ body }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const items = body.assetIds.map((id, index) => ({
 				id,
 				sortOrder: index,
@@ -79,7 +84,8 @@ export const assetsController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/assets/sync",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return AssetsService.syncFromStore(params.appId);
 		},
 		{

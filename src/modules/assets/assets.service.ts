@@ -64,6 +64,11 @@ export class AssetsService {
 			}
 		}
 
+		await db
+			.update(apps)
+			.set({ lastSyncedAt: new Date() })
+			.where(eq(apps.id, appId));
+
 		log.info({ appId, count: totalSynced }, "Assets synced from store");
 		return { synced: totalSynced };
 	}

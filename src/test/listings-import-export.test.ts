@@ -3,12 +3,14 @@ import { Elysia } from "elysia";
 import { appsController } from "@/modules/apps";
 import { listingsController } from "@/modules/listings";
 import { storesController } from "@/modules/stores";
-import { cleanupStores } from "./setup";
+import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("Listings import/export", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app.use(storesController).use(appsController).use(listingsController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) =>
+			app.use(storesController).use(appsController).use(listingsController),
+		);
 
 	const FAKE_UUID = "00000000-0000-0000-0000-000000000000";
 
@@ -22,7 +24,7 @@ describe("Listings import/export", () => {
 	it("sets up mock store and syncs listings", async () => {
 		const storeRes = await app
 			.handle(
-				new Request("http://localhost/api/stores/connect", {
+				authRequest("http://localhost/api/stores/connect", {
 					body: JSON.stringify({
 						credentials: { mock: true, type: "mock" },
 						name: "Test Import/Export",
@@ -37,7 +39,7 @@ describe("Listings import/export", () => {
 		storeId = storeRes.store.id;
 
 		const appsRes = await app
-			.handle(new Request("http://localhost/api/apps"))
+			.handle(authRequest("http://localhost/api/apps"))
 			.then((res) => res.json());
 
 		const mockApp = appsRes.apps.find(
@@ -46,7 +48,7 @@ describe("Listings import/export", () => {
 		appId = mockApp.id;
 
 		await app.handle(
-			new Request(`http://localhost/api/apps/${appId}/listings/sync`, {
+			authRequest(`http://localhost/api/apps/${appId}/listings/sync`, {
 				method: "POST",
 			}),
 		);
@@ -57,7 +59,7 @@ describe("Listings import/export", () => {
 	describe("GET /api/apps/:appId/listings/template", () => {
 		it("returns CSV template with all 10 column headers", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/template?format=csv`,
 				),
 			);
@@ -80,7 +82,7 @@ describe("Listings import/export", () => {
 
 		it("CSV template example row starts with en-US placeholder", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/template?format=csv`,
 				),
 			);
@@ -92,7 +94,7 @@ describe("Listings import/export", () => {
 
 		it("returns JSON template with all 10 keys", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/template?format=json`,
 				),
 			);
@@ -123,7 +125,7 @@ describe("Listings import/export", () => {
 
 		it("JSON template values are all empty strings", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/template?format=json`,
 				),
 			);
@@ -136,14 +138,14 @@ describe("Listings import/export", () => {
 
 		it("returns 422 when format query param is missing", async () => {
 			const res = await app.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/template`),
+				authRequest(`http://localhost/api/apps/${appId}/listings/template`),
 			);
 			expect(res.status).toBe(422);
 		});
 
 		it("returns 422 when format is invalid", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/template?format=xml`,
 				),
 			);
@@ -152,7 +154,7 @@ describe("Listings import/export", () => {
 
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					"http://localhost/api/apps/not-a-uuid/listings/template?format=csv",
 				),
 			);
@@ -165,7 +167,7 @@ describe("Listings import/export", () => {
 	describe("GET /api/apps/:appId/listings/export", () => {
 		it("exports CSV with header and data rows from database", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=csv`,
 				),
 			);
@@ -187,7 +189,7 @@ describe("Listings import/export", () => {
 
 		it("exports JSON with array of listing objects", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=json`,
 				),
 			);
@@ -212,7 +214,7 @@ describe("Listings import/export", () => {
 
 		it("exported CSV data can be parsed back (round-trip header match)", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=csv`,
 				),
 			);
@@ -244,7 +246,7 @@ describe("Listings import/export", () => {
 
 		it("exported JSON languages are unique (no duplicates)", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=json`,
 				),
 			);
@@ -258,7 +260,7 @@ describe("Listings import/export", () => {
 		it("export prefers draft over remote for same language", async () => {
 			// First create a draft with modified title
 			await app.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/en-US`, {
+				authRequest(`http://localhost/api/apps/${appId}/listings/en-US`, {
 					body: JSON.stringify({ title: "Draft Export Title" }),
 					headers: { "Content-Type": "application/json" },
 					method: "PUT",
@@ -266,7 +268,7 @@ describe("Listings import/export", () => {
 			);
 
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=json`,
 				),
 			);
@@ -279,43 +281,36 @@ describe("Listings import/export", () => {
 			expect(enUS.title).toBe("Draft Export Title");
 		});
 
-		it("returns empty data for app with no listings", async () => {
+		it("returns 404 for non-existent app (JSON export)", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/listings/export?format=json`,
 				),
 			);
 
-			expect(res.status).toBe(200);
-			const parsed = await res.json();
-			expect(parsed).toBeArray();
-			expect(parsed).toHaveLength(0);
+			expect(res.status).toBe(404);
 		});
 
-		it("returns CSV with only header for app with no listings", async () => {
+		it("returns 404 for non-existent app (CSV export)", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/listings/export?format=csv`,
 				),
 			);
 
-			expect(res.status).toBe(200);
-			const text = await res.text();
-			const lines = text.split("\n");
-			expect(lines).toHaveLength(1); // header only
-			expect(lines[0]).toStartWith("language,");
+			expect(res.status).toBe(404);
 		});
 
 		it("returns 422 when format query param is missing", async () => {
 			const res = await app.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/export`),
+				authRequest(`http://localhost/api/apps/${appId}/listings/export`),
 			);
 			expect(res.status).toBe(422);
 		});
 
 		it("returns 422 when format is invalid", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=yaml`,
 				),
 			);
@@ -340,7 +335,7 @@ describe("Listings import/export", () => {
 			// Verify draft was actually created
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/it-IT`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/it-IT`),
 				)
 				.then((r) => r.json());
 
@@ -377,7 +372,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/tr-TR`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/tr-TR`),
 				)
 				.then((r) => r.json());
 
@@ -396,7 +391,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/th-TH`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/th-TH`),
 				)
 				.then((r) => r.json());
 
@@ -415,7 +410,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/vi-VN`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/vi-VN`),
 				)
 				.then((r) => r.json());
 
@@ -431,7 +426,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/nl-NL`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/nl-NL`),
 				)
 				.then((r) => r.json());
 
@@ -457,7 +452,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/da-DK`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/da-DK`),
 				)
 				.then((r) => r.json());
 
@@ -531,7 +526,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/fi-FI`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/fi-FI`),
 				)
 				.then((r) => r.json());
 
@@ -547,7 +542,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/uk-UA`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/uk-UA`),
 				)
 				.then((r) => r.json());
 
@@ -567,7 +562,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/ro-RO`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/ro-RO`),
 				)
 				.then((r) => r.json());
 
@@ -603,7 +598,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/pt-PT`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/pt-PT`),
 				)
 				.then((r) => r.json());
 
@@ -693,7 +688,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/cs-CZ`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/cs-CZ`),
 				)
 				.then((r) => r.json());
 
@@ -716,7 +711,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/hu-HU`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/hu-HU`),
 				)
 				.then((r) => r.json());
 
@@ -739,7 +734,7 @@ describe("Listings import/export", () => {
 
 			const listing = await app
 				.handle(
-					new Request(`http://localhost/api/apps/${appId}/listings/el-GR`),
+					authRequest(`http://localhost/api/apps/${appId}/listings/el-GR`),
 				)
 				.then((r) => r.json());
 
@@ -774,7 +769,7 @@ describe("Listings import/export", () => {
 			);
 
 			const res = await app.handle(
-				new Request("http://localhost/api/apps/not-a-uuid/listings/import", {
+				authRequest("http://localhost/api/apps/not-a-uuid/listings/import", {
 					body: formData,
 					method: "POST",
 				}),
@@ -789,7 +784,7 @@ describe("Listings import/export", () => {
 	describe("Export → Import round-trip", () => {
 		it("exported CSV can be re-imported without errors", async () => {
 			const exportRes = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=csv`,
 				),
 			);
@@ -807,7 +802,7 @@ describe("Listings import/export", () => {
 
 		it("exported JSON can be re-imported without errors", async () => {
 			const exportRes = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=json`,
 				),
 			);
@@ -830,7 +825,7 @@ describe("Listings import/export", () => {
 		it("properly escapes commas and quotes in exported CSV", async () => {
 			// Create a draft with special characters
 			await app.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/en-US`, {
+				authRequest(`http://localhost/api/apps/${appId}/listings/en-US`, {
 					body: JSON.stringify({
 						shortDesc: 'Has "quotes" here',
 						title: "Title, with comma",
@@ -841,7 +836,7 @@ describe("Listings import/export", () => {
 			);
 
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${appId}/listings/export?format=csv`,
 				),
 			);
@@ -867,7 +862,7 @@ describe("Listings import/export", () => {
 
 		return app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/import`, {
+				authRequest(`http://localhost/api/apps/${appId}/listings/import`, {
 					body: formData,
 					method: "POST",
 				}),

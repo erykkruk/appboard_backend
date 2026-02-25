@@ -3,12 +3,14 @@ import { Elysia } from "elysia";
 import { appsController } from "@/modules/apps";
 import { assetsController } from "@/modules/assets";
 import { storesController } from "@/modules/stores";
-import { cleanupStores } from "./setup";
+import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("Assets module", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app.use(storesController).use(appsController).use(assetsController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) =>
+			app.use(storesController).use(appsController).use(assetsController),
+		);
 
 	let storeId: string;
 	let appId: string;
@@ -20,7 +22,7 @@ describe("Assets module", () => {
 	it("sets up mock store and gets app ID", async () => {
 		const storeRes = await app
 			.handle(
-				new Request("http://localhost/api/stores/connect", {
+				authRequest("http://localhost/api/stores/connect", {
 					body: JSON.stringify({
 						credentials: { mock: true, type: "mock" },
 						name: "Test GP Assets",
@@ -35,7 +37,7 @@ describe("Assets module", () => {
 		storeId = storeRes.store.id;
 
 		const appsRes = await app
-			.handle(new Request("http://localhost/api/apps"))
+			.handle(authRequest("http://localhost/api/apps"))
 			.then((res) => res.json());
 
 		// Find the mock TaskMaster app
@@ -48,7 +50,7 @@ describe("Assets module", () => {
 	it("POST /api/apps/:appId/assets/sync syncs assets from store", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/assets/sync`, {
+				authRequest(`http://localhost/api/apps/${appId}/assets/sync`, {
 					method: "POST",
 				}),
 			)
@@ -59,7 +61,7 @@ describe("Assets module", () => {
 
 	it("GET /api/apps/:appId/assets lists all assets", async () => {
 		const response = await app
-			.handle(new Request(`http://localhost/api/apps/${appId}/assets`))
+			.handle(authRequest(`http://localhost/api/apps/${appId}/assets`))
 			.then((res) => res.json());
 
 		expect(response.assets).toBeArray();
@@ -69,7 +71,7 @@ describe("Assets module", () => {
 	it("GET /api/apps/:appId/assets?language=en-US filters by language", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/assets?language=en-US`),
+				authRequest(`http://localhost/api/apps/${appId}/assets?language=en-US`),
 			)
 			.then((res) => res.json());
 
@@ -81,13 +83,13 @@ describe("Assets module", () => {
 
 	it("DELETE /api/apps/:appId/assets/:assetId deletes an asset", async () => {
 		const listRes = await app
-			.handle(new Request(`http://localhost/api/apps/${appId}/assets`))
+			.handle(authRequest(`http://localhost/api/apps/${appId}/assets`))
 			.then((res) => res.json());
 
 		const assetId = listRes.assets[0].id;
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/assets/${assetId}`, {
+				authRequest(`http://localhost/api/apps/${appId}/assets/${assetId}`, {
 					method: "DELETE",
 				}),
 			)

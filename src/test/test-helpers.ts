@@ -8,6 +8,7 @@ import { reviewsController } from "@/modules/reviews";
 import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
 import { systemController } from "@/modules/system";
+import { authGuard, authRequest, getTestWorkspaceId } from "@/test/setup";
 import { encrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { apps, stores } from "@/utils/db/schema";
@@ -15,6 +16,7 @@ import { errorHandler } from "@/utils/errors/errorHandler";
 
 export function createTestApp() {
 	return new Elysia()
+		.use(authGuard)
 		.use(errorHandler)
 		.group("/api", (app) =>
 			app
@@ -30,7 +32,7 @@ export function createTestApp() {
 		);
 }
 
-export async function seedTestStore() {
+export async function seedTestStore(workspaceId?: string) {
 	const creds = encrypt(JSON.stringify({ mock: true }));
 	const [store] = await db
 		.insert(stores)
@@ -39,6 +41,7 @@ export async function seedTestStore() {
 			name: "Test Store",
 			status: "connected",
 			type: "google_play",
+			workspaceId: workspaceId ?? getTestWorkspaceId(),
 		})
 		.returning();
 	return store;
@@ -71,7 +74,7 @@ export async function request(
 		options.headers = { "Content-Type": "application/json" };
 		options.body = JSON.stringify(body);
 	}
-	const response = await app.handle(new Request(url, options));
+	const response = await app.handle(authRequest(url, options));
 	const data = await response.json();
 	return { data, status: response.status };
 }

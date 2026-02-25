@@ -24,8 +24,8 @@ const promptBody = t.Object({
 export const settingsController = new Elysia({ prefix: "/settings" })
 	.get(
 		"/",
-		async () => {
-			const result = await SettingsService.getAll();
+		async ({ workspaceId }) => {
+			const result = await SettingsService.getAll(workspaceId!);
 			return { settings: result };
 		},
 		{
@@ -37,8 +37,11 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 	)
 	.patch(
 		"/",
-		async ({ body }) => {
-			return SettingsService.update(body as Record<string, string>);
+		async ({ body, workspaceId }) => {
+			return SettingsService.update(
+				workspaceId!,
+				body as Record<string, string>,
+			);
 		},
 		{
 			body: updateSettingsBody,
@@ -50,7 +53,7 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 	)
 	.get(
 		"/prompts",
-		async () => {
+		async ({ workspaceId }) => {
 			const defaults = getAllDefaultPrompts();
 			const prompts: Record<
 				string,
@@ -64,7 +67,7 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 			for (const field of LISTING_FIELDS) {
 				for (const mode of PROMPT_MODES) {
 					const key = getSettingKey(field, mode);
-					const customValue = await SettingsService.getRaw(key);
+					const customValue = await SettingsService.getRaw(workspaceId!, key);
 					prompts[key] = {
 						customPrompt: customValue,
 						defaultPrompt: defaults[key],
@@ -96,12 +99,12 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 	)
 	.put(
 		"/prompts/:mode/:field",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
 			const key = getSettingKey(
 				params.field as Parameters<typeof getSettingKey>[0],
 				params.mode as Parameters<typeof getSettingKey>[1],
 			);
-			await SettingsService.set(key, body.prompt);
+			await SettingsService.set(workspaceId!, key, body.prompt);
 			return { key, success: true };
 		},
 		{
@@ -115,12 +118,12 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 	)
 	.delete(
 		"/prompts/:mode/:field",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
 			const key = getSettingKey(
 				params.field as Parameters<typeof getSettingKey>[0],
 				params.mode as Parameters<typeof getSettingKey>[1],
 			);
-			await SettingsService.delete(key);
+			await SettingsService.delete(workspaceId!, key);
 			return { key, success: true };
 		},
 		{
@@ -133,8 +136,8 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 	)
 	.get(
 		"/:key",
-		async ({ params }) => {
-			const setting = await SettingsService.get(params.key);
+		async ({ params, workspaceId }) => {
+			const setting = await SettingsService.get(workspaceId!, params.key);
 			return { setting };
 		},
 		{
@@ -147,8 +150,8 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 	)
 	.put(
 		"/:key",
-		async ({ body, params }) => {
-			return SettingsService.set(params.key, body.value);
+		async ({ body, params, workspaceId }) => {
+			return SettingsService.set(workspaceId!, params.key, body.value);
 		},
 		{
 			body: setSettingBody,

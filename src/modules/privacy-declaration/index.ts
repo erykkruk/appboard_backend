@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	privacyDeclarationParams,
 	upsertPrivacyDeclarationBody,
@@ -24,7 +25,8 @@ export const privacyDeclarationController = new Elysia({
 })
 	.get(
 		"/",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const declaration = await PrivacyDeclarationService.get(params.appId);
 			return { privacyDeclaration: declaration };
 		},
@@ -38,7 +40,8 @@ export const privacyDeclarationController = new Elysia({
 	)
 	.put(
 		"/",
-		async ({ params, body }) => {
+		async ({ params, body, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const declaration = await PrivacyDeclarationService.upsert(
 				params.appId,
 				body,
@@ -48,7 +51,21 @@ export const privacyDeclarationController = new Elysia({
 		{
 			body: upsertPrivacyDeclarationBody,
 			detail: {
-				description: "Create or update privacy declaration",
+				description: "Auto-save privacy declaration to local DB",
+				tags: ["Privacy Declaration"],
+			},
+			params: privacyDeclarationParams,
+		},
+	)
+	.post(
+		"/publish",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PrivacyDeclarationService.publish(params.appId);
+		},
+		{
+			detail: {
+				description: "Publish privacy declaration to store",
 				tags: ["Privacy Declaration"],
 			},
 			params: privacyDeclarationParams,

@@ -1,11 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { publishingController } from "@/modules/publishing";
+import { authGuard, authRequest } from "@/test/setup";
 
 describe("Publishing localizations endpoints", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app.use(publishingController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(publishingController));
 
 	const FAKE_UUID = "00000000-0000-0000-0000-000000000000";
 	const FAKE_VERSION_ID = "fake-version-123";
@@ -16,7 +17,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("POST /api/apps/:appId/publishing/versions/:versionId/localizations", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/localizations`,
 					{
 						body: JSON.stringify({ locale: "en-US" }),
@@ -31,7 +32,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when locale is missing from body", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations`,
 					{
 						body: JSON.stringify({}),
@@ -46,7 +47,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when locale is empty string", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations`,
 					{
 						body: JSON.stringify({ locale: "" }),
@@ -61,7 +62,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations`,
 					{
 						body: JSON.stringify({ locale: "en-US" }),
@@ -80,7 +81,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("PATCH /api/apps/:appId/publishing/versions/:versionId/localizations/:localizationId", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({ description: "test" }),
@@ -95,7 +96,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when versionId is empty", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions//localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({ description: "test" }),
@@ -111,7 +112,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({ description: "Updated desc" }),
@@ -126,7 +127,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("accepts empty body (no fields to update)", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({}),
@@ -143,7 +144,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("accepts all valid field names", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({
@@ -168,7 +169,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when body contains non-string field value", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({ description: 12345 }),
@@ -187,7 +188,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("DELETE /api/apps/:appId/publishing/versions/:versionId/localizations/:localizationId", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{ method: "DELETE" },
 				),
@@ -198,7 +199,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{ method: "DELETE" },
 				),
@@ -213,7 +214,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("GET /api/apps/:appId/publishing/versions/:versionId", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}`,
 				),
 			);
@@ -223,7 +224,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}`,
 				),
 			);
@@ -237,7 +238,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("GET /api/apps/:appId/publishing/versions", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request("http://localhost/api/apps/not-a-uuid/publishing/versions"),
+				authRequest("http://localhost/api/apps/not-a-uuid/publishing/versions"),
 			);
 
 			expect(res.status).toBe(422);
@@ -245,7 +246,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions`,
 				),
 			);
@@ -259,7 +260,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("GET /api/apps/:appId/publishing/versions/:versionId/screenshots", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/screenshots`,
 				),
 			);
@@ -269,7 +270,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/screenshots`,
 				),
 			);
@@ -283,7 +284,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("DELETE /api/apps/:appId/publishing/screenshots/:screenshotId", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					"http://localhost/api/apps/not-a-uuid/publishing/screenshots/fake-ss-id",
 					{ method: "DELETE" },
 				),
@@ -294,7 +295,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/screenshots/fake-ss-id`,
 					{ method: "DELETE" },
 				),
@@ -309,7 +310,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("PATCH /api/apps/:appId/publishing/screenshots/reorder", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					"http://localhost/api/apps/not-a-uuid/publishing/screenshots/reorder",
 					{
 						body: JSON.stringify({
@@ -327,7 +328,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when body is missing required fields", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/screenshots/reorder`,
 					{
 						body: JSON.stringify({}),
@@ -342,7 +343,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/screenshots/reorder`,
 					{
 						body: JSON.stringify({
@@ -364,7 +365,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("DELETE /api/apps/:appId/publishing/screenshot-sets/:screenshotSetId", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					"http://localhost/api/apps/not-a-uuid/publishing/screenshot-sets/set-1",
 					{ method: "DELETE" },
 				),
@@ -375,7 +376,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/screenshot-sets/set-1`,
 					{ method: "DELETE" },
 				),
@@ -390,7 +391,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("PATCH localizations — empty string field values", () => {
 		it("accepts empty string for description (null-check, not truthy)", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({ description: "" }),
@@ -406,7 +407,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("accepts empty string for title and subtitle simultaneously", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({ subtitle: "", title: "" }),
@@ -421,7 +422,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("accepts empty string for all optional fields at once", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/localizations/${FAKE_LOC_ID}`,
 					{
 						body: JSON.stringify({
@@ -449,7 +450,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("POST /api/apps/:appId/publishing/versions/:versionId/publish-localizations", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/publish-localizations`,
 					{ method: "POST" },
 				),
@@ -460,7 +461,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/publish-localizations`,
 					{ method: "POST" },
 				),
@@ -475,7 +476,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("PATCH /api/apps/:appId/publishing/versions/:versionId/copyright", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/not-a-uuid/publishing/versions/${FAKE_VERSION_ID}/copyright`,
 					{
 						body: JSON.stringify({ copyright: "© 2024" }),
@@ -490,7 +491,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when copyright exceeds 255 characters", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/copyright`,
 					{
 						body: JSON.stringify({ copyright: "x".repeat(256) }),
@@ -505,7 +506,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when copyright is missing from body", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/copyright`,
 					{
 						body: JSON.stringify({}),
@@ -520,7 +521,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/versions/${FAKE_VERSION_ID}/copyright`,
 					{
 						body: JSON.stringify({ copyright: "© 2024 Test Corp" }),
@@ -539,7 +540,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("POST /api/apps/:appId/publishing/sync-versions", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					"http://localhost/api/apps/not-a-uuid/publishing/sync-versions",
 					{ method: "POST" },
 				),
@@ -550,7 +551,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/sync-versions`,
 					{ method: "POST" },
 				),
@@ -565,7 +566,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("POST /api/apps/:appId/publishing/submit-review", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					"http://localhost/api/apps/not-a-uuid/publishing/submit-review",
 					{ method: "POST" },
 				),
@@ -576,7 +577,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/submit-review`,
 					{ method: "POST" },
 				),
@@ -591,7 +592,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("POST /api/apps/:appId/publishing/create-version", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					"http://localhost/api/apps/not-a-uuid/publishing/create-version",
 					{
 						body: JSON.stringify({ versionString: "1.0.0" }),
@@ -606,7 +607,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 422 when versionString is missing", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/create-version`,
 					{
 						body: JSON.stringify({}),
@@ -621,7 +622,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/create-version`,
 					{
 						body: JSON.stringify({ versionString: "1.0.0" }),
@@ -640,7 +641,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("GET /api/apps/:appId/publishing/overview", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request("http://localhost/api/apps/not-a-uuid/publishing/overview"),
+				authRequest("http://localhost/api/apps/not-a-uuid/publishing/overview"),
 			);
 
 			expect(res.status).toBe(422);
@@ -648,7 +649,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/overview`,
 				),
 			);
@@ -662,7 +663,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("POST /api/apps/:appId/publishing/publish", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request("http://localhost/api/apps/not-a-uuid/publishing/publish", {
+				authRequest("http://localhost/api/apps/not-a-uuid/publishing/publish", {
 					method: "POST",
 				}),
 			);
@@ -672,7 +673,7 @@ describe("Publishing localizations endpoints", () => {
 
 		it("returns 404 when app does not exist", async () => {
 			const res = await app.handle(
-				new Request(
+				authRequest(
 					`http://localhost/api/apps/${FAKE_UUID}/publishing/publish`,
 					{ method: "POST" },
 				),
@@ -687,7 +688,7 @@ describe("Publishing localizations endpoints", () => {
 	describe("GET /api/apps/:appId/publishing/version", () => {
 		it("returns 422 when appId is not a valid UUID", async () => {
 			const res = await app.handle(
-				new Request("http://localhost/api/apps/not-a-uuid/publishing/version"),
+				authRequest("http://localhost/api/apps/not-a-uuid/publishing/version"),
 			);
 
 			expect(res.status).toBe(422);

@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	draftReplyBody,
 	generateDescriptionBody,
@@ -15,8 +16,10 @@ import { AIService } from "./ai.service";
 export const aiController = new Elysia({ prefix: "/ai" })
 	.post(
 		"/generate-listing-field",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
+			await verifyAppOwnership(body.appId, workspaceId!);
 			const { model, result } = await AIService.generateListingField(
+				workspaceId!,
 				body.field,
 				body.appId,
 				body.appName,
@@ -36,8 +39,8 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/translate",
-		async ({ body }) => {
-			return AIService.translate(body.text, body.targetLanguages);
+		async ({ body, workspaceId }) => {
+			return AIService.translate(workspaceId!, body.text, body.targetLanguages);
 		},
 		{
 			body: translateBody,
@@ -49,8 +52,10 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/translate-localization",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
+			await verifyAppOwnership(body.appId, workspaceId!);
 			return AIService.translateLocalization(
+				workspaceId!,
 				body.appId,
 				body.appName,
 				body.platform,
@@ -69,8 +74,9 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/generate-description",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
 			return AIService.generateDescription(
+				workspaceId!,
 				body.appName,
 				body.prompt,
 				body.platform,
@@ -87,8 +93,9 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/suggest-keywords",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
 			return AIService.suggestKeywords(
+				workspaceId!,
 				body.appName,
 				body.description,
 				body.category,
@@ -105,8 +112,9 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/draft-reply",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
 			return AIService.draftReply(
+				workspaceId!,
 				body.reviewText,
 				body.rating,
 				body.authorName,
@@ -123,8 +131,9 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/generate-privacy",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
 			const { model, result } = await AIService.generatePrivacyDeclaration(
+				workspaceId!,
 				body.appName,
 				body.description,
 			);
@@ -140,8 +149,9 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/generate-release-notes",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
 			return AIService.generateReleaseNotes(
+				workspaceId!,
 				body.appName,
 				body.version,
 				body.changes,
@@ -157,8 +167,10 @@ export const aiController = new Elysia({ prefix: "/ai" })
 	)
 	.post(
 		"/suggest-category",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
+			await verifyAppOwnership(body.appId, workspaceId!);
 			return AIService.suggestCategory(
+				workspaceId!,
 				body.appId,
 				body.appName,
 				body.platform,

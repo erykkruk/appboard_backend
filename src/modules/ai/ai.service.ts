@@ -288,6 +288,7 @@ async function resolvePrompt(
 	field: ListingField,
 	mode: PromptMode,
 	platform: string,
+	workspaceId: string,
 	appId?: string,
 ): Promise<string> {
 	// 1. Per-app custom prompt
@@ -308,7 +309,7 @@ async function resolvePrompt(
 
 	// 2. Global custom prompt from settings
 	const settingKey = getSettingKey(field, mode);
-	const globalPrompt = await SettingsService.getRaw(settingKey);
+	const globalPrompt = await SettingsService.getRaw(workspaceId, settingKey);
 	if (globalPrompt) return globalPrompt;
 
 	// 3. Built-in default (platform-aware)
@@ -413,25 +414,32 @@ const PURPOSE_SETTING_KEYS: Record<AiPurpose, string> = {
 };
 
 export class AIService {
-	private static async resolveModel(purpose: AiPurpose): Promise<string> {
+	private static async resolveModel(
+		workspaceId: string,
+		purpose: AiPurpose,
+	): Promise<string> {
 		const settingKey = PURPOSE_SETTING_KEYS[purpose];
-		const model = await SettingsService.getRaw(settingKey);
+		const model = await SettingsService.getRaw(workspaceId, settingKey);
 		return model || DEFAULT_MODEL;
 	}
 
 	private static async callOpenRouter(
+		workspaceId: string,
 		systemPrompt: string,
 		userPrompt: string,
 		purpose: AiPurpose = "generate",
 	): Promise<{ content: string; model: string }> {
-		const apiKey = await SettingsService.getRaw("OPENROUTER_API_KEY");
+		const apiKey = await SettingsService.getRaw(
+			workspaceId,
+			"OPENROUTER_API_KEY",
+		);
 		if (!apiKey) {
 			buildError("badRequest", {
 				info: "OpenRouter API key not configured. Go to Settings to add it.",
 			});
 		}
 
-		const selectedModel = await AIService.resolveModel(purpose);
+		const selectedModel = await AIService.resolveModel(workspaceId, purpose);
 
 		const response = await fetch(OPENROUTER_URL, {
 			body: JSON.stringify({
@@ -490,6 +498,7 @@ export class AIService {
 	}
 
 	static async generateListingField(
+		workspaceId: string,
 		field: ListingField,
 		appId: string,
 		appName: string,
@@ -507,6 +516,7 @@ export class AIService {
 			resolvedField,
 			mode,
 			platform,
+			workspaceId,
 			appId || undefined,
 		);
 		const userPrompt = buildUserPrompt(
@@ -526,6 +536,7 @@ export class AIService {
 
 		const purpose: AiPurpose = currentValue ? "rephrase" : "generate";
 		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
 			systemPrompt,
 			userPrompt,
 			purpose,
@@ -541,7 +552,11 @@ export class AIService {
 		return { model, result: trimmedContent };
 	}
 
-	static async translate(text: string, targetLanguages: string[]) {
+	static async translate(
+		workspaceId: string,
+		text: string,
+		targetLanguages: string[],
+	) {
 		const systemPrompt =
 			"You are a professional translator specializing in app store content. Translate accurately while maintaining marketing tone and ASO effectiveness.";
 		const userPrompt = `Translate the following text to these languages: ${targetLanguages.join(", ")}
@@ -554,6 +569,7 @@ ${text}
 Return a JSON object where keys are language codes and values are translations. Return ONLY the JSON, no explanations.`;
 
 		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
 			systemPrompt,
 			userPrompt,
 			"generate",
@@ -571,12 +587,14 @@ Return a JSON object where keys are language codes and values are translations. 
 	}
 
 	static async generateDescription(
+		workspaceId: string,
 		appName: string,
 		_prompt: string,
 		platform?: string,
 		_keywords?: string[],
 	) {
 		const { model, result } = await AIService.generateListingField(
+			workspaceId,
 			"description",
 			"",
 			appName,
@@ -587,6 +605,7 @@ Return a JSON object where keys are language codes and values are translations. 
 	}
 
 	static async suggestKeywords(
+		workspaceId: string,
 		appName: string,
 		description?: string,
 		category?: string,
@@ -620,6 +639,7 @@ Suggest keywords organized into semantic clusters. Return ONLY a JSON object wit
 Each cluster should have 3-5 keywords. Total ~15-20 keywords.`;
 
 		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
 			systemPrompt,
 			userPrompt,
 			"research",
@@ -636,6 +656,7 @@ Each cluster should have 3-5 keywords. Total ~15-20 keywords.`;
 	}
 
 	static async draftReply(
+		workspaceId: string,
 		reviewText: string,
 		rating: number,
 		authorName: string,
@@ -664,6 +685,7 @@ ${tone ? `Desired tone: ${tone}` : ""}
 Write a ${isPositive ? "thankful, encouraging reply that reinforces their positive experience" : "empathetic, solution-oriented reply following the AAAA+I framework"}. Keep it concise (2-4 sentences). Return ONLY the reply text.`;
 
 		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
 			systemPrompt,
 			userPrompt,
 			"generate",
@@ -672,6 +694,7 @@ Write a ${isPositive ? "thankful, encouraging reply that reinforces their positi
 	}
 
 	static async generatePrivacyDeclaration(
+		workspaceId: string,
 		appName: string,
 		description: string,
 	): Promise<{ model: string; result: string }> {
@@ -715,6 +738,7 @@ Generate the privacy declaration JSON array.`;
 		log.info({ appName }, "Generating privacy declaration");
 
 		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
 			systemPrompt,
 			userPrompt,
 			"generate",
@@ -743,6 +767,7 @@ Generate the privacy declaration JSON array.`;
 	}
 
 	static async translateLocalization(
+		workspaceId: string,
 		appId: string,
 		appName: string,
 		platform: string,
@@ -846,6 +871,7 @@ Return ONLY a JSON object with the same keys and translated values.`;
 		);
 
 		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
 			systemPrompt,
 			userPrompt,
 			"generate",
@@ -877,11 +903,13 @@ Return ONLY a JSON object with the same keys and translated values.`;
 	}
 
 	static async generateReleaseNotes(
+		workspaceId: string,
 		appName: string,
 		_version: string,
 		changes: string[],
 	) {
 		const { model, result } = await AIService.generateListingField(
+			workspaceId,
 			"whatsNew",
 			"",
 			appName,
@@ -893,6 +921,7 @@ Return ONLY a JSON object with the same keys and translated values.`;
 	}
 
 	static async suggestCategory(
+		workspaceId: string,
 		appId: string,
 		appName: string,
 		platform: string,
@@ -930,6 +959,7 @@ Suggest the best primary and secondary category. Return ONLY the JSON.`;
 		log.info({ appId, appName }, "Suggesting categories with AI");
 
 		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
 			systemPrompt,
 			userPrompt,
 			"research",

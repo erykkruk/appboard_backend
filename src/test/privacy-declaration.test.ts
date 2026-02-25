@@ -8,16 +8,18 @@ import {
 import { storesController } from "@/modules/stores";
 import { db } from "@/utils/db";
 import { appPrivacyDeclarations } from "@/utils/db/schema";
-import { cleanupStores } from "./setup";
+import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("Privacy Declaration module", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app
-			.use(storesController)
-			.use(appsController)
-			.use(privacyTemplatesController)
-			.use(privacyDeclarationController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) =>
+			app
+				.use(storesController)
+				.use(appsController)
+				.use(privacyTemplatesController)
+				.use(privacyDeclarationController),
+		);
 
 	let storeId: string;
 	let appId: string;
@@ -33,7 +35,7 @@ describe("Privacy Declaration module", () => {
 	it("sets up mock store with apps", async () => {
 		const response = await app
 			.handle(
-				new Request("http://localhost/api/stores/connect", {
+				authRequest("http://localhost/api/stores/connect", {
 					body: JSON.stringify({
 						credentials: { mock: true, type: "mock" },
 						name: "Test Privacy Store",
@@ -48,7 +50,7 @@ describe("Privacy Declaration module", () => {
 		storeId = response.store.id;
 
 		const appsRes = await app
-			.handle(new Request("http://localhost/api/apps"))
+			.handle(authRequest("http://localhost/api/apps"))
 			.then((res) => res.json());
 
 		appId = appsRes.apps[0].id;
@@ -58,7 +60,7 @@ describe("Privacy Declaration module", () => {
 
 	it("GET /api/privacy-templates returns all templates", async () => {
 		const response = await app
-			.handle(new Request("http://localhost/api/privacy-templates"))
+			.handle(authRequest("http://localhost/api/privacy-templates"))
 			.then((res) => res.json());
 
 		expect(response.templates).toBeDefined();
@@ -90,7 +92,7 @@ describe("Privacy Declaration module", () => {
 	it("GET /api/apps/:appId/privacy-declaration returns null when none exists", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/privacy-declaration`),
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`),
 			)
 			.then((res) => res.json());
 
@@ -101,7 +103,7 @@ describe("Privacy Declaration module", () => {
 
 	it("PUT /api/apps/:appId/privacy-declaration creates with basic_app template", async () => {
 		const res = await app.handle(
-			new Request(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+			authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
 				body: JSON.stringify({ templateId: "basic_app" }),
 				headers: { "Content-Type": "application/json" },
 				method: "PUT",
@@ -131,7 +133,7 @@ describe("Privacy Declaration module", () => {
 	it("GET /api/apps/:appId/privacy-declaration returns saved declaration", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/privacy-declaration`),
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`),
 			)
 			.then((res) => res.json());
 
@@ -147,7 +149,7 @@ describe("Privacy Declaration module", () => {
 	it("PUT /api/apps/:appId/privacy-declaration updates to ecommerce template", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
 					body: JSON.stringify({ templateId: "ecommerce" }),
 					headers: { "Content-Type": "application/json" },
 					method: "PUT",
@@ -187,7 +189,7 @@ describe("Privacy Declaration module", () => {
 
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
 					body: JSON.stringify({
 						dataCollections: customData,
 						templateId: "custom",
@@ -220,7 +222,7 @@ describe("Privacy Declaration module", () => {
 
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
 					body: JSON.stringify({
 						dataCollections: dataWithTracking,
 						templateId: "custom",
@@ -240,7 +242,7 @@ describe("Privacy Declaration module", () => {
 	it("PUT saves privacyPolicyUrl and trackingDomains", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
 					body: JSON.stringify({
 						privacyPolicyUrl: "https://example.com/privacy",
 						templateId: "minimal",
@@ -265,7 +267,7 @@ describe("Privacy Declaration module", () => {
 
 	it("PUT with invalid appId returns 422", async () => {
 		const res = await app.handle(
-			new Request("http://localhost/api/apps/not-a-uuid/privacy-declaration", {
+			authRequest("http://localhost/api/apps/not-a-uuid/privacy-declaration", {
 				body: JSON.stringify({ templateId: "minimal" }),
 				headers: { "Content-Type": "application/json" },
 				method: "PUT",
@@ -277,7 +279,7 @@ describe("Privacy Declaration module", () => {
 
 	it("GET with invalid appId returns 422", async () => {
 		const res = await app.handle(
-			new Request("http://localhost/api/apps/not-a-uuid/privacy-declaration"),
+			authRequest("http://localhost/api/apps/not-a-uuid/privacy-declaration"),
 		);
 
 		expect(res.status).toBe(422);
@@ -285,11 +287,58 @@ describe("Privacy Declaration module", () => {
 
 	it("PUT without templateId returns 422", async () => {
 		const res = await app.handle(
-			new Request(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+			authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
 				body: JSON.stringify({}),
 				headers: { "Content-Type": "application/json" },
 				method: "PUT",
 			}),
+		);
+
+		expect(res.status).toBe(422);
+	});
+
+	// --- Publish ---
+
+	it("POST /api/apps/:appId/privacy-declaration/publish publishes saved declaration to store", async () => {
+		// Ensure a declaration is saved first
+		await app.handle(
+			authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+				body: JSON.stringify({ templateId: "basic_app" }),
+				headers: { "Content-Type": "application/json" },
+				method: "PUT",
+			}),
+		);
+
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appId}/privacy-declaration/publish`,
+				{ method: "POST" },
+			),
+		);
+
+		expect(res.status).toBe(200);
+		const response = await res.json();
+		expect(response.success).toBe(true);
+	});
+
+	it("POST /api/apps/:appId/privacy-declaration/publish returns 404 when no declaration saved", async () => {
+		const fakeAppId = "00000000-0000-0000-0000-000000000000";
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${fakeAppId}/privacy-declaration/publish`,
+				{ method: "POST" },
+			),
+		);
+
+		expect(res.status).toBe(404);
+	});
+
+	it("POST publish with invalid appId returns 422", async () => {
+		const res = await app.handle(
+			authRequest(
+				"http://localhost/api/apps/not-a-uuid/privacy-declaration/publish",
+				{ method: "POST" },
+			),
 		);
 
 		expect(res.status).toBe(422);

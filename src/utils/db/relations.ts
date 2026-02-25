@@ -1,5 +1,6 @@
 import { relations } from "drizzle-orm";
 import {
+	account,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
@@ -10,12 +11,74 @@ import {
 	listingHistory,
 	listings,
 	reviews,
+	session,
+	settings,
 	stores,
+	user,
 	versionLocalizations,
+	workspaceMembers,
+	workspaces,
 } from "./schema";
 
-export const storesRelations = relations(stores, ({ many }) => ({
+// ── Auth relations ──────────────────────────────────────────────────
+
+export const userRelations = relations(user, ({ many }) => ({
+	accounts: many(account),
+	sessions: many(session),
+	workspaceMemberships: many(workspaceMembers),
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+	user: one(user, {
+		fields: [session.userId],
+		references: [user.id],
+	}),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+	user: one(user, {
+		fields: [account.userId],
+		references: [user.id],
+	}),
+}));
+
+// ── Workspace relations ─────────────────────────────────────────────
+
+export const workspacesRelations = relations(workspaces, ({ many }) => ({
+	members: many(workspaceMembers),
+	settings: many(settings),
+	stores: many(stores),
+}));
+
+export const workspaceMembersRelations = relations(
+	workspaceMembers,
+	({ one }) => ({
+		user: one(user, {
+			fields: [workspaceMembers.userId],
+			references: [user.id],
+		}),
+		workspace: one(workspaces, {
+			fields: [workspaceMembers.workspaceId],
+			references: [workspaces.id],
+		}),
+	}),
+);
+
+// ── Domain relations ────────────────────────────────────────────────
+
+export const storesRelations = relations(stores, ({ many, one }) => ({
 	apps: many(apps),
+	workspace: one(workspaces, {
+		fields: [stores.workspaceId],
+		references: [workspaces.id],
+	}),
+}));
+
+export const settingsRelations = relations(settings, ({ one }) => ({
+	workspace: one(workspaces, {
+		fields: [settings.workspaceId],
+		references: [workspaces.id],
+	}),
 }));
 
 export const appsRelations = relations(apps, ({ many, one }) => ({

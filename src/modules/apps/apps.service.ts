@@ -5,8 +5,11 @@ import { apps, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 
 export class AppsService {
-	static async findAll(filters?: { platform?: Platform; storeId?: string }) {
-		const conditions = [];
+	static async findAll(
+		workspaceId: string,
+		filters?: { platform?: Platform; storeId?: string },
+	) {
+		const conditions = [eq(stores.workspaceId, workspaceId)];
 		if (filters?.platform) {
 			conditions.push(eq(apps.platform, filters.platform));
 		}
@@ -24,8 +27,8 @@ export class AppsService {
 				},
 			})
 			.from(apps)
-			.leftJoin(stores, eq(apps.storeId, stores.id))
-			.where(conditions.length > 0 ? and(...conditions) : undefined);
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(and(...conditions));
 
 		return result.map((r) => ({
 			...r.app,
@@ -33,7 +36,7 @@ export class AppsService {
 		}));
 	}
 
-	static async findOne(appId: string) {
+	static async findOne(workspaceId: string, appId: string) {
 		const result = await db
 			.select({
 				app: apps,
@@ -44,8 +47,8 @@ export class AppsService {
 				},
 			})
 			.from(apps)
-			.leftJoin(stores, eq(apps.storeId, stores.id))
-			.where(eq(apps.id, appId))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(and(eq(apps.id, appId), eq(stores.workspaceId, workspaceId)))
 			.limit(1);
 
 		if (result.length === 0) {

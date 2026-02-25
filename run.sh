@@ -7,7 +7,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG_FILE="$SCRIPT_DIR/appboard.config.json"
-BACKEND_PORT=6667
+BACKEND_PORT=6680
 PANEL_PORT=6600
 BACKEND_PID=""
 PANEL_PID=""

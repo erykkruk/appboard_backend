@@ -4,6 +4,7 @@ import { createProvider } from "@/providers";
 import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { appAgeRatings, apps, stores } from "@/utils/db/schema";
+import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import { computeAppleRating, getAgeRatingPreset } from "./age-rating.templates";
 
@@ -76,25 +77,19 @@ export class AgeRatingService {
 			.returning();
 
 		log.info({ appId }, "Age rating upserted locally");
+		return result;
+	}
 
-		// Push to App Store Connect
-		let syncedToStore = false;
-		let syncError: string | null = null;
-		try {
-			await AgeRatingService.pushToStore(appId, appleQuestionnaire);
-			syncedToStore = true;
-		} catch (err) {
-			const errMsg = err instanceof Error ? err.message : String(err);
-			syncError = errMsg.includes("STATE_ERROR")
-				? "NO_EDITABLE_VERSION"
-				: "SYNC_FAILED";
-			log.error(
-				{ appId, err },
-				"Failed to push age rating to store — saved locally only",
-			);
+	static async publish(appId: string) {
+		const rating = await AgeRatingService.get(appId);
+		if (!rating) {
+			buildError("notFound", { info: "Age rating not found — save first" });
+			throw new Error("unreachable");
 		}
 
-		return { ...result, syncError, syncedToStore };
+		await AgeRatingService.pushToStore(appId, rating.appleQuestionnaire);
+		log.info({ appId }, "Age rating published to store");
+		return { success: true };
 	}
 
 	private static async pushToStore(

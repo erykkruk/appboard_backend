@@ -81,6 +81,14 @@ export class GooglePlayProvider implements StoreProvider {
 		log.info("Google Play category update not supported via API");
 	}
 
+	async updatePrivacyDeclaration(
+		_appId: string,
+		_data: import("../store-provider").PrivacyDeclarationData,
+	): Promise<void> {
+		// Google Play Data Safety is managed via Play Console
+		log.info("Google Play privacy declaration update not supported via API");
+	}
+
 	async validateCredentials(): Promise<boolean> {
 		if (this.isMock) return true;
 

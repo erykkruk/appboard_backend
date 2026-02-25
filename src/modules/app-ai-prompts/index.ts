@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { AppAiPromptsService } from "./app-ai-prompts.service";
 
 const promptParams = t.Object({
@@ -16,7 +17,8 @@ export const appAiPromptsController = new Elysia({
 })
 	.get(
 		"/",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const prompts = await AppAiPromptsService.getAll(params.appId);
 			return { prompts };
 		},
@@ -30,7 +32,8 @@ export const appAiPromptsController = new Elysia({
 	)
 	.put(
 		"/:mode/:field",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const prompt = await AppAiPromptsService.upsert(
 				params.appId,
 				params.field,
@@ -50,7 +53,8 @@ export const appAiPromptsController = new Elysia({
 	)
 	.delete(
 		"/:mode/:field",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return AppAiPromptsService.delete(
 				params.appId,
 				params.field,

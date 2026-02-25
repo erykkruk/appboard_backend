@@ -4,16 +4,18 @@ import { appsController } from "@/modules/apps";
 import { historyController } from "@/modules/history";
 import { listingsController } from "@/modules/listings";
 import { storesController } from "@/modules/stores";
-import { cleanupStores } from "./setup";
+import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("Listings module", () => {
-	const app = new Elysia().group("/api", (app) =>
-		app
-			.use(storesController)
-			.use(appsController)
-			.use(listingsController)
-			.use(historyController),
-	);
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) =>
+			app
+				.use(storesController)
+				.use(appsController)
+				.use(listingsController)
+				.use(historyController),
+		);
 
 	let storeId: string;
 	let appId: string;
@@ -25,7 +27,7 @@ describe("Listings module", () => {
 	it("sets up mock store and gets app ID", async () => {
 		const storeRes = await app
 			.handle(
-				new Request("http://localhost/api/stores/connect", {
+				authRequest("http://localhost/api/stores/connect", {
 					body: JSON.stringify({
 						credentials: { mock: true, type: "mock" },
 						name: "Test GP Listings",
@@ -40,7 +42,7 @@ describe("Listings module", () => {
 		storeId = storeRes.store.id;
 
 		const appsRes = await app
-			.handle(new Request("http://localhost/api/apps"))
+			.handle(authRequest("http://localhost/api/apps"))
 			.then((res) => res.json());
 
 		// Find the mock TaskMaster app
@@ -53,7 +55,7 @@ describe("Listings module", () => {
 	it("POST /api/apps/:appId/listings/sync syncs listings from store", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/sync`, {
+				authRequest(`http://localhost/api/apps/${appId}/listings/sync`, {
 					method: "POST",
 				}),
 			)
@@ -64,7 +66,7 @@ describe("Listings module", () => {
 
 	it("GET /api/apps/:appId/listings returns all listings", async () => {
 		const response = await app
-			.handle(new Request(`http://localhost/api/apps/${appId}/listings`))
+			.handle(authRequest(`http://localhost/api/apps/${appId}/listings`))
 			.then((res) => res.json());
 
 		expect(response.listings).toBeArray();
@@ -73,7 +75,7 @@ describe("Listings module", () => {
 
 	it("GET /api/apps/:appId/listings/:language returns listing for language", async () => {
 		const response = await app
-			.handle(new Request(`http://localhost/api/apps/${appId}/listings/en-US`))
+			.handle(authRequest(`http://localhost/api/apps/${appId}/listings/en-US`))
 			.then((res) => res.json());
 
 		expect(response.remote).toBeDefined();
@@ -83,7 +85,7 @@ describe("Listings module", () => {
 	it("PUT /api/apps/:appId/listings/:language updates draft and sets isDirty", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/en-US`, {
+				authRequest(`http://localhost/api/apps/${appId}/listings/en-US`, {
 					body: JSON.stringify({
 						shortDesc: "Updated description",
 						title: "Updated Title",
@@ -103,7 +105,7 @@ describe("Listings module", () => {
 	it("POST /api/apps/:appId/listings/publish publishes dirty drafts and creates history", async () => {
 		const response = await app
 			.handle(
-				new Request(`http://localhost/api/apps/${appId}/listings/publish`, {
+				authRequest(`http://localhost/api/apps/${appId}/listings/publish`, {
 					method: "POST",
 				}),
 			)
@@ -114,7 +116,7 @@ describe("Listings module", () => {
 
 	it("GET /api/apps/:appId/history returns change history", async () => {
 		const response = await app
-			.handle(new Request(`http://localhost/api/apps/${appId}/history`))
+			.handle(authRequest(`http://localhost/api/apps/${appId}/history`))
 			.then((res) => res.json());
 
 		expect(response.history).toBeArray();

@@ -247,6 +247,11 @@ export class ListingsService {
 			log.warn({ appId, err }, "Failed to sync categories from store");
 		}
 
+		await db
+			.update(apps)
+			.set({ lastSyncedAt: new Date() })
+			.where(eq(apps.id, appId));
+
 		log.info({ appId, count: fetched.length }, "Listings synced from store");
 		return { synced: fetched.length };
 	}
@@ -569,18 +574,7 @@ export class ListingsService {
 		primaryCategory: string,
 		secondaryCategory?: string,
 	) {
-		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
-		const provider = createProvider(app.store.type as StoreType, credentials);
-
-		// Push to store
-		await provider.updateCategories(
-			app.externalId,
-			primaryCategory,
-			secondaryCategory,
-		);
-
-		// Update local DB
+		// Auto-save to local DB only
 		await db
 			.update(apps)
 			.set({
@@ -591,10 +585,25 @@ export class ListingsService {
 
 		log.info(
 			{ appId, primaryCategory, secondaryCategory },
-			"Categories updated",
+			"Categories saved locally",
 		);
 
 		return { primaryCategory, secondaryCategory: secondaryCategory ?? null };
+	}
+
+	static async publishCategories(appId: string) {
+		const app = await ListingsService.getAppWithStore(appId);
+		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const provider = createProvider(app.store.type as StoreType, credentials);
+
+		await provider.updateCategories(
+			app.externalId,
+			app.primaryCategory ?? "",
+			app.secondaryCategory ?? undefined,
+		);
+
+		log.info({ appId }, "Categories published to store");
+		return { success: true };
 	}
 
 	private static async getAppWithStore(appId: string) {

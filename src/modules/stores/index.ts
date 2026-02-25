@@ -1,12 +1,14 @@
 import Elysia from "elysia";
+import { verifyStoreOwnership } from "@/modules/auth/verify-ownership";
 import { connectStoreBody, storeIdParams } from "./stores.schema";
 import { StoresService } from "./stores.service";
 
 export const storesController = new Elysia({ prefix: "/stores" })
 	.post(
 		"/connect",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
 			const store = await StoresService.connect(
+				workspaceId!,
 				body.name,
 				body.type,
 				body.credentials as Record<string, unknown>,
@@ -27,8 +29,8 @@ export const storesController = new Elysia({ prefix: "/stores" })
 	)
 	.get(
 		"/",
-		async () => {
-			const storesList = await StoresService.list();
+		async ({ workspaceId }) => {
+			const storesList = await StoresService.list(workspaceId!);
 			return {
 				stores: storesList.map((s) => ({
 					id: s.id,
@@ -45,8 +47,8 @@ export const storesController = new Elysia({ prefix: "/stores" })
 	)
 	.delete(
 		"/:storeId",
-		async ({ params }) => {
-			return StoresService.disconnect(params.storeId);
+		async ({ params, workspaceId }) => {
+			return StoresService.disconnect(params.storeId, workspaceId!);
 		},
 		{
 			detail: { description: "Disconnect a store", tags: ["Stores"] },
@@ -55,7 +57,8 @@ export const storesController = new Elysia({ prefix: "/stores" })
 	)
 	.post(
 		"/:storeId/sync",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyStoreOwnership(params.storeId, workspaceId!);
 			return StoresService.syncApps(params.storeId);
 		},
 		{

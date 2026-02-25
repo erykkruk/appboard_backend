@@ -6,8 +6,8 @@ import { AppsService } from "./apps.service";
 export const appsController = new Elysia({ prefix: "/apps" })
 	.get(
 		"/",
-		async ({ query }) => {
-			const appsList = await AppsService.findAll({
+		async ({ query, workspaceId }) => {
+			const appsList = await AppsService.findAll(workspaceId!, {
 				platform: query.platform as Platform | undefined,
 				storeId: query.storeId,
 			});
@@ -20,8 +20,8 @@ export const appsController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId",
-		async ({ params }) => {
-			const app = await AppsService.findOne(params.appId);
+		async ({ params, workspaceId }) => {
+			const app = await AppsService.findOne(workspaceId!, params.appId);
 			return { app };
 		},
 		{

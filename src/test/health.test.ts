@@ -1,9 +1,12 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { systemController } from "@/modules/system";
+import { authGuard } from "./setup";
 
 describe("Health endpoint", () => {
-	const app = new Elysia().group("/api", (app) => app.use(systemController));
+	const app = new Elysia()
+		.use(authGuard)
+		.group("/api", (app) => app.use(systemController));
 
 	it("GET /api/system/health returns 200 with status ok", async () => {
 		const response = await app

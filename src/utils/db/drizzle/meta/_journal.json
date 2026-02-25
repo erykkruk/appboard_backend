@@ -21,6 +21,13 @@
 			"tag": "0002_faithful_marten_broadcloak",
 			"version": "7",
 			"when": 1771882977651
+		},
+		{
+			"breakpoints": true,
+			"idx": 3,
+			"tag": "0003_left_mockingbird",
+			"version": "7",
+			"when": 1771945933320
 		}
 	],
 	"version": "7"

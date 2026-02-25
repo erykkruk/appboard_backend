@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { PublishingService } from "./publishing.service";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
@@ -34,7 +35,8 @@ async function withScreenshotCopy<T extends Record<string, unknown>>(
 export const publishingController = new Elysia({ prefix: "/apps" })
 	.get(
 		"/:appId/publishing/overview",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.getOverview(params.appId);
 		},
 		{
@@ -47,7 +49,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/publish",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.publishAll(params.appId, {
 				submitForReview: body?.submitForReview,
 			});
@@ -67,7 +70,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/publishing/versions",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.listVersions(params.appId);
 		},
 		{
@@ -80,7 +84,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/publishing/versions/:versionId",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.getVersionLocalizations(
 				params.appId,
 				params.versionId,
@@ -99,7 +104,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/versions/:versionId/localizations/translate",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const result =
 				await PublishingService.addVersionLocalizationWithTranslation(
 					params.appId,
@@ -135,7 +141,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/versions/:versionId/localizations",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const result = await PublishingService.addVersionLocalization(
 				params.appId,
 				params.versionId,
@@ -167,7 +174,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.patch(
 		"/:appId/publishing/versions/:versionId/localizations/:localizationId",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.updateVersionLocalization(
 				params.appId,
 				params.versionId,
@@ -199,7 +207,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.delete(
 		"/:appId/publishing/versions/:versionId/localizations/:localizationId",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.deleteVersionLocalization(
 				params.appId,
 				params.localizationId,
@@ -219,7 +228,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/publishing/versions/:versionId/screenshots",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.getVersionScreenshots(
 				params.appId,
 				params.versionId,
@@ -238,7 +248,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/screenshots/preview",
-		async ({ body }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const cropParams =
 				body.cropX !== undefined &&
 				body.cropY !== undefined &&
@@ -276,7 +287,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/screenshots/upload",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const cropParams =
 				body.cropX !== undefined &&
 				body.cropY !== undefined &&
@@ -318,7 +330,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/screenshots/split-preview",
-		async ({ body }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.splitPreview(
 				body.displayType,
 				body.file,
@@ -344,7 +357,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/screenshots/split-upload",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const cropParams =
 				body.cropX !== undefined &&
 				body.cropY !== undefined &&
@@ -395,7 +409,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/screenshots/copy",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.copyScreenshots(
 				params.appId,
 				body.versionId,
@@ -421,7 +436,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.delete(
 		"/:appId/publishing/screenshots/:screenshotId",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.deleteScreenshot(
 				params.appId,
 				params.screenshotId,
@@ -440,7 +456,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.patch(
 		"/:appId/publishing/screenshots/reorder",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.reorderScreenshots(
 				params.appId,
 				body.screenshotSetId,
@@ -461,7 +478,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.delete(
 		"/:appId/publishing/screenshot-sets/:screenshotSetId",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.deleteAllScreenshots(
 				params.appId,
 				params.screenshotSetId,
@@ -480,7 +498,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.patch(
 		"/:appId/publishing/versions/:versionId/copyright",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.updateVersionCopyright(
 				params.appId,
 				params.versionId,
@@ -503,7 +522,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/publishing/versions/:versionId/review-detail",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.getReviewDetail(params.appId, params.versionId);
 		},
 		{
@@ -519,7 +539,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.patch(
 		"/:appId/publishing/versions/:versionId/review-detail",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.updateReviewDetail(
 				params.appId,
 				params.versionId,
@@ -549,7 +570,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/versions/:versionId/review-detail/attachments",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.uploadReviewAttachment(
 				params.appId,
 				params.versionId,
@@ -572,7 +594,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.delete(
 		"/:appId/publishing/review-attachments/:attachmentId",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.deleteReviewAttachment(
 				params.appId,
 				params.attachmentId,
@@ -591,7 +614,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/sync-versions",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.syncVersions(params.appId);
 		},
 		{
@@ -604,7 +628,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/versions/:versionId/publish-localizations",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.publishVersionLocalizations(
 				params.appId,
 				params.versionId,
@@ -624,7 +649,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/publishing/version",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const version = await PublishingService.getVersionInfo(params.appId);
 			return { version };
 		},
@@ -638,7 +664,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/create-version",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const result = await PublishingService.createVersion(
 				params.appId,
 				body.versionString,
@@ -658,7 +685,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/publishing/submit-review",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return PublishingService.submitForReview(params.appId);
 		},
 		{

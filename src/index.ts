@@ -2,6 +2,7 @@ import cors from "@elysiajs/cors";
 import { openapi } from "@elysiajs/openapi";
 import { Elysia } from "elysia";
 import config from "@/config";
+import { auth } from "@/config/auth";
 import {
 	ageRatingController,
 	ageRatingPresetsController,
@@ -9,8 +10,9 @@ import {
 import { aiController } from "@/modules/ai";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appsController } from "@/modules/apps";
-import { assetsController } from "@/modules/assets";
 import { asoProfileController } from "@/modules/aso-profile";
+import { assetsController } from "@/modules/assets";
+import { authGuard } from "@/modules/auth";
 import { listingsController } from "@/modules/listings";
 import {
 	privacyDeclarationController,
@@ -26,7 +28,7 @@ import { createLogger } from "@/utils/logger";
 
 const log = createLogger("app");
 
-const port = Number(config.PORT) || 6667;
+const port = Number(config.PORT) || 6680;
 
 const app = new Elysia()
 	.use(
@@ -36,6 +38,8 @@ const app = new Elysia()
 	)
 	.use(openapi())
 	.use(errorHandler)
+	.all("/api/auth/*", ({ request }) => auth.handler(request))
+	.use(authGuard)
 	.group("/api", (app) =>
 		app
 			.use(systemController)

@@ -12,6 +12,7 @@ const log = createLogger("stores-service");
 
 export class StoresService {
 	static async connect(
+		workspaceId: string,
 		name: string,
 		type: StoreType,
 		credentials: Record<string, unknown>,
@@ -32,6 +33,7 @@ export class StoresService {
 				name,
 				status: "connected",
 				type,
+				workspaceId,
 			})
 			.returning();
 
@@ -39,15 +41,15 @@ export class StoresService {
 		return store;
 	}
 
-	static async list() {
-		return db.select().from(stores);
+	static async list(workspaceId: string) {
+		return db.select().from(stores).where(eq(stores.workspaceId, workspaceId));
 	}
 
-	static async disconnect(storeId: string) {
+	static async disconnect(storeId: string, workspaceId: string) {
 		const [store] = await db
 			.select()
 			.from(stores)
-			.where(eq(stores.id, storeId))
+			.where(and(eq(stores.id, storeId), eq(stores.workspaceId, workspaceId)))
 			.limit(1);
 
 		if (!store) buildError("notFound", { info: "Store not found" });

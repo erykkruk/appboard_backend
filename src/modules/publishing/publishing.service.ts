@@ -452,6 +452,11 @@ export class PublishingService {
 				synced++;
 			}
 
+			await db
+				.update(apps)
+				.set({ lastSyncedAt: new Date() })
+				.where(eq(apps.id, appId));
+
 			log.info({ appId, synced }, "Synced versions from ASC");
 			return { source: "live" as const, synced };
 		} catch (err) {
@@ -1889,10 +1894,10 @@ export class PublishingService {
 		if (cropParams) {
 			rawBuffer = await sharp(rawBuffer)
 				.extract({
+					height: Math.round(cropParams.height),
 					left: Math.round(cropParams.x),
 					top: Math.round(cropParams.y),
 					width: Math.round(cropParams.width),
-					height: Math.round(cropParams.height),
 				})
 				.toBuffer();
 		}

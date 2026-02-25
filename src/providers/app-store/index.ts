@@ -912,6 +912,23 @@ export class AppStoreProvider implements StoreProvider {
 		}
 	}
 
+	async updatePrivacyDeclaration(
+		_appId: string,
+		_data: import("../store-provider").PrivacyDeclarationData,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId: _appId }, "Mock: privacy declaration updated");
+			return;
+		}
+
+		// TODO: Implement App Store Connect privacy declaration push
+		// App Privacy uses the App Store Connect API appPrivacyDetails endpoints
+		log.warn(
+			{ appId: _appId },
+			"App Store privacy declaration push not yet implemented",
+		);
+	}
+
 	private async getEditableVersion(appId: string): Promise<ApiResource | null> {
 		const { readAll } = await createAppStoreClient(this.credentials);
 		const { data: versions } = await readAll(`apps/${appId}/appStoreVersions`);

@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	replyBody,
 	reviewIdParams,
@@ -10,7 +11,8 @@ import { ReviewsService } from "./reviews.service";
 export const reviewsController = new Elysia({ prefix: "/apps" })
 	.get(
 		"/:appId/reviews",
-		async ({ params, query }) => {
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			const result = await ReviewsService.list(params.appId, {
 				hasReply: query.hasReply,
 				language: query.language,
@@ -30,7 +32,8 @@ export const reviewsController = new Elysia({ prefix: "/apps" })
 	)
 	.get(
 		"/:appId/reviews/stats",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ReviewsService.getStats(params.appId);
 		},
 		{
@@ -43,7 +46,8 @@ export const reviewsController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/reviews/:reviewId/reply",
-		async ({ body, params }) => {
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ReviewsService.reply(params.appId, params.reviewId, body.text);
 		},
 		{
@@ -57,7 +61,8 @@ export const reviewsController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/reviews/sync",
-		async ({ params }) => {
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
 			return ReviewsService.syncFromStore(params.appId);
 		},
 		{

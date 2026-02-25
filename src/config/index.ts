@@ -3,10 +3,18 @@ import { ArkErrors, type } from "arktype";
 const configSchema = type({
 	"+": "delete",
 	ALLOWED_ORIGINS: "string?",
+	BETTER_AUTH_SECRET: "string",
+	BETTER_AUTH_URL: "string?",
 	DB_URL: "/^postgres:\\/\\//",
 	ENCRYPTION_KEY: "string",
+	NODE_ENV: "string?",
 	OPENROUTER_API_KEY: "string?",
 	PORT: "string?",
+	SMTP_FROM: "string?",
+	SMTP_HOST: "string?",
+	SMTP_PASS: "string?",
+	SMTP_PORT: "string?",
+	SMTP_USER: "string?",
 });
 
 const config = configSchema({ ...process.env });
