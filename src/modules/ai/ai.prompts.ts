@@ -189,19 +189,77 @@ export function getSettingKey(field: ListingField, mode: PromptMode): string {
 export function buildTranslationFieldRules(field: string): string {
 	switch (field) {
 		case "title":
-			return `TITLE (max 30 chars): Keep the brand name unchanged. Adapt the keyword portion to the highest-value equivalent in the target market. Do NOT transliterate — find the keyword users actually search for in this language.`;
+			return `TITLE (max 30 chars):
+- Keep brand name unchanged — NEVER translate or transliterate it
+- Formula: [Brand] – [Benefit keyword] or [Brand]: [What it does]
+- Adapt the keyword portion to the HIGHEST-VALUE search term in the target language
+- Do NOT transliterate source keywords — find what users actually search for in that market
+- Do NOT use generic filler words ("app", "tool") unless part of the brand
+- Title has the STRONGEST algorithmic weight for search ranking — every character counts
+- Must be readable and natural, not spammy`;
+
 		case "subtitle":
-			return `SUBTITLE (max 30 chars): Do NOT repeat words from the translated title. Front-load the most important keyword for the target market. Adapt the benefit statement culturally.`;
+			return `SUBTITLE (max 30 chars — STRICT, count carefully):
+- Formula: [Action] + [Outcome] or [Specific benefit statement]
+- MUST complement the title — NEVER repeat words already in the translated title
+- Front-load the most important keyword for the target market
+- This is the second strongest ranking factor on iOS — use high-value keywords
+- Adapt the benefit statement culturally — what resonates in this market?
+- Use active voice with verbs natural in the target language
+- Must make sense as a standalone phrase — not a sentence fragment`;
+
 		case "shortDescription":
-			return `SHORT DESCRIPTION (max 80 chars): Front-load the primary keyword in the first 3-4 words. Use an action verb natural in the target language + core benefit. Adapt the differentiator to resonate with the local market.`;
+			return `SHORT DESCRIPTION (max 80 chars):
+- Formula: [Action Verb] + [Core Benefit] + [Key Differentiator]
+- Front-load the primary keyword in the FIRST 3-4 words — this is critical for Google Play ranking
+- This is the SECOND strongest ranking factor on Google Play — heavily indexed by the algorithm
+- Use an action verb that sounds natural in the target language
+- Include 1-2 high-value keywords naturally — what do users in this market search for?
+- Must be compelling enough to stop scrolling
+- Adapt the differentiator to resonate with local audience expectations`;
+
 		case "description":
-			return `DESCRIPTION (max 4000 chars): Preserve the HOOK-BENEFIT-PROOF-CTA structure. Adapt social proof references to the target market where possible. Maintain bullet point formatting. Weave locally relevant keywords naturally (3-5x for Android).`;
+			return `DESCRIPTION (max 4000 chars):
+- Preserve the HOOK-BENEFIT-PROOF-CTA structure exactly
+- HOOK (first 3 lines before "Read More"): must be powerful and locally adapted — this is the only part most users see
+- Adapt social proof references to the target market (local awards, media, metrics)
+- Maintain bullet point formatting — scannable structure is universal
+- For Android: weave locally relevant keywords 3-5x naturally (description IS indexed)
+- For iOS: focus purely on conversion (description is NOT indexed)
+- Benefits over features — "Save 2h/week" not "Has a calendar feature"
+- Adapt idioms, humor, and cultural references — do NOT translate them literally
+- Use the customer's language — write how the target audience actually speaks`;
+
 		case "keywords":
-			return `KEYWORDS (max 100 chars): Do NOT translate 1:1. Research what users in the target market actually search for. Use singular forms only. No spaces after commas. Each keyword must be unique — never repeat words from title or subtitle.`;
+			return `KEYWORDS (max 100 chars — STRICT, every character matters):
+- Do NOT translate 1:1 — research what users in the target market ACTUALLY search for
+- Example: "Calorie Counter" in English might be "Dieta App" in Spanish markets, not "Contador de Calorias"
+- Comma-separated, NO spaces after commas (to maximize character usage)
+- Singular forms only — the store handles plural matching automatically
+- NEVER repeat words already used in the translated title or subtitle
+- Mix high-volume terms with long-tail keywords specific to the target market
+- Include common local misspellings if they save characters
+- No special characters or numbers unless part of a keyword`;
+
 		case "promotionalText":
-			return `PROMOTIONAL TEXT (max 170 chars): Adapt urgency and excitement to the target culture. Some markets prefer understated language, others respond to bold claims. This field is NOT indexed — focus on conversion.`;
+			return `PROMOTIONAL TEXT (max 170 chars):
+- Formula: [News/Update] + [What's new] + [Benefit]
+- This field is NOT indexed for search — focus PURELY on driving conversions
+- Adapt urgency and excitement to the target culture:
+  - Some markets (e.g. German, Japanese) prefer understated, factual language
+  - Others (e.g. US, Brazilian) respond to bold, energetic claims
+- Use culturally appropriate calls to action
+- Can be updated anytime without app review — treat it as a marketing banner`;
+
 		case "whatsNew":
-			return `WHAT'S NEW (max 4000 chars): Use positive framing ("Now 2x faster" not "Fixed slow loading"). Adapt idioms and colloquialisms to the target language. Keep bullet point structure.`;
+			return `WHAT'S NEW (max 4000 chars):
+- Use positive framing: "Now 2x faster" not "Fixed slow loading"
+- Each bullet: [What changed] — [benefit to user]
+- Adapt idioms and colloquialisms — do NOT translate literally
+- Keep bullet point structure for scannability
+- End with a CTA adapted to local conventions (rate the app, contact support)
+- Mention bug fixes briefly, highlight new features prominently`;
+
 		default:
 			return "";
 	}

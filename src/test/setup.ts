@@ -1,5 +1,5 @@
 import { afterAll, beforeAll } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/utils/db";
 import {
 	settings,
@@ -132,9 +132,17 @@ export async function cleanupStores(storeIds: string[]) {
 
 /**
  * Cleanup helper: deletes only the settings created during a test suite.
+ * Scoped to test workspace A by default to prevent cross-workspace deletion.
  */
-export async function cleanupSettings(keys: string[]) {
+export async function cleanupSettings(
+	keys: string[],
+	workspaceId: string = TEST_WORKSPACE_ID,
+) {
 	for (const key of keys) {
-		await db.delete(settings).where(eq(settings.key, key));
+		await db
+			.delete(settings)
+			.where(
+				and(eq(settings.workspaceId, workspaceId), eq(settings.key, key)),
+			);
 	}
 }

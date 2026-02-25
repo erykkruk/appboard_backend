@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { appsController } from "@/modules/apps";
 import {
@@ -6,8 +6,6 @@ import {
 	privacyTemplatesController,
 } from "@/modules/privacy-declaration";
 import { storesController } from "@/modules/stores";
-import { db } from "@/utils/db";
-import { appPrivacyDeclarations } from "@/utils/db/schema";
 import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("Privacy Declaration module", () => {
@@ -26,10 +24,6 @@ describe("Privacy Declaration module", () => {
 
 	afterAll(async () => {
 		if (storeId) await cleanupStores([storeId]);
-	});
-
-	beforeAll(async () => {
-		await db.delete(appPrivacyDeclarations);
 	});
 
 	it("sets up mock store with apps", async () => {

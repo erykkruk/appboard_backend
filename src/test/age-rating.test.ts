@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import {
 	ageRatingController,
@@ -6,8 +6,6 @@ import {
 } from "@/modules/age-rating";
 import { appsController } from "@/modules/apps";
 import { storesController } from "@/modules/stores";
-import { db } from "@/utils/db";
-import { appAgeRatings } from "@/utils/db/schema";
 import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("Age Rating module", () => {
@@ -26,10 +24,6 @@ describe("Age Rating module", () => {
 
 	afterAll(async () => {
 		if (storeId) await cleanupStores([storeId]);
-	});
-
-	beforeAll(async () => {
-		await db.delete(appAgeRatings);
 	});
 
 	it("sets up mock store with apps", async () => {

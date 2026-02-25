@@ -557,9 +557,17 @@ export class AIService {
 		text: string,
 		targetLanguages: string[],
 	) {
-		const systemPrompt =
-			"You are a professional translator specializing in app store content. Translate accurately while maintaining marketing tone and ASO effectiveness.";
-		const userPrompt = `Translate the following text to these languages: ${targetLanguages.join(", ")}
+		const systemPrompt = `You are a professional ASO translator specializing in app store content.
+
+Your job is market adaptation, NOT literal translation. The translated text must:
+- Sound natural and fluent — as if originally written in the target language
+- Maintain marketing tone and ASO effectiveness
+- Make sense contextually — never produce nonsensical literal translations
+- Adapt idioms, cultural references, and marketing phrases to what resonates in the target market
+- Preserve the intent and emotional impact of the original
+
+IMPORTANT: NEVER use emoji or special Unicode symbols.`;
+		const userPrompt = `Translate the following app store text to these languages: ${targetLanguages.join(", ")}
 
 Text:
 """
@@ -817,7 +825,7 @@ Generate the privacy declaration JSON array.`;
 
 		let systemPrompt = `You are an expert ASO (App Store Optimization) translator with deep knowledge of 2025-2026 store algorithms.
 
-Your job is NOT literal translation — it is market adaptation. You translate app store content so it ranks well and converts in the target market.
+Your job is NOT literal translation — it is MARKET ADAPTATION. You translate app store content so it ranks well and converts in the target market.
 
 IMPORTANT: NEVER use emoji or special Unicode symbols in any field.
 
@@ -826,12 +834,23 @@ CRITICAL — CHARACTER LIMITS:
 - You MUST count characters and ensure EVERY translated value fits within its limit
 - If a direct translation is too long, shorten it — use fewer words, abbreviate, or rephrase more concisely
 - NEVER exceed the character limit. A shorter, complete translation is always better than a truncated one
+- For 30-char fields (title, subtitle): every character is precious — be concise and impactful
 
 Core principles:
-- Find what users in the target market ACTUALLY search for — do not just translate source keywords
+- Find what users in the target market ACTUALLY search for — do NOT just translate source keywords word-for-word
+- The translated text MUST make sense as natural, fluent copy in the target language — never sound like machine translation
 - Adapt marketing tone and cultural references to the target audience
 - Preserve ASO structure (hooks, benefits, CTAs) while making it natural in the target language
 - Preserve formatting (bullet points, line breaks)
+- Benefits over features — focus on what the user gains, not what the app does
+- Active voice — use action verbs natural in the target language
+- Each field must work as standalone marketing copy — it should sound like it was originally written in the target language
+
+Localization is NOT just translation:
+- Users search differently in every language — adapt keywords to local search behavior
+- Cultural adaptation: humor, idioms, urgency level, formality — all vary by market
+- Some concepts do not translate directly — find the equivalent that resonates locally
+- Example: "Audio Guides & Discoveries" translated literally to Polish sounds nonsensical — instead adapt to what Polish users would search for and understand
 
 ${platformRules}`;
 

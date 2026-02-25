@@ -1,11 +1,8 @@
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { eq } from "drizzle-orm";
+import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { storesController } from "@/modules/stores";
-import { db } from "@/utils/db";
-import { appAsoProfiles } from "@/utils/db/schema";
 import { authGuard, authRequest, cleanupStores } from "./setup";
 
 describe("ASO Profile module", () => {
@@ -20,11 +17,6 @@ describe("ASO Profile module", () => {
 
 	afterAll(async () => {
 		if (storeId) await cleanupStores([storeId]);
-	});
-
-	beforeAll(async () => {
-		// Clean up any leftover ASO profiles from previous test runs
-		await db.delete(appAsoProfiles);
 	});
 
 	it("sets up mock store with apps", async () => {
