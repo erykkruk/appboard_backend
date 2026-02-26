@@ -158,6 +158,26 @@ export class GooglePlayProvider implements StoreProvider {
 						log.warn({ packageName }, "Could not fetch listings for app name");
 					}
 
+					// Check if app has any releases (draft apps have none)
+					let isDraft = true;
+					try {
+						const { data: tracksData } = await client.api.edits.tracks.list({
+							editId,
+							packageName,
+						});
+						const hasReleases = tracksData.tracks?.some((track) =>
+							track.releases?.some(
+								(r) => r.versionCodes && r.versionCodes.length > 0,
+							),
+						);
+						isDraft = !hasReleases;
+					} catch {
+						log.warn(
+							{ packageName },
+							"Could not check tracks for draft status",
+						);
+					}
+
 					// Try to fetch app icon
 					let iconUrl: string | undefined;
 					try {
@@ -179,6 +199,7 @@ export class GooglePlayProvider implements StoreProvider {
 						bundleId: packageName,
 						externalId: packageName,
 						iconUrl,
+						isDraft,
 						name: appName,
 						platform: "android",
 					});

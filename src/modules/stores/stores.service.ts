@@ -91,6 +91,8 @@ export class StoresService {
 				)
 				.limit(1);
 
+			const appStatus = appData.isDraft ? "draft" : "active";
+
 			if (existing.length > 0) {
 				await db
 					.update(apps)
@@ -100,6 +102,7 @@ export class StoresService {
 						lastSyncedAt: new Date(),
 						name: appData.name,
 						platform: appData.platform,
+						status: appStatus,
 						storeId,
 					})
 					.where(eq(apps.id, existing[0].id));
@@ -111,6 +114,7 @@ export class StoresService {
 					lastSyncedAt: new Date(),
 					name: appData.name,
 					platform: appData.platform,
+					status: appStatus,
 					storeId,
 				});
 			}

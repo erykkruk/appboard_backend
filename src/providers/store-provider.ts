@@ -58,6 +58,7 @@ export interface AppData {
 	bundleId: string;
 	externalId: string;
 	iconUrl?: string;
+	isDraft?: boolean;
 	name: string;
 	platform: "android" | "ios";
 }
