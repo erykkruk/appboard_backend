@@ -109,11 +109,17 @@ export interface AssetMetadata {
 export interface PrivacyDeclarationData {
 	dataCollections: Array<{
 		category: string;
+		collected?: boolean;
 		dataType: string;
+		ephemeral?: boolean;
 		linked: boolean;
 		purposes: string[];
+		required?: boolean;
+		shared?: boolean;
 		tracking: boolean;
 	}>;
+	gpDeletionMechanism: boolean;
+	gpEncryptedInTransit: boolean;
 	privacyPolicyUrl: string | null;
 	trackingDomains: string[] | null;
 	trackingEnabled: boolean;

@@ -136,6 +136,7 @@ export const aiController = new Elysia({ prefix: "/ai" })
 				workspaceId!,
 				body.appName,
 				body.description,
+				body.platform,
 			);
 			return { mock: false, model, result };
 		},

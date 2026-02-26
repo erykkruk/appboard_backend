@@ -24,6 +24,13 @@ export const PRIVACY_TEMPLATE_IDS = [
 	"game",
 	"health_fitness",
 	"custom",
+	"gp_minimal",
+	"gp_basic_app",
+	"gp_social_media",
+	"gp_ecommerce",
+	"gp_game",
+	"gp_health_fitness",
+	"gp_custom",
 ] as const;
 export type PrivacyTemplateId = (typeof PRIVACY_TEMPLATE_IDS)[number];
 
@@ -54,6 +61,36 @@ export const DATA_PURPOSES = [
 	"third_party_advertising",
 ] as const;
 export type DataPurpose = (typeof DATA_PURPOSES)[number];
+
+// Google Play Data Safety
+export const GP_DATA_PURPOSES = [
+	"app_functionality",
+	"analytics",
+	"developer_communications",
+	"advertising_marketing",
+	"fraud_prevention",
+	"personalization",
+	"account_management",
+] as const;
+export type GpDataPurpose = (typeof GP_DATA_PURPOSES)[number];
+
+export const GP_DATA_CATEGORIES = [
+	"location",
+	"personal_info",
+	"financial_info",
+	"health_fitness",
+	"messages",
+	"photos_videos",
+	"audio",
+	"files_docs",
+	"calendar",
+	"contacts",
+	"app_activity",
+	"web_browsing",
+	"app_info_performance",
+	"device_ids",
+] as const;
+export type GpDataCategory = (typeof GP_DATA_CATEGORIES)[number];
 
 // Age Rating
 export const AGE_RATING_PRESET_IDS = [

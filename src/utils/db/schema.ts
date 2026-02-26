@@ -345,12 +345,18 @@ export const appPrivacyDeclarations = pgTable("app_privacy_declarations", {
 		jsonb().$type<
 			Array<{
 				category: string;
+				collected?: boolean;
 				dataType: string;
+				ephemeral?: boolean;
 				linked: boolean;
 				purposes: string[];
+				required?: boolean;
+				shared?: boolean;
 				tracking: boolean;
 			}>
 		>(),
+	gpDeletionMechanism: boolean().notNull().default(false),
+	gpEncryptedInTransit: boolean().notNull().default(false),
 	privacyPolicyUrl: varchar({ length: 2048 }),
 	templateId: varchar({ length: 50 }).notNull(),
 	trackingDomains: jsonb().$type<string[]>(),

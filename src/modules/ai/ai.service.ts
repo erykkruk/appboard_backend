@@ -717,8 +717,11 @@ Write a ${isPositive ? "thankful, encouraging reply that reinforces their positi
 		workspaceId: string,
 		appName: string,
 		description: string,
+		platform?: string,
 	): Promise<{ model: string; result: string }> {
-		const systemPrompt = `You are an expert in Apple App Store privacy declarations (App Privacy "nutrition labels").
+		const isAndroid = platform === "android";
+
+		const iosSystemPrompt = `You are an expert in Apple App Store privacy declarations (App Privacy "nutrition labels").
 
 Given an app name and a description of what data it collects and processes, generate a structured privacy declaration.
 
@@ -748,12 +751,50 @@ Rules:
 - Include diagnostics (crash data) by default unless the description explicitly says no analytics
 - Return a JSON array, no markdown, no explanations`;
 
+		const gpSystemPrompt = `You are an expert in Google Play Data Safety declarations.
+
+Given an app name and a description of what data it collects and processes, generate a structured data safety declaration.
+
+Return ONLY valid JSON: an array of objects with this exact shape:
+{ "category": string, "dataType": string, "purposes": string[], "collected": boolean, "shared": boolean, "ephemeral": boolean, "required": boolean, "linked": false, "tracking": false }
+
+Valid categories: "location", "personal_info", "financial_info", "health_fitness", "messages", "photos_videos", "audio", "files_docs", "calendar", "contacts", "app_activity", "web_browsing", "app_info_performance", "device_ids"
+
+Example data types per category:
+- location: "Approximate location", "Precise location"
+- personal_info: "Name", "Email address", "User IDs", "Address", "Phone number"
+- financial_info: "User payment info", "Purchase history", "Credit score"
+- health_fitness: "Health info", "Fitness info"
+- messages: "Emails", "SMS or MMS", "Other in-app messages"
+- photos_videos: "Photos", "Videos"
+- audio: "Voice or sound recordings", "Music files"
+- files_docs: "Files and docs"
+- calendar: "Calendar events"
+- contacts: "Contacts"
+- app_activity: "App interactions", "In-app search history", "Installed apps"
+- web_browsing: "Web browsing history"
+- app_info_performance: "Crash logs", "Diagnostics", "Other app performance data"
+- device_ids: "Device or other IDs"
+
+Valid purposes: "app_functionality", "analytics", "developer_communications", "advertising_marketing", "fraud_prevention", "personalization", "account_management"
+
+Rules:
+- "collected" = true if the app collects this data
+- "shared" = true if the app shares this data with third parties
+- "ephemeral" = true if data is processed ephemerally (not stored)
+- "required" = true if users cannot use the app without providing this data
+- Be realistic and thorough — include all data types implied by the description
+- Include app_info_performance (crash logs) by default unless explicitly excluded
+- Return a JSON array, no markdown, no explanations`;
+
+		const systemPrompt = isAndroid ? gpSystemPrompt : iosSystemPrompt;
+
 		const userPrompt = `App name: ${appName}
 
 Description of data collection:
 ${description}
 
-Generate the privacy declaration JSON array.`;
+Generate the ${isAndroid ? "data safety" : "privacy declaration"} JSON array.`;
 
 		log.info({ appName }, "Generating privacy declaration");
 

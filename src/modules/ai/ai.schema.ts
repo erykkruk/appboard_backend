@@ -35,6 +35,7 @@ export const generateReleaseNotesBody = t.Object({
 export const generatePrivacyBody = t.Object({
 	appName: t.String({ minLength: 1 }),
 	description: t.String({ minLength: 10 }),
+	platform: t.Optional(t.Union([t.Literal("ios"), t.Literal("android")])),
 });
 
 export const suggestCategoryBody = t.Object({
