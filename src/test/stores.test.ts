@@ -179,7 +179,13 @@ describe("Stores module", () => {
 		expect(typeof data.totalSynced).toBe("number");
 		expect(data.totalSynced).toBeGreaterThanOrEqual(0);
 		expect(Array.isArray(data.results)).toBe(true);
-		expect(data.results.length).toBe(2);
+		// At least our 2 stores (other parallel tests may add more)
+		expect(data.results.length).toBeGreaterThanOrEqual(2);
+
+		// Verify our stores are in the results
+		const storeIds = data.results.map((r: { storeId: string }) => r.storeId);
+		expect(storeIds).toContain(storeIdGP);
+		expect(storeIds).toContain(storeIdAS);
 
 		for (const result of data.results) {
 			expect(typeof result.storeId).toBe("string");

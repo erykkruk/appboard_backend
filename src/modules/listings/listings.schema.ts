@@ -22,6 +22,7 @@ export const updateListingBody = t.Object({
 	shortDesc: t.Optional(t.String({ maxLength: 255 })),
 	supportUrl: t.Optional(t.String({ maxLength: 1024 })),
 	title: t.Optional(t.String({ maxLength: 255 })),
+	videoUrl: t.Optional(t.String({ maxLength: 1024 })),
 	whatsNew: t.Optional(t.String()),
 });
 

@@ -344,7 +344,7 @@ export class GooglePlayProvider implements StoreProvider {
 				};
 
 				log.info(
-					{ appId, language, fields: Object.keys(data) },
+					{ appId, fields: Object.keys(data), language },
 					"Updating listing",
 				);
 

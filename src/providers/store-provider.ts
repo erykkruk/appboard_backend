@@ -72,6 +72,7 @@ export interface ListingData {
 	shortDesc: string;
 	supportUrl?: string;
 	title: string;
+	videoUrl?: string;
 	whatsNew?: string;
 }
 
@@ -84,6 +85,7 @@ export interface ListingUpdateData {
 	shortDesc?: string;
 	supportUrl?: string;
 	title?: string;
+	videoUrl?: string;
 	whatsNew?: string;
 }
 

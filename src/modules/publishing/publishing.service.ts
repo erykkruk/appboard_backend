@@ -36,6 +36,7 @@ function suggestNextVersion(versionString: string): string {
 }
 
 const REQUIRED_SIZES: Record<string, [number, number][]> = {
+	// iOS devices
 	APP_IPAD_PRO_129: [
 		[2064, 2752],
 		[2752, 2064],
@@ -79,6 +80,26 @@ const REQUIRED_SIZES: Record<string, [number, number][]> = {
 	APP_IPHONE_67: [
 		[1290, 2796],
 		[2796, 1290],
+	],
+	// Android devices — use iPhone-compatible sizes as defaults
+	// GP accepts any size; these match iPhone for reuse of assets
+	phone: [
+		[1284, 2778],
+		[2778, 1284],
+		[1242, 2688],
+		[2688, 1242],
+	],
+	sevenInch: [
+		[2048, 2732],
+		[2732, 2048],
+		[2064, 2752],
+		[2752, 2064],
+	],
+	tenInch: [
+		[2048, 2732],
+		[2732, 2048],
+		[2064, 2752],
+		[2752, 2064],
 	],
 };
 
@@ -2713,10 +2734,7 @@ export class PublishingService {
 
 		if (app.store.type === "google_play") {
 			const credentials = JSON.parse(decrypt(app.store.credentials!));
-			const provider = createProvider(
-				app.store.type as StoreType,
-				credentials,
-			);
+			const provider = createProvider(app.store.type as StoreType, credentials);
 			if ("sendChangesForReview" in provider) {
 				await (
 					provider as { sendChangesForReview: (id: string) => Promise<void> }

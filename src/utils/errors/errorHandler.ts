@@ -43,10 +43,11 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 
 			default: {
 				// Handle buildError() responses (status() throws with a specific shape)
-				const statusCode =
-					(error as Record<string, unknown>)?.status ??
-					(error as Record<string, unknown>)?.statusCode;
-				if (typeof statusCode === "number" && statusCode >= 400) {
+				// Elysia status() puts HTTP code in .code (number), external APIs use .status/.statusCode
+				const err = error as Record<string, unknown>;
+				const rawCode = err?.status ?? err?.statusCode ?? err?.code;
+				const statusCode = typeof rawCode === "number" ? rawCode : undefined;
+				if (statusCode !== undefined && statusCode >= 400) {
 					set.status = statusCode;
 					const body = (error as Record<string, unknown>)?.response;
 					if (body && typeof body === "object" && "code" in body) {

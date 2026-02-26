@@ -19,6 +19,7 @@ const LISTING_FIELDS = [
 	"shortDesc",
 	"supportUrl",
 	"title",
+	"videoUrl",
 	"whatsNew",
 ] as const;
 
@@ -63,6 +64,7 @@ const EXPORT_COLUMNS = [
 	"marketingUrl",
 	"supportUrl",
 	"privacyUrl",
+	"videoUrl",
 ] as const;
 
 type ExportRow = Record<(typeof EXPORT_COLUMNS)[number], string>;
@@ -244,6 +246,7 @@ export class ListingsService {
 					supportUrl: listing.supportUrl,
 					syncedAt: new Date(),
 					title: listing.title,
+					videoUrl: listing.videoUrl,
 					whatsNew: listing.whatsNew,
 				})
 				.onConflictDoUpdate({
@@ -257,6 +260,7 @@ export class ListingsService {
 						supportUrl: listing.supportUrl,
 						syncedAt: new Date(),
 						title: listing.title,
+						videoUrl: listing.videoUrl,
 						whatsNew: listing.whatsNew,
 					},
 					target: [listings.appId, listings.language, listings.source],
@@ -360,6 +364,7 @@ export class ListingsService {
 						shortDesc: remote[0].shortDesc,
 						supportUrl: remote[0].supportUrl,
 						title: remote[0].title,
+						videoUrl: remote[0].videoUrl,
 						whatsNew: remote[0].whatsNew,
 					}
 				: {};
@@ -455,7 +460,19 @@ export class ListingsService {
 					data: u.changedFields,
 					language: u.draft.language,
 				}));
-			await provider.batchPublishListings(app.externalId, updates);
+			try {
+				await provider.batchPublishListings(app.externalId, updates);
+				// Successful publish — ensure app is not marked as draft
+				if (app.status === "draft") {
+					await db
+						.update(apps)
+						.set({ status: "active" })
+						.where(eq(apps.id, appId));
+				}
+			} catch (err) {
+				await ListingsService.detectDraftApp(err, appId);
+				throw err;
+			}
 		} else if (hasChanges) {
 			// App Store / fallback: update per-language then publish
 			for (const { changedFields, draft } of batchUpdates) {
@@ -501,6 +518,7 @@ export class ListingsService {
 						supportUrl: draft.supportUrl,
 						syncedAt: new Date(),
 						title: draft.title,
+						videoUrl: draft.videoUrl,
 						whatsNew: draft.whatsNew,
 					})
 					.where(eq(listings.id, remote.id));
@@ -884,5 +902,18 @@ export class ListingsService {
 		}
 
 		return { ...result[0].app, store: result[0].store };
+	}
+
+	/**
+	 * Detects "draft app" error from GP API and marks the app accordingly.
+	 */
+	private static async detectDraftApp(err: unknown, appId: string) {
+		const msg =
+			(err as { message?: string })?.message ??
+			JSON.stringify((err as { response?: unknown })?.response ?? "");
+		if (/draft\s+app/i.test(msg)) {
+			log.warn({ appId }, "GP draft app detected — marking status");
+			await db.update(apps).set({ status: "draft" }).where(eq(apps.id, appId));
+		}
 	}
 }

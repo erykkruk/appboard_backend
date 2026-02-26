@@ -158,6 +158,7 @@ export const listings = pgTable(
 		supportUrl: varchar({ length: 1024 }),
 		syncedAt: timestamp(),
 		title: varchar({ length: 255 }),
+		videoUrl: varchar({ length: 1024 }),
 		whatsNew: text(),
 	},
 	(t) => [unique().on(t.appId, t.language, t.source)],

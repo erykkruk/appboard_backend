@@ -144,10 +144,7 @@ export async function commitEdit(
 		editId,
 		packageName,
 	});
-	log.info(
-		{ editId, packageName, sentForReview: true },
-		"Edit committed",
-	);
+	log.info({ editId, packageName, sentForReview: true }, "Edit committed");
 }
 
 /**

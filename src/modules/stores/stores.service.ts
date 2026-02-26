@@ -77,12 +77,18 @@ export class StoresService {
 		const fetchedApps = await provider.fetchApps();
 
 		for (const appData of fetchedApps) {
-			// Look up by externalId globally (not scoped to storeId) to handle
+			// Look up by externalId within the same workspace to handle
 			// reconnects where the store row was recreated with a new UUID.
 			const existing = await db
-				.select()
+				.select({ id: apps.id })
 				.from(apps)
-				.where(eq(apps.externalId, appData.externalId))
+				.innerJoin(stores, eq(apps.storeId, stores.id))
+				.where(
+					and(
+						eq(apps.externalId, appData.externalId),
+						eq(stores.workspaceId, store.workspaceId),
+					),
+				)
 				.limit(1);
 
 			if (existing.length > 0) {
@@ -124,7 +130,10 @@ export class StoresService {
 			.select()
 			.from(stores)
 			.where(
-				and(eq(stores.workspaceId, workspaceId), eq(stores.status, "connected")),
+				and(
+					eq(stores.workspaceId, workspaceId),
+					eq(stores.status, "connected"),
+				),
 			);
 
 		const results: { storeId: string; storeName: string; synced: number }[] =

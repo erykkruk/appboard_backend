@@ -779,7 +779,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			detail: {
-				description: "Submit changes for store review (App Store or Google Play)",
+				description:
+					"Submit changes for store review (App Store or Google Play)",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,
