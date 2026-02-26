@@ -30,7 +30,7 @@ export type GooglePlayImageType = (typeof GOOGLE_PLAY_IMAGE_TYPES)[number];
 export const DEVICE_TO_IMAGE_TYPE: Record<string, GooglePlayImageType> = {
 	phone: "phoneScreenshots",
 	sevenInch: "sevenInchScreenshots",
-	tablet: "tenInchScreenshots",
+	tenInch: "tenInchScreenshots",
 	tv: "tvScreenshots",
 	wear: "wearScreenshots",
 };
@@ -39,7 +39,7 @@ export const DEVICE_TO_IMAGE_TYPE: Record<string, GooglePlayImageType> = {
 export const IMAGE_TYPE_TO_DEVICE: Record<string, string> = {
 	phoneScreenshots: "phone",
 	sevenInchScreenshots: "sevenInch",
-	tenInchScreenshots: "tablet",
+	tenInchScreenshots: "tenInch",
 	tvScreenshots: "tv",
 	wearScreenshots: "wear",
 };

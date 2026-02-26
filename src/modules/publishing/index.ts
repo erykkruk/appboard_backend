@@ -1,8 +1,21 @@
 import Elysia, { t } from "elysia";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
+import { SettingsService } from "@/modules/settings/settings.service";
 import { PublishingService } from "./publishing.service";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
+const PUBLISH_MODE_KEY_PREFIX = "PUBLISH_MODE";
+const PUBLISH_SCHEDULED_AT_KEY_PREFIX = "PUBLISH_SCHEDULED_AT";
+const DEFAULT_PUBLISH_MODE = "manual";
+
+function publishModeKey(appId: string): string {
+	return `${PUBLISH_MODE_KEY_PREFIX}::${appId}`;
+}
+
+function publishScheduledAtKey(appId: string): string {
+	return `${PUBLISH_SCHEDULED_AT_KEY_PREFIX}::${appId}`;
+}
 
 const appIdParams = t.Object({
 	appId: t.String({ format: "uuid" }),
@@ -42,6 +55,79 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		{
 			detail: {
 				description: "Get publishing overview with pending changes",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.get(
+		"/:appId/publishing/settings",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const mode = await SettingsService.getRaw(
+				workspaceId!,
+				publishModeKey(params.appId),
+			);
+			const scheduledAt = await SettingsService.getRaw(
+				workspaceId!,
+				publishScheduledAtKey(params.appId),
+			);
+			return {
+				publishMode: mode ?? DEFAULT_PUBLISH_MODE,
+				publishScheduledAt: scheduledAt ?? null,
+			};
+		},
+		{
+			detail: {
+				description: "Get publish mode settings for the app",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.put(
+		"/:appId/publishing/settings",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await SettingsService.set(
+				workspaceId!,
+				publishModeKey(params.appId),
+				body.publishMode,
+			);
+
+			if (body.publishMode === "scheduled" && body.publishScheduledAt) {
+				await SettingsService.set(
+					workspaceId!,
+					publishScheduledAtKey(params.appId),
+					body.publishScheduledAt,
+				);
+			} else {
+				// Clear scheduled timestamp when not in scheduled mode
+				await SettingsService.delete(
+					workspaceId!,
+					publishScheduledAtKey(params.appId),
+				);
+			}
+
+			return {
+				publishMode: body.publishMode,
+				publishScheduledAt:
+					body.publishMode === "scheduled"
+						? (body.publishScheduledAt ?? null)
+						: null,
+			};
+		},
+		{
+			body: t.Object({
+				publishMode: t.Union([
+					t.Literal("manual"),
+					t.Literal("auto"),
+					t.Literal("scheduled"),
+				]),
+				publishScheduledAt: t.Optional(t.String({ format: "date-time" })),
+			}),
+			detail: {
+				description: "Update publish mode settings for the app",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,
@@ -186,9 +272,11 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		{
 			body: t.Object({
 				description: t.Optional(t.String()),
+				fullDescription: t.Optional(t.String()),
 				keywords: t.Optional(t.String()),
 				marketingUrl: t.Optional(t.String()),
 				promotionalText: t.Optional(t.String()),
+				shortDescription: t.Optional(t.String()),
 				subtitle: t.Optional(t.String()),
 				supportUrl: t.Optional(t.String()),
 				title: t.Optional(t.String()),
@@ -691,7 +779,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			detail: {
-				description: "Submit the app for Apple review",
+				description: "Submit changes for store review (App Store or Google Play)",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,

@@ -89,15 +89,21 @@ export function getMockAssets(
 	language: string,
 ): AssetData[] {
 	const assets: AssetData[] = [];
+	const shortId = appExternalId.split(".").pop() ?? appExternalId;
 	for (let i = 0; i < 8; i++) {
+		const isTablet = i >= 4 && i < 6;
+		const isPhone = i < 4;
+		const deviceType = isPhone ? "phone" : isTablet ? "tenInch" : undefined;
+		const assetType =
+			i < 6 ? "screenshot" : i === 6 ? "featureGraphic" : "icon";
 		assets.push({
-			assetType: i < 6 ? "screenshot" : i === 6 ? "featureGraphic" : "icon",
-			deviceType: i < 4 ? "phone" : "tablet",
+			assetType,
+			deviceType: deviceType ?? "phone",
 			externalId: `${appExternalId}-${language}-asset-${i}`,
 			fileSize: 256000 + i * 50000,
-			height: i < 4 ? 1920 : 2048,
-			url: `https://placehold.co/1080x1920?text=${appExternalId}-${language}-${i}`,
-			width: i < 4 ? 1080 : 2732,
+			height: isPhone ? 1920 : 2048,
+			url: `https://placehold.co/${isPhone ? "1080x1920" : "2732x2048"}/1a1a1a/666?text=${shortId}+${i}`,
+			width: isPhone ? 1080 : 2732,
 		});
 	}
 	return assets;

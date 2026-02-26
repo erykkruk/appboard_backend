@@ -64,9 +64,19 @@ export class AssetsService {
 			}
 		}
 
+		// Update app iconUrl from synced icon asset
+		const [iconAsset] = await db
+			.select({ url: assets.url })
+			.from(assets)
+			.where(and(eq(assets.appId, appId), eq(assets.assetType, "icon")))
+			.limit(1);
+
 		await db
 			.update(apps)
-			.set({ lastSyncedAt: new Date() })
+			.set({
+				iconUrl: iconAsset?.url ?? undefined,
+				lastSyncedAt: new Date(),
+			})
 			.where(eq(apps.id, appId));
 
 		log.info({ appId, count: totalSynced }, "Assets synced from store");

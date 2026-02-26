@@ -7,12 +7,26 @@ export const storesController = new Elysia({ prefix: "/stores" })
 	.post(
 		"/connect",
 		async ({ body, workspaceId }) => {
-			const store = await StoresService.connect(
+			const { store, syncedApps } = await StoresService.connect(
 				workspaceId!,
 				body.name,
 				body.type,
 				body.credentials as Record<string, unknown>,
 			);
+			const warnings: string[] = [];
+
+			if (body.type === "google_play") {
+				warnings.push(
+					"Draft apps without a package name are not accessible via the Google Play API. Only published apps (or apps with an assigned package name) will be discovered automatically.",
+				);
+
+				if (syncedApps === 0) {
+					warnings.push(
+						'No apps were discovered automatically. If you have apps that should appear, you can provide their package names (e.g. com.example.app) manually in the credentials under the "package_names" field.',
+					);
+				}
+			}
+
 			return {
 				store: {
 					id: store.id,
@@ -20,6 +34,8 @@ export const storesController = new Elysia({ prefix: "/stores" })
 					status: store.status,
 					type: store.type,
 				},
+				syncedApps,
+				warnings,
 			};
 		},
 		{
@@ -53,6 +69,18 @@ export const storesController = new Elysia({ prefix: "/stores" })
 		{
 			detail: { description: "Disconnect a store", tags: ["Stores"] },
 			params: storeIdParams,
+		},
+	)
+	.post(
+		"/sync-all",
+		async ({ workspaceId }) => {
+			return StoresService.syncAll(workspaceId!);
+		},
+		{
+			detail: {
+				description: "Sync apps from all connected stores",
+				tags: ["Stores"],
+			},
 		},
 	)
 	.post(

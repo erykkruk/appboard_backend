@@ -37,8 +37,8 @@ export class StoresService {
 			})
 			.returning();
 
-		await StoresService.syncApps(store.id);
-		return store;
+		const syncResult = await StoresService.syncApps(store.id);
+		return { store, syncedApps: syncResult.synced };
 	}
 
 	static async list(workspaceId: string) {
@@ -117,6 +117,35 @@ export class StoresService {
 
 		log.info({ appCount: fetchedApps.length, storeId }, "Apps synced");
 		return { synced: fetchedApps.length };
+	}
+
+	static async syncAll(workspaceId: string) {
+		const connectedStores = await db
+			.select()
+			.from(stores)
+			.where(
+				and(eq(stores.workspaceId, workspaceId), eq(stores.status, "connected")),
+			);
+
+		const results: { storeId: string; storeName: string; synced: number }[] =
+			[];
+
+		for (const store of connectedStores) {
+			const result = await StoresService.syncApps(store.id);
+			results.push({
+				storeId: store.id,
+				storeName: store.name,
+				synced: result.synced,
+			});
+		}
+
+		const totalSynced = results.reduce((sum, r) => sum + r.synced, 0);
+		log.info(
+			{ storeCount: connectedStores.length, totalSynced, workspaceId },
+			"All stores synced",
+		);
+
+		return { results, totalSynced };
 	}
 
 	static getProvider(store: {

@@ -19,6 +19,10 @@ export interface StoreProvider {
 		data: ListingUpdateData,
 	): Promise<void>;
 	publishListings(appId: string): Promise<void>;
+	batchPublishListings?(
+		appId: string,
+		updates: Array<{ language: string; data: ListingUpdateData }>,
+	): Promise<void>;
 	fetchAssets(appId: string, language: string): Promise<AssetData[]>;
 	uploadAsset(
 		appId: string,

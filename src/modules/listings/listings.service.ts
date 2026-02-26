@@ -399,8 +399,14 @@ export class ListingsService {
 			return { published: 0 };
 		}
 
+		// Collect changes per language for batch processing
+		const batchUpdates: Array<{
+			draft: (typeof dirtyDrafts)[0];
+			changedFields: Record<string, string | undefined>;
+			remote: (typeof dirtyDrafts)[0] | undefined;
+		}> = [];
+
 		for (const draft of dirtyDrafts) {
-			// Get current remote for history tracking
 			const [remote] = await db
 				.select()
 				.from(listings)
@@ -413,25 +419,59 @@ export class ListingsService {
 				)
 				.limit(1);
 
-			// Only send fields that actually changed compared to remote
 			const changedFields: Record<string, string | undefined> = {};
-			for (const field of LISTING_FIELDS) {
-				const draftVal = draft[field] ?? null;
-				const remoteVal = remote?.[field] ?? null;
-				if (draftVal !== remoteVal && draftVal !== null) {
-					changedFields[field] = draftVal;
+			if (remote) {
+				// Existing remote: send only changed fields
+				for (const field of LISTING_FIELDS) {
+					const draftVal = draft[field] ?? null;
+					const remoteVal = remote[field] ?? null;
+					if (draftVal !== remoteVal && draftVal !== null) {
+						changedFields[field] = draftVal;
+					}
+				}
+			} else {
+				// No remote listing yet: send ALL non-null fields from draft
+				// so the store gets the complete listing (GP requires title etc.)
+				for (const field of LISTING_FIELDS) {
+					const draftVal = draft[field] ?? null;
+					if (draftVal !== null) {
+						changedFields[field] = draftVal;
+					}
 				}
 			}
 
-			if (Object.keys(changedFields).length > 0) {
-				await provider.updateListing(
-					app.externalId,
-					draft.language,
-					changedFields,
-				);
-			}
+			batchUpdates.push({ changedFields, draft, remote });
+		}
 
-			// Record history for changed fields
+		// GP: use single edit+commit for all languages
+		const hasChanges = batchUpdates.some(
+			(u) => Object.keys(u.changedFields).length > 0,
+		);
+
+		if (hasChanges && provider.batchPublishListings) {
+			const updates = batchUpdates
+				.filter((u) => Object.keys(u.changedFields).length > 0)
+				.map((u) => ({
+					data: u.changedFields,
+					language: u.draft.language,
+				}));
+			await provider.batchPublishListings(app.externalId, updates);
+		} else if (hasChanges) {
+			// App Store / fallback: update per-language then publish
+			for (const { changedFields, draft } of batchUpdates) {
+				if (Object.keys(changedFields).length > 0) {
+					await provider.updateListing(
+						app.externalId,
+						draft.language,
+						changedFields,
+					);
+				}
+			}
+			await provider.publishListings(app.externalId);
+		}
+
+		// Record history + update remote + mark clean
+		for (const { changedFields, draft, remote } of batchUpdates) {
 			for (const field of LISTING_FIELDS) {
 				const oldVal = remote?.[field] ?? null;
 				const newVal = draft[field] ?? null;
@@ -448,7 +488,6 @@ export class ListingsService {
 				}
 			}
 
-			// Update remote with draft values
 			if (remote) {
 				await db
 					.update(listings)
@@ -467,14 +506,11 @@ export class ListingsService {
 					.where(eq(listings.id, remote.id));
 			}
 
-			// Mark draft as clean
 			await db
 				.update(listings)
 				.set({ isDirty: false })
 				.where(eq(listings.id, draft.id));
 		}
-
-		await provider.publishListings(app.externalId);
 
 		log.info({ appId, count: dirtyDrafts.length }, "Listings published");
 		return { published: dirtyDrafts.length };

@@ -21,12 +21,18 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 			case "INTERNAL_SERVER_ERROR":
 				log.error(error, "Internal server error");
 				set.status = 500;
-				return { code: "SOMETHING_WENT_WRONG" };
+				return {
+					code: "SOMETHING_WENT_WRONG",
+					data: { info: error?.message || "Internal server error" },
+				};
 
 			case "UNKNOWN":
 				log.error(error, "Unknown error");
 				set.status = 500;
-				return { code: "SOMETHING_WENT_WRONG" };
+				return {
+					code: "SOMETHING_WENT_WRONG",
+					data: { info: error?.message || "Unknown error" },
+				};
 
 			case "PARSE":
 				set.status = 400;
@@ -46,8 +52,19 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 					if (body && typeof body === "object" && "code" in body) {
 						return body;
 					}
+					// External API errors (e.g. googleapis) — propagate message
+					log.error(error, "Unhandled error with status code");
+					return {
+						code: "EXTERNAL_ERROR",
+						data: { info: error?.message || `Error (${statusCode})` },
+					};
 				}
-				return;
+				log.error(error, "Unhandled error");
+				set.status = 500;
+				return {
+					code: "SOMETHING_WENT_WRONG",
+					data: { info: error?.message || "Unknown error" },
+				};
 			}
 		}
 	},

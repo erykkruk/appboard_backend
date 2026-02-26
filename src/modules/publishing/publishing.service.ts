@@ -11,6 +11,7 @@ import { db } from "@/utils/db";
 import {
 	apps,
 	appVersions,
+	assets,
 	listings,
 	stores,
 	versionLocalizations,
@@ -287,6 +288,14 @@ export class PublishingService {
 					versionString: latest.versionString,
 				};
 			}
+		} else {
+			// Google Play: synthetic version (always editable)
+			version = {
+				isEditable: true,
+				state: "ACTIVE",
+				suggestedVersion: null,
+				versionString: "Current",
+			};
 		}
 
 		return {
@@ -468,7 +477,22 @@ export class PublishingService {
 	static async listVersions(appId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		// Google Play: return a single synthetic "default" version (GP has no version concept)
+		if (app.store.type !== "app_store") {
+			return {
+				source: "live" as const,
+				versions: [
+					{
+						id: "default",
+						isEditable: true,
+						state: "ACTIVE",
+						versionString: "Current",
+					},
+				],
+			};
+		}
+
+		if (!app.store.credentials) {
 			return { source: "live" as const, versions: [] };
 		}
 
@@ -495,7 +519,52 @@ export class PublishingService {
 	static async getVersionLocalizations(appId: string, versionId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		// Google Play: return listings data mapped to the version localizations shape
+		if (app.store.type !== "app_store") {
+			const appListings = await db
+				.select()
+				.from(listings)
+				.where(eq(listings.appId, appId));
+
+			// Merge drafts over remotes (same pattern as iOS version localizations)
+			const remotes = appListings.filter((l) => l.source === "remote");
+			const draftByLang = new Map(
+				appListings
+					.filter((l) => l.source === "draft")
+					.map((d) => [d.language, d]),
+			);
+
+			const localizations = remotes.map((remote) => {
+				const draft = draftByLang.get(remote.language);
+				const merged = draft ?? remote;
+				return {
+					description: "",
+					fullDescription: merged.fullDesc ?? "",
+					isDirty: draft?.isDirty ?? false,
+					keywords: "",
+					language: merged.language,
+					localizationId: remote.id,
+					marketingUrl: undefined as string | undefined,
+					promotionalText: undefined as string | undefined,
+					shortDescription: merged.shortDesc ?? "",
+					subtitle: "",
+					supportUrl: undefined as string | undefined,
+					title: merged.title ?? "",
+					whatsNew: undefined as string | undefined,
+				};
+			});
+
+			return {
+				copyright: "",
+				localizations,
+				source: "live" as const,
+				state: "ACTIVE",
+				versionId: "default",
+				versionString: "Current",
+			};
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
 				info: "Version localizations are only available for App Store apps",
 			});
@@ -933,9 +1002,11 @@ export class PublishingService {
 		localizationId: string,
 		data: {
 			description?: string;
+			fullDescription?: string;
 			keywords?: string;
 			marketingUrl?: string;
 			promotionalText?: string;
+			shortDescription?: string;
 			subtitle?: string;
 			supportUrl?: string;
 			title?: string;
@@ -944,7 +1015,46 @@ export class PublishingService {
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		// Google Play: save to the listings table via ListingsService
+		if (app.store.type !== "app_store") {
+			// localizationId is the listings.id — look up the language
+			const [listing] = await db
+				.select({ language: listings.language })
+				.from(listings)
+				.where(eq(listings.id, localizationId))
+				.limit(1);
+
+			if (!listing) {
+				buildError("notFound", { info: "Listing not found" });
+				throw new Error("unreachable");
+			}
+
+			const updateData: Record<string, string | undefined> = {};
+			if (data.title !== undefined) updateData.title = data.title;
+			if (data.fullDescription !== undefined)
+				updateData.fullDesc = data.fullDescription;
+			if (data.description !== undefined)
+				updateData.fullDesc = data.description;
+			if (data.shortDescription !== undefined)
+				updateData.shortDesc = data.shortDescription;
+			if (data.subtitle !== undefined) updateData.shortDesc = data.subtitle;
+			if (data.keywords !== undefined) updateData.keywords = data.keywords;
+			if (data.whatsNew !== undefined) updateData.whatsNew = data.whatsNew;
+
+			const result = await ListingsService.updateDraft(
+				appId,
+				listing.language,
+				updateData,
+			);
+			return {
+				language: listing.language,
+				localizationId,
+				result,
+				updated: true,
+			};
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
 				info: "Version localizations are only available for App Store apps",
 			});
@@ -1251,7 +1361,28 @@ export class PublishingService {
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		// Google Play: create a listing entry in the listings table
+		if (app.store.type !== "app_store") {
+			await db
+				.insert(listings)
+				.values({
+					appId,
+					fullDesc: "",
+					language: locale,
+					shortDesc: "",
+					source: "remote",
+					title: "",
+				})
+				.onConflictDoUpdate({
+					set: { syncedAt: new Date() },
+					target: [listings.appId, listings.language, listings.source],
+				});
+
+			log.info({ appId, locale }, "Added GP listing language");
+			return { added: true, language: locale };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
 				info: "Version localizations are only available for App Store apps",
 			});
@@ -1421,7 +1552,22 @@ export class PublishingService {
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		// Google Play: delete listing entry
+		if (app.store.type !== "app_store") {
+			const deleted = await db
+				.delete(listings)
+				.where(eq(listings.id, localizationId))
+				.returning();
+
+			if (deleted.length === 0) {
+				buildError("notFound", { info: "Listing not found" });
+			}
+
+			log.info({ appId, localizationId }, "Deleted GP listing language");
+			return { deleted: true };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
 				info: "Version localizations are only available for App Store apps",
 			});
@@ -1454,7 +1600,30 @@ export class PublishingService {
 	static async getVersionScreenshots(appId: string, versionId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		// Google Play: return assets from the assets table as screenshots
+		if (app.store.type !== "app_store") {
+			const gpAssets = await db
+				.select()
+				.from(assets)
+				.where(
+					and(eq(assets.appId, appId), eq(assets.assetType, "screenshot")),
+				);
+
+			const screenshots = gpAssets.map((a) => ({
+				deviceType: a.deviceType ?? "phone",
+				displayType: a.deviceType ?? "phone",
+				externalId: a.externalId ?? a.id,
+				height: a.height ?? null,
+				language: a.language ?? "en-US",
+				screenshotSetId: `gp-${a.deviceType ?? "phone"}-${a.language ?? "en-US"}`,
+				url: a.url ?? "",
+				width: a.width ?? null,
+			}));
+
+			return { screenshots };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
 				info: "Screenshots are only available for App Store apps",
 			});
@@ -2369,11 +2538,27 @@ export class PublishingService {
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		// Publish listings
-		const listingResult = await ListingsService.publish(appId);
+		let listingResult: { published: number };
+		try {
+			listingResult = await ListingsService.publish(appId);
+		} catch (err) {
+			log.error(
+				{ appId, err: (err as Error).message ?? err },
+				"Failed to publish listings",
+			);
+			throw err;
+		}
 
-		// Publish assets
-		const assetResult = await AssetsService.publishAssets(appId);
+		let assetResult: { published: number };
+		try {
+			assetResult = await AssetsService.publishAssets(appId);
+		} catch (err) {
+			log.error(
+				{ appId, err: (err as Error).message ?? err },
+				"Failed to publish assets",
+			);
+			throw err;
+		}
 
 		// Submit for review if requested (App Store only)
 		if (options?.submitForReview && app.store.type === "app_store") {
@@ -2526,11 +2711,25 @@ export class PublishingService {
 	static async submitForReview(appId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
+		if (app.store.type === "google_play") {
+			const credentials = JSON.parse(decrypt(app.store.credentials!));
+			const provider = createProvider(
+				app.store.type as StoreType,
+				credentials,
+			);
+			if ("sendChangesForReview" in provider) {
+				await (
+					provider as { sendChangesForReview: (id: string) => Promise<void> }
+				).sendChangesForReview(app.externalId);
+			}
+			log.info({ appId }, "GP changes sent for review");
+			return { submitted: true };
+		}
+
 		if (app.store.type !== "app_store") {
 			buildError("badRequest", {
-				info: "Submit for review is only available for App Store apps",
+				info: "Submit for review is not supported for this store type",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials!));

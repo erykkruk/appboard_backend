@@ -51,6 +51,7 @@ type ListingField =
 	| "subtitle"
 	| "shortDescription"
 	| "description"
+	| "fullDescription"
 	| "keywords"
 	| "promotionalText"
 	| "whatsNew";
@@ -59,6 +60,7 @@ export type { ListingField };
 
 const FIELD_CHAR_LIMITS: Record<ListingField, number> = {
 	description: 4000,
+	fullDescription: 4000,
 	keywords: 100,
 	promotionalText: 170,
 	shortDescription: 80,
@@ -69,6 +71,7 @@ const FIELD_CHAR_LIMITS: Record<ListingField, number> = {
 
 const FIELD_LABELS: Record<ListingField, string> = {
 	description: "App Description",
+	fullDescription: "Full Description (Google Play)",
 	keywords: "Keywords",
 	promotionalText: "Promotional Text",
 	shortDescription: "Short Description",
@@ -281,6 +284,11 @@ Release notes influence AI-generated review summaries (Apple Intelligence / Gemi
 - Mention bug fixes briefly
 - End with a CTA: invite users to rate/review
 - Positive framing: "Now 2x faster" not "Fixed slow loading"`;
+
+		// fullDescription is resolved to "description" by resolveFieldForPlatform,
+		// so this case should not be reached, but TypeScript requires exhaustiveness
+		case "fullDescription":
+			return buildFieldInstructions("description", false);
 	}
 }
 
@@ -382,6 +390,10 @@ function resolveFieldForPlatform(
 	platform: string,
 ): ListingField {
 	const isIos = platform === "ios";
+
+	// Google Play uses "fullDescription", internally we map to "description"
+	// which has platform-aware prompts (iOS = conversion only, Android = SEO + conversion)
+	if (field === "fullDescription") return "description";
 
 	if (!isIos && field === "subtitle") return "shortDescription";
 
@@ -792,8 +804,10 @@ Generate the privacy declaration JSON array.`;
 
 		const fieldLimits: Record<string, number> = {
 			description: 4000,
+			fullDescription: 4000,
 			keywords: 100,
 			promotionalText: 170,
+			shortDescription: 80,
 			subtitle: 30,
 			title: 30,
 			whatsNew: 4000,

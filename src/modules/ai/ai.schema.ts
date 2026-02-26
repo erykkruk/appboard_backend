@@ -62,6 +62,7 @@ export const generateListingFieldBody = t.Object({
 		t.Literal("subtitle"),
 		t.Literal("shortDescription"),
 		t.Literal("description"),
+		t.Literal("fullDescription"),
 		t.Literal("keywords"),
 		t.Literal("promotionalText"),
 		t.Literal("whatsNew"),

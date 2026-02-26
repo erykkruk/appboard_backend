@@ -95,19 +95,18 @@ export class GooglePlayProvider implements StoreProvider {
 		try {
 			const client = await this.getClient();
 
-			if (client.packageNames.length === 0) {
-				log.warn(
-					"No package names configured — credentials accepted but no apps to verify",
-				);
-				return true;
+			// Auto-discovery via Reporting API already ran in getClient().
+			// If we have at least one package, verify edit access.
+			if (client.packageNames.length > 0) {
+				const packageName = client.packageNames[0];
+				const editId = await createEdit(client.api, packageName);
+				await deleteEdit(client.api, packageName, editId);
 			}
 
-			// Try to create and immediately discard an edit to verify access
-			const packageName = client.packageNames[0];
-			const editId = await createEdit(client.api, packageName);
-			await deleteEdit(client.api, packageName, editId);
-
-			log.info("Google Play credentials validated successfully");
+			log.info(
+				{ appCount: client.packageNames.length },
+				"Google Play credentials validated successfully",
+			);
 			return true;
 		} catch (err) {
 			log.error({ err }, "Google Play credentials validation failed");
@@ -121,7 +120,7 @@ export class GooglePlayProvider implements StoreProvider {
 		const client = await this.getClient();
 
 		if (client.packageNames.length === 0) {
-			log.warn("No package_names in credentials — cannot discover apps");
+			log.warn("No apps found — Reporting API returned empty list");
 			return [];
 		}
 
@@ -274,13 +273,7 @@ export class GooglePlayProvider implements StoreProvider {
 				},
 			});
 
-			log.info({ appId, language }, "Listing updated (edit not yet committed)");
-			// Note: we do NOT commit here. Call publishListings() to commit.
-			// But we must keep the edit alive, so we do NOT delete it.
-			// The edit ID needs to be tracked externally or committed immediately.
-			// For simplicity in this flow, commit immediately after update.
-			await commitEdit(client.api, appId, editId);
-			log.info({ appId, language }, "Listing update committed");
+			log.info({ appId, language }, "Listing updated in edit (not committed)");
 		} catch (err) {
 			await deleteEdit(client.api, appId, editId);
 			throw err;
@@ -293,12 +286,8 @@ export class GooglePlayProvider implements StoreProvider {
 			return;
 		}
 
-		// publishListings creates a new edit, applies no changes,
-		// and commits it. This is useful if the caller has staged
-		// changes through updateListing without committing.
-		// However, since updateListing now auto-commits, this is a no-op
-		// in the current flow. We keep it for future use when we
-		// batch multiple updates into a single edit.
+		// Create an empty edit and commit — only useful if there are
+		// staged changes. With batchPublishListings, this is a no-op.
 		const client = await this.getClient();
 		const editId = await createEdit(client.api, appId);
 
@@ -306,6 +295,79 @@ export class GooglePlayProvider implements StoreProvider {
 			await commitEdit(client.api, appId, editId);
 			log.info({ appId }, "Listings published via commit");
 		} catch (err) {
+			await deleteEdit(client.api, appId, editId);
+			throw err;
+		}
+	}
+
+	async batchPublishListings(
+		appId: string,
+		updates: Array<{ language: string; data: ListingUpdateData }>,
+	): Promise<void> {
+		if (this.isMock) {
+			for (const u of updates) {
+				log.info({ appId, language: u.language }, "Mock: listing updated");
+			}
+			log.info({ appId }, "Mock: listings published");
+			return;
+		}
+
+		const client = await this.getClient();
+		const editId = await createEdit(client.api, appId);
+
+		try {
+			for (const { language, data } of updates) {
+				let existingListing: {
+					fullDescription?: string | null;
+					shortDescription?: string | null;
+					title?: string | null;
+				} = {};
+
+				try {
+					const { data: current } = await client.api.edits.listings.get({
+						editId,
+						language,
+						packageName: appId,
+					});
+					existingListing = current;
+				} catch {
+					log.info({ appId, language }, "No existing listing, creating new");
+				}
+
+				const requestBody = {
+					fullDescription:
+						data.fullDesc ?? existingListing.fullDescription ?? "",
+					language,
+					shortDescription:
+						data.shortDesc ?? existingListing.shortDescription ?? "",
+					title: data.title ?? existingListing.title ?? "",
+				};
+
+				log.info(
+					{ appId, language, fields: Object.keys(data) },
+					"Updating listing",
+				);
+
+				await client.api.edits.listings.update({
+					editId,
+					language,
+					packageName: appId,
+					requestBody,
+				});
+
+				log.info({ appId, language }, "Listing queued in edit");
+			}
+
+			await commitEdit(client.api, appId, editId);
+			log.info(
+				{ appId, count: updates.length },
+				"All listings published in single edit",
+			);
+		} catch (err) {
+			log.error(
+				{ appId, err: (err as Error).message ?? err },
+				"Failed to batch publish listings",
+			);
 			await deleteEdit(client.api, appId, editId);
 			throw err;
 		}
@@ -446,6 +508,28 @@ export class GooglePlayProvider implements StoreProvider {
 			}
 
 			await commitEdit(client.api, appId, editId);
+		} catch (err) {
+			await deleteEdit(client.api, appId, editId);
+			throw err;
+		}
+	}
+
+	/**
+	 * Sends all pending (not-yet-reviewed) changes for Google review.
+	 * Creates an empty edit and commits with sendForReview flag.
+	 */
+	async sendChangesForReview(appId: string): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId }, "Mock: changes sent for review");
+			return;
+		}
+
+		const client = await this.getClient();
+		const editId = await createEdit(client.api, appId);
+
+		try {
+			await commitEdit(client.api, appId, editId, { sendForReview: true });
+			log.info({ appId }, "Changes sent for review");
 		} catch (err) {
 			await deleteEdit(client.api, appId, editId);
 			throw err;

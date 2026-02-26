@@ -3,6 +3,7 @@ export type ListingField =
 	| "subtitle"
 	| "shortDescription"
 	| "description"
+	| "fullDescription"
 	| "keywords"
 	| "promotionalText"
 	| "whatsNew";
@@ -34,12 +35,13 @@ const FIELD_PROMPTS: Record<
 	description: {
 		generate: `${BASE_PROMPT}
 
-You are writing an APP DESCRIPTION (max 4000 characters).
+You are writing an iOS APP DESCRIPTION (max 4000 characters).
+The description on iOS is NOT indexed for search — focus 100% on conversion and persuasion.
+
 Structure (HOOK-BENEFIT-PROOF-CTA):
 
 1. HOOK (first 3 lines, visible before "Read More"):
    - Short, powerful paragraph. What problem do you solve? Why should users read on?
-   - Include primary keyword naturally.
 
 2. BENEFIT BLOCK:
    - Address the target persona directly
@@ -55,12 +57,55 @@ Structure (HOOK-BENEFIT-PROOF-CTA):
 5. CTA:
    - End with a clear call to action
 
-Use bullet points for scannable structure. No keyword stuffing — max 5 repetitions of main keyword.`,
+Use bullet points for scannable structure. Write purely for conversion — no need to stuff keywords.`,
 		rephrase: `${BASE_PROMPT}
 
-You are rephrasing an APP DESCRIPTION (max 4000 characters).
+You are rephrasing an iOS APP DESCRIPTION (max 4000 characters).
+The iOS description is NOT indexed — focus on improving conversion, not keyword placement.
+Improve the existing description for better persuasion while maintaining the same structure and key information.
+Focus on: stronger hooks, clearer benefits, more compelling social proof.`,
+	},
+	fullDescription: {
+		generate: `${BASE_PROMPT}
+
+You are writing a Google Play FULL DESCRIPTION (max 4000 characters).
+The full description on Google Play IS indexed for search — it is the third strongest ranking factor after title and short description.
+
+Structure (HOOK-BENEFIT-PROOF-CTA):
+
+1. HOOK (first 3 lines, visible before "Read More"):
+   - Short, powerful paragraph. What problem do you solve? Why should users read on?
+   - Include primary keyword naturally in the first sentence.
+
+2. BENEFIT BLOCK:
+   - Address the target persona directly
+   - List 4-6 key benefits with bullet points (bullet character)
+   - Each bullet: [Benefit] — [how it works]
+   - Weave secondary keywords naturally into benefit descriptions
+
+3. WHAT MAKES IT UNIQUE:
+   - 2-3 unique selling points competitors don't have
+
+4. SOCIAL PROOF (if available):
+   - Download counts, ratings, awards, press quotes
+
+5. CTA:
+   - End with a clear call to action
+
+Keyword strategy:
+- Weave primary keyword 3-5x naturally throughout the description
+- Include secondary keywords in benefit descriptions and headings
+- Front-load keywords in the first paragraph (highest indexing weight)
+- NEVER keyword stuff — Google penalizes unnatural repetition
+- Balance SEO (keyword placement) with conversion (compelling copy)
+
+Use bullet points for scannable structure.`,
+		rephrase: `${BASE_PROMPT}
+
+You are rephrasing a Google Play FULL DESCRIPTION (max 4000 characters).
+The Google Play description IS indexed — balance keyword optimization with compelling copy.
 Improve the existing description for better ASO effectiveness while maintaining the same structure and key information.
-Focus on: stronger hooks, clearer benefits, better keyword placement.`,
+Focus on: stronger hooks, clearer benefits, better keyword placement (3-5x natural repetitions of primary keyword).`,
 	},
 	keywords: {
 		generate: `${BASE_PROMPT}
@@ -168,6 +213,7 @@ export const LISTING_FIELDS: ListingField[] = [
 	"subtitle",
 	"shortDescription",
 	"description",
+	"fullDescription",
 	"keywords",
 	"promotionalText",
 	"whatsNew",
@@ -219,16 +265,28 @@ export function buildTranslationFieldRules(field: string): string {
 - Adapt the differentiator to resonate with local audience expectations`;
 
 		case "description":
-			return `DESCRIPTION (max 4000 chars):
+			return `DESCRIPTION — iOS (max 4000 chars):
+- This description is NOT indexed for search on iOS — focus purely on conversion
 - Preserve the HOOK-BENEFIT-PROOF-CTA structure exactly
 - HOOK (first 3 lines before "Read More"): must be powerful and locally adapted — this is the only part most users see
 - Adapt social proof references to the target market (local awards, media, metrics)
 - Maintain bullet point formatting — scannable structure is universal
-- For Android: weave locally relevant keywords 3-5x naturally (description IS indexed)
-- For iOS: focus purely on conversion (description is NOT indexed)
 - Benefits over features — "Save 2h/week" not "Has a calendar feature"
 - Adapt idioms, humor, and cultural references — do NOT translate them literally
 - Use the customer's language — write how the target audience actually speaks`;
+
+		case "fullDescription":
+			return `FULL DESCRIPTION — Google Play (max 4000 chars):
+- This description IS indexed for search on Google Play — weave locally relevant keywords 3-5x naturally
+- Preserve the HOOK-BENEFIT-PROOF-CTA structure exactly
+- HOOK (first 3 lines before "Read More"): must be powerful and locally adapted, include primary keyword
+- Front-load keywords in the first paragraph (highest indexing weight)
+- Adapt social proof references to the target market (local awards, media, metrics)
+- Maintain bullet point formatting — scannable structure is universal
+- Benefits over features — "Save 2h/week" not "Has a calendar feature"
+- Adapt idioms, humor, and cultural references — do NOT translate them literally
+- Use the customer's language — write how the target audience actually speaks
+- Balance SEO (keyword placement) with conversion (compelling copy)`;
 
 		case "keywords":
 			return `KEYWORDS (max 100 chars — STRICT, every character matters):
