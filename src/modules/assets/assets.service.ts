@@ -3,7 +3,7 @@ import type { StoreType } from "@/config/const";
 import { createProvider } from "@/providers";
 import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
-import { apps, assets, stores } from "@/utils/db/schema";
+import { apps, assets, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
@@ -15,8 +15,17 @@ export class AssetsService {
 		const credentials = JSON.parse(decrypt(app.store.credentials!));
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
-		// Fetch assets for all common languages
-		const languages = ["en-US", "pl-PL", "de-DE"];
+		// Derive languages from existing listings (synced from store)
+		const appListings = await db
+			.select({ language: listings.language })
+			.from(listings)
+			.where(eq(listings.appId, appId));
+		const languageSet = new Set(appListings.map((l) => l.language));
+		// Ensure at least en-US so we always try the default language
+		if (languageSet.size === 0) {
+			languageSet.add("en-US");
+		}
+		const languages = [...languageSet];
 		let totalSynced = 0;
 
 		for (const language of languages) {
