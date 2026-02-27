@@ -8,6 +8,7 @@ import {
 	ageRatingPresetsController,
 } from "@/modules/age-rating";
 import { aiController } from "@/modules/ai";
+import { appGroupsController } from "@/modules/app-groups";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
@@ -56,7 +57,8 @@ const app = new Elysia()
 			.use(aiController)
 			.use(appAiPromptsController)
 			.use(assetsController)
-			.use(listingsController),
+			.use(listingsController)
+			.use(appGroupsController),
 	)
 	.listen(port);
 

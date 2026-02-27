@@ -377,11 +377,46 @@ export const appAgeRatings = pgTable("app_age_ratings", {
 	presetId: varchar({ length: 50 }).notNull(),
 });
 
+// ── App Groups ─────────────────────────────────────────────────────
+
+export const appGroups = pgTable(
+	"app_groups",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		iconUrl: varchar({ length: 1024 }),
+		name: varchar({ length: 255 }).notNull(),
+		sortOrder: integer().notNull().default(0),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [unique().on(t.workspaceId, t.name)],
+);
+
+export const appGroupMembers = pgTable(
+	"app_group_members",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		groupId: uuid()
+			.notNull()
+			.references(() => appGroups.id, { onDelete: "cascade" }),
+		sortOrder: integer().notNull().default(0),
+	},
+	(t) => [unique().on(t.groupId, t.appId)],
+);
+
 export const schema = {
 	account,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
+	appGroupMembers,
+	appGroups,
 	appPrivacyDeclarations,
 	apps,
 	appVersions,

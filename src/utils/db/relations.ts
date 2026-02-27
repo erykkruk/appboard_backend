@@ -4,6 +4,8 @@ import {
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
+	appGroupMembers,
+	appGroups,
 	appPrivacyDeclarations,
 	apps,
 	appVersions,
@@ -45,6 +47,7 @@ export const accountRelations = relations(account, ({ one }) => ({
 // ── Workspace relations ─────────────────────────────────────────────
 
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
+	appGroups: many(appGroups),
 	members: many(workspaceMembers),
 	settings: many(settings),
 	stores: many(stores),
@@ -92,6 +95,7 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 		references: [appAsoProfiles.appId],
 	}),
 	assets: many(assets),
+	groupMemberships: many(appGroupMembers),
 	listingHistory: many(listingHistory),
 	listings: many(listings),
 	privacyDeclaration: one(appPrivacyDeclarations, {
@@ -191,3 +195,27 @@ export const appAgeRatingsRelations = relations(appAgeRatings, ({ one }) => ({
 		references: [apps.id],
 	}),
 }));
+
+// ── App Group relations ────────────────────────────────────────────
+
+export const appGroupsRelations = relations(appGroups, ({ many, one }) => ({
+	members: many(appGroupMembers),
+	workspace: one(workspaces, {
+		fields: [appGroups.workspaceId],
+		references: [workspaces.id],
+	}),
+}));
+
+export const appGroupMembersRelations = relations(
+	appGroupMembers,
+	({ one }) => ({
+		app: one(apps, {
+			fields: [appGroupMembers.appId],
+			references: [apps.id],
+		}),
+		group: one(appGroups, {
+			fields: [appGroupMembers.groupId],
+			references: [appGroups.id],
+		}),
+	}),
+);
