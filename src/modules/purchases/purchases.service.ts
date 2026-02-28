@@ -1,0 +1,355 @@
+import { and, eq } from "drizzle-orm";
+import type { StoreType } from "@/config/const";
+import { createProvider } from "@/providers";
+import { decrypt } from "@/utils/crypto";
+import { db } from "@/utils/db";
+import {
+	apps,
+	inAppPurchases,
+	purchaseLocalizations,
+	purchasePrices,
+	stores,
+	subscriptionGroups,
+} from "@/utils/db/schema";
+import { buildError } from "@/utils/errors";
+import { createLogger } from "@/utils/logger";
+
+const log = createLogger("purchases-service");
+
+export class PurchasesService {
+	static async syncPurchases(appId: string, workspaceId: string) {
+		const [app] = await db
+			.select({
+				app: apps,
+				store: stores,
+			})
+			.from(apps)
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(and(eq(apps.id, appId), eq(stores.workspaceId, workspaceId)))
+			.limit(1);
+
+		if (!app) buildError("notFound", { info: "App not found" });
+
+		if (!app.store.credentials) {
+			buildError("storeConnectionFailed", {
+				info: "Store has no credentials",
+			});
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const provider = createProvider(
+			app.store.type as StoreType,
+			credentials,
+		);
+
+		// Sync subscription groups
+		const groups = await provider.fetchSubscriptionGroups(
+			app.app.externalId,
+		);
+		let syncedGroups = 0;
+		let syncedSubscriptions = 0;
+
+		for (const group of groups) {
+			const [dbGroup] = await db
+				.insert(subscriptionGroups)
+				.values({
+					appId,
+					externalId: group.externalId,
+					name: group.name,
+					syncedAt: new Date(),
+				})
+				.onConflictDoUpdate({
+					set: {
+						name: group.name,
+						syncedAt: new Date(),
+					},
+					target: [subscriptionGroups.appId, subscriptionGroups.externalId],
+				})
+				.returning();
+			syncedGroups++;
+
+			for (const sub of group.subscriptions) {
+				const [dbPurchase] = await db
+					.insert(inAppPurchases)
+					.values({
+						appId,
+						duration: sub.duration,
+						externalId: sub.externalId,
+						groupId: dbGroup.id,
+						name: sub.name,
+						productId: sub.productId,
+						productType: sub.productType,
+						status: sub.status,
+						syncedAt: new Date(),
+					})
+					.onConflictDoUpdate({
+						set: {
+							duration: sub.duration,
+							groupId: dbGroup.id,
+							name: sub.name,
+							productType: sub.productType,
+							status: sub.status,
+							syncedAt: new Date(),
+						},
+						target: [inAppPurchases.appId, inAppPurchases.externalId],
+					})
+					.returning();
+				syncedSubscriptions++;
+
+				await PurchasesService.syncLocalizations(
+					dbPurchase.id,
+					sub.localizations ?? [],
+				);
+				await PurchasesService.syncPrices(
+					dbPurchase.id,
+					sub.prices ?? [],
+				);
+			}
+		}
+
+		// Sync standalone in-app purchases (consumables, non-consumables)
+		const iaps = await provider.fetchInAppPurchases(app.app.externalId);
+		let syncedIaps = 0;
+
+		for (const iap of iaps) {
+			const [dbPurchase] = await db
+				.insert(inAppPurchases)
+				.values({
+					appId,
+					externalId: iap.externalId,
+					name: iap.name,
+					productId: iap.productId,
+					productType: iap.productType,
+					status: iap.status,
+					syncedAt: new Date(),
+				})
+				.onConflictDoUpdate({
+					set: {
+						name: iap.name,
+						productType: iap.productType,
+						status: iap.status,
+						syncedAt: new Date(),
+					},
+					target: [inAppPurchases.appId, inAppPurchases.externalId],
+				})
+				.returning();
+			syncedIaps++;
+
+			await PurchasesService.syncLocalizations(
+				dbPurchase.id,
+				iap.localizations ?? [],
+			);
+			await PurchasesService.syncPrices(dbPurchase.id, iap.prices ?? []);
+		}
+
+		log.info(
+			{
+				appId,
+				syncedGroups,
+				syncedIaps,
+				syncedSubscriptions,
+			},
+			"Purchases synced",
+		);
+
+		return {
+			syncedGroups,
+			syncedIaps,
+			syncedSubscriptions,
+		};
+	}
+
+	static async listPurchases(appId: string) {
+		const purchases = await db
+			.select()
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.appId, appId));
+
+		// Enrich with localizations and prices
+		const enriched = await Promise.all(
+			purchases.map(async (purchase) => {
+				const locs = await db
+					.select()
+					.from(purchaseLocalizations)
+					.where(eq(purchaseLocalizations.purchaseId, purchase.id));
+
+				const prices = await db
+					.select()
+					.from(purchasePrices)
+					.where(eq(purchasePrices.purchaseId, purchase.id));
+
+				return {
+					...purchase,
+					localizations: locs,
+					prices,
+				};
+			}),
+		);
+
+		return enriched;
+	}
+
+	static async getPurchase(purchaseId: string) {
+		const [purchase] = await db
+			.select()
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.id, purchaseId))
+			.limit(1);
+
+		if (!purchase) buildError("notFound", { info: "Purchase not found" });
+
+		const locs = await db
+			.select()
+			.from(purchaseLocalizations)
+			.where(eq(purchaseLocalizations.purchaseId, purchaseId));
+
+		const prices = await db
+			.select()
+			.from(purchasePrices)
+			.where(eq(purchasePrices.purchaseId, purchaseId));
+
+		return {
+			...purchase,
+			localizations: locs,
+			prices,
+		};
+	}
+
+	static async listSubscriptionGroups(appId: string) {
+		const groups = await db
+			.select()
+			.from(subscriptionGroups)
+			.where(eq(subscriptionGroups.appId, appId));
+
+		const enriched = await Promise.all(
+			groups.map(async (group) => {
+				const subs = await db
+					.select()
+					.from(inAppPurchases)
+					.where(
+						and(
+							eq(inAppPurchases.groupId, group.id),
+							eq(inAppPurchases.productType, "auto_renewable"),
+						),
+					);
+
+				const enrichedSubs = await Promise.all(
+					subs.map(async (sub) => {
+						const locs = await db
+							.select()
+							.from(purchaseLocalizations)
+							.where(eq(purchaseLocalizations.purchaseId, sub.id));
+						const prices = await db
+							.select()
+							.from(purchasePrices)
+							.where(eq(purchasePrices.purchaseId, sub.id));
+						return { ...sub, localizations: locs, prices };
+					}),
+				);
+
+				return { ...group, subscriptions: enrichedSubs };
+			}),
+		);
+
+		return enriched;
+	}
+
+	static async getSubscriptionGroup(groupId: string) {
+		const [group] = await db
+			.select()
+			.from(subscriptionGroups)
+			.where(eq(subscriptionGroups.id, groupId))
+			.limit(1);
+
+		if (!group)
+			buildError("notFound", { info: "Subscription group not found" });
+
+		const subs = await db
+			.select()
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.groupId, groupId));
+
+		const enrichedSubs = await Promise.all(
+			subs.map(async (sub) => {
+				const locs = await db
+					.select()
+					.from(purchaseLocalizations)
+					.where(eq(purchaseLocalizations.purchaseId, sub.id));
+				const prices = await db
+					.select()
+					.from(purchasePrices)
+					.where(eq(purchasePrices.purchaseId, sub.id));
+				return { ...sub, localizations: locs, prices };
+			}),
+		);
+
+		return { ...group, subscriptions: enrichedSubs };
+	}
+
+	private static async syncLocalizations(
+		purchaseId: string,
+		localizations: Array<{
+			description?: string;
+			externalId?: string;
+			language: string;
+			name?: string;
+		}>,
+	) {
+		for (const loc of localizations) {
+			await db
+				.insert(purchaseLocalizations)
+				.values({
+					description: loc.description,
+					externalId: loc.externalId,
+					language: loc.language,
+					name: loc.name,
+					purchaseId,
+					syncedAt: new Date(),
+				})
+				.onConflictDoUpdate({
+					set: {
+						description: loc.description,
+						externalId: loc.externalId,
+						name: loc.name,
+						syncedAt: new Date(),
+					},
+					target: [
+						purchaseLocalizations.purchaseId,
+						purchaseLocalizations.language,
+					],
+				});
+		}
+	}
+
+	private static async syncPrices(
+		purchaseId: string,
+		prices: Array<{
+			currency: string;
+			externalId?: string;
+			price: string;
+			territory: string;
+		}>,
+	) {
+		for (const price of prices) {
+			await db
+				.insert(purchasePrices)
+				.values({
+					currency: price.currency,
+					externalId: price.externalId,
+					price: price.price,
+					purchaseId,
+					syncedAt: new Date(),
+					territory: price.territory,
+				})
+				.onConflictDoUpdate({
+					set: {
+						currency: price.currency,
+						externalId: price.externalId,
+						price: price.price,
+						syncedAt: new Date(),
+					},
+					target: [purchasePrices.purchaseId, purchasePrices.territory],
+				});
+		}
+	}
+}

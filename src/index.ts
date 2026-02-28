@@ -15,6 +15,7 @@ import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
 import { authGuard } from "@/modules/auth";
 import { listingsController } from "@/modules/listings";
+import { purchasesController } from "@/modules/purchases";
 import {
 	privacyDeclarationController,
 	privacyTemplatesController,
@@ -58,7 +59,8 @@ const app = new Elysia()
 			.use(appAiPromptsController)
 			.use(assetsController)
 			.use(listingsController)
-			.use(appGroupsController),
+			.use(appGroupsController)
+			.use(purchasesController),
 	)
 	.listen(port);
 
