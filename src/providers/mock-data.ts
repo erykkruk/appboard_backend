@@ -1,8 +1,10 @@
 import type {
 	AppData,
 	AssetData,
+	InAppPurchaseData,
 	ListingData,
 	ReviewData,
+	SubscriptionGroupData,
 } from "./store-provider";
 
 export const MOCK_ANDROID_APPS: AppData[] = [
@@ -259,4 +261,154 @@ export function getMockReviews(
 			title: review.title,
 		};
 	});
+}
+
+export function getMockSubscriptionGroups(
+	appExternalId: string,
+): SubscriptionGroupData[] {
+	const shortId = appExternalId.split(".").pop() ?? appExternalId;
+	return [
+		{
+			externalId: `${appExternalId}-group-premium`,
+			name: "Premium",
+			subscriptions: [
+				{
+					duration: "P1M",
+					externalId: `${appExternalId}-sub-monthly`,
+					groupExternalId: `${appExternalId}-group-premium`,
+					localizations: [
+						{
+							description: "Unlock all premium features with monthly access",
+							language: "en-US",
+							name: "Monthly Premium",
+						},
+						{
+							description:
+								"Odblokuj wszystkie funkcje premium z miesięcznym dostępem",
+							language: "pl-PL",
+							name: "Miesięczny Premium",
+						},
+					],
+					name: "Monthly Premium",
+					prices: [
+						{ currency: "USD", price: "4.99", territory: "US" },
+						{ currency: "PLN", price: "19.99", territory: "PL" },
+						{ currency: "EUR", price: "4.99", territory: "DE" },
+					],
+					productId: `${shortId}.premium.monthly`,
+					productType: "auto_renewable",
+					status: "approved",
+				},
+				{
+					duration: "P1Y",
+					externalId: `${appExternalId}-sub-yearly`,
+					groupExternalId: `${appExternalId}-group-premium`,
+					localizations: [
+						{
+							description:
+								"Save 50% with yearly access to all premium features",
+							language: "en-US",
+							name: "Yearly Premium",
+						},
+						{
+							description:
+								"Oszczędź 50% z rocznym dostępem do wszystkich funkcji premium",
+							language: "pl-PL",
+							name: "Roczny Premium",
+						},
+					],
+					name: "Yearly Premium",
+					prices: [
+						{ currency: "USD", price: "29.99", territory: "US" },
+						{ currency: "PLN", price: "119.99", territory: "PL" },
+						{ currency: "EUR", price: "29.99", territory: "DE" },
+					],
+					productId: `${shortId}.premium.yearly`,
+					productType: "auto_renewable",
+					status: "approved",
+				},
+			],
+		},
+	];
+}
+
+export function getMockInAppPurchases(
+	appExternalId: string,
+): InAppPurchaseData[] {
+	const shortId = appExternalId.split(".").pop() ?? appExternalId;
+	return [
+		{
+			externalId: `${appExternalId}-iap-coins100`,
+			localizations: [
+				{
+					description: "Get 100 coins to use in the app",
+					language: "en-US",
+					name: "100 Coins",
+				},
+				{
+					description: "Zdobądź 100 monet do wykorzystania w aplikacji",
+					language: "pl-PL",
+					name: "100 Monet",
+				},
+			],
+			name: "100 Coins",
+			prices: [
+				{ currency: "USD", price: "0.99", territory: "US" },
+				{ currency: "PLN", price: "4.99", territory: "PL" },
+				{ currency: "EUR", price: "0.99", territory: "DE" },
+			],
+			productId: `${shortId}.coins.100`,
+			productType: "consumable",
+			status: "approved",
+		},
+		{
+			externalId: `${appExternalId}-iap-coins500`,
+			localizations: [
+				{
+					description: "Get 500 coins to use in the app — best value!",
+					language: "en-US",
+					name: "500 Coins",
+				},
+				{
+					description:
+						"Zdobądź 500 monet do wykorzystania w aplikacji — najlepsza wartość!",
+					language: "pl-PL",
+					name: "500 Monet",
+				},
+			],
+			name: "500 Coins",
+			prices: [
+				{ currency: "USD", price: "3.99", territory: "US" },
+				{ currency: "PLN", price: "17.99", territory: "PL" },
+				{ currency: "EUR", price: "3.99", territory: "DE" },
+			],
+			productId: `${shortId}.coins.500`,
+			productType: "consumable",
+			status: "approved",
+		},
+		{
+			externalId: `${appExternalId}-iap-removeads`,
+			localizations: [
+				{
+					description: "Remove all ads permanently",
+					language: "en-US",
+					name: "Remove Ads",
+				},
+				{
+					description: "Usuń wszystkie reklamy na stałe",
+					language: "pl-PL",
+					name: "Usuń reklamy",
+				},
+			],
+			name: "Remove Ads",
+			prices: [
+				{ currency: "USD", price: "2.99", territory: "US" },
+				{ currency: "PLN", price: "12.99", territory: "PL" },
+				{ currency: "EUR", price: "2.99", territory: "DE" },
+			],
+			productId: `${shortId}.removeads`,
+			productType: "non_consumable",
+			status: "approved",
+		},
+	];
 }

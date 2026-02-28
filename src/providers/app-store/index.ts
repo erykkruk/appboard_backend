@@ -1,8 +1,10 @@
 import type { ApiResource } from "node-app-store-connect-api";
 import {
 	getMockAssets,
+	getMockInAppPurchases,
 	getMockListings,
 	getMockReviews,
+	getMockSubscriptionGroups,
 	MOCK_IOS_APPS,
 } from "@/providers/mock-data";
 import type {
@@ -10,10 +12,14 @@ import type {
 	AssetData,
 	AssetMetadata,
 	CategoryData,
+	InAppPurchaseData,
 	ListingData,
 	ListingUpdateData,
+	PurchaseLocalizationData,
+	PurchasePriceData,
 	ReviewData,
 	StoreProvider,
+	SubscriptionGroupData,
 	VersionData,
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
@@ -931,6 +937,231 @@ export class AppStoreProvider implements StoreProvider {
 			{ appId: _appId },
 			"App Store privacy declaration push not yet implemented",
 		);
+	}
+
+	async fetchInAppPurchases(appId: string): Promise<InAppPurchaseData[]> {
+		if (this.isMock) return getMockInAppPurchases(appId);
+
+		try {
+			const { readAll } = await createAppStoreClient(this.credentials);
+
+			const { data: iapsData } = await readAll(
+				`apps/${appId}/inAppPurchasesV2`,
+			);
+
+			const purchases: InAppPurchaseData[] = [];
+
+			for (const raw of (iapsData ?? []) as ApiResource[]) {
+				const attrs = raw.attributes;
+				const productType = this.mapIapType(
+					attrs.inAppPurchaseType as string,
+				);
+
+				// Fetch localizations
+				let localizations: PurchaseLocalizationData[] = [];
+				try {
+					const { data: locs } = await readAll(
+						`inAppPurchases/${raw.id}/inAppPurchaseLocalizations`,
+					);
+					localizations = ((locs ?? []) as ApiResource[]).map((loc) => ({
+						description: (loc.attributes.description as string) ?? undefined,
+						externalId: loc.id,
+						language: (loc.attributes.locale as string) ?? "en-US",
+						name: (loc.attributes.name as string) ?? undefined,
+					}));
+				} catch {
+					log.debug({ iapId: raw.id }, "Could not fetch IAP localizations");
+				}
+
+				// Fetch price schedule
+				let prices: PurchasePriceData[] = [];
+				try {
+					const { data: priceSchedule } = await readAll(
+						`inAppPurchases/${raw.id}/iapPriceSchedule`,
+					);
+					if (priceSchedule) {
+						const schedule = (
+							Array.isArray(priceSchedule) ? priceSchedule[0] : priceSchedule
+						) as ApiResource | undefined;
+						if (schedule) {
+							const { data: manualPrices } = await readAll(
+								`inAppPurchasePriceSchedules/${schedule.id}/manualPrices`,
+							);
+							prices = ((manualPrices ?? []) as ApiResource[]).map((p) => ({
+								currency: "USD",
+								externalId: p.id,
+								price:
+									(p.relationships?.inAppPurchasePricePoint?.data as
+										| { id: string }
+										| undefined)?.id ?? "0",
+								territory:
+									(p.relationships?.territory?.data as
+										| { id: string }
+										| undefined)?.id ?? "US",
+							}));
+						}
+					}
+				} catch {
+					log.debug({ iapId: raw.id }, "Could not fetch IAP prices");
+				}
+
+				purchases.push({
+					externalId: raw.id,
+					localizations,
+					name:
+						(attrs.name as string) ??
+						localizations[0]?.name ??
+						(attrs.productId as string) ??
+						"",
+					prices,
+					productId: (attrs.productId as string) ?? "",
+					productType,
+					status: this.mapIapState(attrs.state as string),
+				});
+			}
+
+			log.info(
+				{ appId, count: purchases.length },
+				"Fetched in-app purchases from App Store Connect",
+			);
+			return purchases;
+		} catch (err) {
+			log.error({ appId, err }, "Failed to fetch in-app purchases from ASC");
+			return [];
+		}
+	}
+
+	async fetchSubscriptionGroups(
+		appId: string,
+	): Promise<SubscriptionGroupData[]> {
+		if (this.isMock) return getMockSubscriptionGroups(appId);
+
+		try {
+			const { readAll } = await createAppStoreClient(this.credentials);
+
+			const { data: groupsData } = await readAll(
+				`apps/${appId}/subscriptionGroups`,
+			);
+
+			const groups: SubscriptionGroupData[] = [];
+
+			for (const raw of (groupsData ?? []) as ApiResource[]) {
+				const { data: subsData } = await readAll(
+					`subscriptionGroups/${raw.id}/subscriptions`,
+				);
+
+				const subscriptions: InAppPurchaseData[] = [];
+
+				for (const sub of (subsData ?? []) as ApiResource[]) {
+					const attrs = sub.attributes;
+
+					// Fetch localizations
+					let localizations: PurchaseLocalizationData[] = [];
+					try {
+						const { data: locs } = await readAll(
+							`subscriptions/${sub.id}/subscriptionLocalizations`,
+						);
+						localizations = ((locs ?? []) as ApiResource[]).map((loc) => ({
+							description:
+								(loc.attributes.description as string) ?? undefined,
+							externalId: loc.id,
+							language: (loc.attributes.locale as string) ?? "en-US",
+							name: (loc.attributes.name as string) ?? undefined,
+						}));
+					} catch {
+						log.debug(
+							{ subId: sub.id },
+							"Could not fetch subscription localizations",
+						);
+					}
+
+					subscriptions.push({
+						duration:
+							(attrs.subscriptionPeriod as string) ?? undefined,
+						externalId: sub.id,
+						groupExternalId: raw.id,
+						localizations,
+						name:
+							(attrs.name as string) ??
+							localizations[0]?.name ??
+							"",
+						productId: (attrs.productId as string) ?? "",
+						productType: "auto_renewable",
+						status: this.mapSubState(attrs.state as string),
+					});
+				}
+
+				groups.push({
+					externalId: raw.id,
+					name:
+						(raw.attributes.referenceName as string) ??
+						"Subscription Group",
+					subscriptions,
+				});
+			}
+
+			log.info(
+				{ appId, groupCount: groups.length },
+				"Fetched subscription groups from App Store Connect",
+			);
+			return groups;
+		} catch (err) {
+			log.error(
+				{ appId, err },
+				"Failed to fetch subscription groups from ASC",
+			);
+			return [];
+		}
+	}
+
+	private mapIapType(ascType: string): string {
+		switch (ascType) {
+			case "CONSUMABLE":
+				return "consumable";
+			case "NON_CONSUMABLE":
+				return "non_consumable";
+			case "NON_RENEWING_SUBSCRIPTION":
+				return "non_renewing";
+			default:
+				return ascType?.toLowerCase() ?? "consumable";
+		}
+	}
+
+	private mapIapState(ascState: string): string {
+		switch (ascState) {
+			case "APPROVED":
+				return "approved";
+			case "DEVELOPER_ACTION_NEEDED":
+			case "MISSING_METADATA":
+				return "draft";
+			case "WAITING_FOR_REVIEW":
+			case "IN_REVIEW":
+				return "in_review";
+			case "REJECTED":
+				return "rejected";
+			case "REMOVED_FROM_SALE":
+			case "DEVELOPER_REMOVED_FROM_SALE":
+				return "removed";
+			default:
+				return ascState?.toLowerCase() ?? "draft";
+		}
+	}
+
+	private mapSubState(ascState: string): string {
+		switch (ascState) {
+			case "APPROVED":
+				return "approved";
+			case "MISSING_METADATA":
+			case "READY_TO_SUBMIT":
+				return "draft";
+			case "WAITING_FOR_REVIEW":
+			case "IN_REVIEW":
+				return "in_review";
+			case "REJECTED":
+				return "rejected";
+			default:
+				return ascState?.toLowerCase() ?? "draft";
+		}
 	}
 
 	private async getEditableVersion(appId: string): Promise<ApiResource | null> {

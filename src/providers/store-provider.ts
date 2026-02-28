@@ -52,6 +52,8 @@ export interface StoreProvider {
 		appId: string,
 		data: PrivacyDeclarationData,
 	): Promise<void>;
+	fetchInAppPurchases(appId: string): Promise<InAppPurchaseData[]>;
+	fetchSubscriptionGroups(appId: string): Promise<SubscriptionGroupData[]>;
 }
 
 export interface AppData {
@@ -139,4 +141,36 @@ export interface ReviewData {
 	reviewDate: Date;
 	territory?: string;
 	title?: string;
+}
+
+export interface SubscriptionGroupData {
+	externalId: string;
+	name: string;
+	subscriptions: InAppPurchaseData[];
+}
+
+export interface InAppPurchaseData {
+	duration?: string;
+	externalId: string;
+	groupExternalId?: string;
+	localizations?: PurchaseLocalizationData[];
+	name: string;
+	prices?: PurchasePriceData[];
+	productId: string;
+	productType: string;
+	status: string;
+}
+
+export interface PurchaseLocalizationData {
+	description?: string;
+	externalId?: string;
+	language: string;
+	name?: string;
+}
+
+export interface PurchasePriceData {
+	currency: string;
+	externalId?: string;
+	price: string;
+	territory: string;
 }

@@ -1,7 +1,9 @@
 import {
 	getMockAssets,
+	getMockInAppPurchases,
 	getMockListings,
 	getMockReviews,
+	getMockSubscriptionGroups,
 	MOCK_ANDROID_APPS,
 } from "@/providers/mock-data";
 import type {
@@ -9,10 +11,12 @@ import type {
 	AssetData,
 	AssetMetadata,
 	CategoryData,
+	InAppPurchaseData,
 	ListingData,
 	ListingUpdateData,
 	ReviewData,
 	StoreProvider,
+	SubscriptionGroupData,
 	VersionData,
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
@@ -629,6 +633,116 @@ export class GooglePlayProvider implements StoreProvider {
 		});
 
 		log.info({ appId, reviewId }, "Review reply sent");
+	}
+
+	async fetchInAppPurchases(appId: string): Promise<InAppPurchaseData[]> {
+		if (this.isMock) return getMockInAppPurchases(appId);
+
+		const client = await this.getClient();
+
+		try {
+			const purchases: InAppPurchaseData[] = [];
+
+			// Fetch one-time products via legacy inappproducts API
+			const { data } = await client.api.inappproducts.list({
+				packageName: appId,
+			});
+
+			for (const product of data.inappproduct ?? []) {
+				purchases.push({
+					externalId: product.sku ?? "",
+					name:
+						product.listings?.["en-US"]?.title ??
+						product.defaultLanguage ??
+						product.sku ??
+						"",
+					productId: product.sku ?? "",
+					productType:
+						product.purchaseType === "subscription"
+							? "auto_renewable"
+							: "consumable",
+					status: product.status ?? "active",
+				});
+			}
+
+			log.info(
+				{ appId, count: purchases.length },
+				"Fetched in-app purchases from Google Play",
+			);
+			return purchases;
+		} catch (err) {
+			log.error({ appId, err }, "Failed to fetch in-app purchases");
+			return [];
+		}
+	}
+
+	async fetchSubscriptionGroups(
+		appId: string,
+	): Promise<SubscriptionGroupData[]> {
+		if (this.isMock) return getMockSubscriptionGroups(appId);
+
+		const client = await this.getClient();
+
+		try {
+			const groups: SubscriptionGroupData[] = [];
+
+			// Google Play doesn't have subscription groups as a concept,
+			// so we fetch subscriptions via the monetization API and put them in a single group
+			const { data } = await client.api.monetization.subscriptions.list({
+				packageName: appId,
+			});
+
+			const subscriptions: InAppPurchaseData[] = [];
+			for (const sub of data.subscriptions ?? []) {
+				const basePlans = sub.basePlans ?? [];
+				for (const plan of basePlans) {
+					const pricing = plan.regionalConfigs?.find(
+						(r) => r.regionCode === "US",
+					);
+
+					subscriptions.push({
+						duration: plan.autoRenewingBasePlanType?.billingPeriodDuration ?? undefined,
+						externalId: `${sub.productId}-${plan.basePlanId}`,
+						name:
+							sub.listings?.find((l) => l.languageCode === "en-US")?.title ??
+							sub.productId ??
+							"",
+						prices: pricing
+							? [
+									{
+										currency: pricing.price?.currencyCode ?? "USD",
+										price: pricing.price?.units ?? "0",
+										territory: "US",
+									},
+								]
+							: [],
+						productId: sub.productId ?? "",
+						productType: "auto_renewable",
+						status:
+							plan.state === "ACTIVE"
+								? "approved"
+								: plan.state?.toLowerCase() ?? "draft",
+					});
+				}
+			}
+
+			if (subscriptions.length > 0) {
+				groups.push({
+					externalId: `${appId}-subscriptions`,
+					name: "Subscriptions",
+					subscriptions,
+				});
+			}
+
+			log.info(
+				{ appId, groupCount: groups.length },
+				"Fetched subscription groups from Google Play",
+			);
+			return groups;
+		} catch (err) {
+			log.error({ appId, err }, "Failed to fetch subscriptions");
+			return [];
+		}
 	}
 
 	/** Lazily initializes and returns the Google Play API client */
