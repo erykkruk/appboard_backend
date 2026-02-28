@@ -158,6 +158,25 @@ export const APP_STORE_CATEGORIES = [
 
 export type AppStoreCategory = (typeof APP_STORE_CATEGORIES)[number]["id"];
 
+// In-App Purchases
+export const PURCHASE_PRODUCT_TYPES = [
+	"auto_renewable",
+	"non_renewing",
+	"consumable",
+	"non_consumable",
+] as const;
+export type PurchaseProductType = (typeof PURCHASE_PRODUCT_TYPES)[number];
+
+export const PURCHASE_STATUSES = [
+	"approved",
+	"draft",
+	"in_review",
+	"rejected",
+	"removed",
+	"waiting_for_review",
+] as const;
+export type PurchaseStatus = (typeof PURCHASE_STATUSES)[number];
+
 export const CHAR_LIMITS = {
 	APP_STORE: {
 		description: 4000,

@@ -10,12 +10,16 @@ import {
 	apps,
 	appVersions,
 	assets,
+	inAppPurchases,
 	listingHistory,
 	listings,
+	purchaseLocalizations,
+	purchasePrices,
 	reviews,
 	session,
 	settings,
 	stores,
+	subscriptionGroups,
 	user,
 	versionLocalizations,
 	workspaceMembers,
@@ -96,6 +100,7 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 	}),
 	assets: many(assets),
 	groupMemberships: many(appGroupMembers),
+	inAppPurchases: many(inAppPurchases),
 	listingHistory: many(listingHistory),
 	listings: many(listings),
 	privacyDeclaration: one(appPrivacyDeclarations, {
@@ -107,6 +112,7 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 		fields: [apps.storeId],
 		references: [stores.id],
 	}),
+	subscriptionGroups: many(subscriptionGroups),
 	versions: many(appVersions),
 }));
 
@@ -216,6 +222,55 @@ export const appGroupMembersRelations = relations(
 		group: one(appGroups, {
 			fields: [appGroupMembers.groupId],
 			references: [appGroups.id],
+		}),
+	}),
+);
+
+// ── In-App Purchases & Subscriptions relations ────────────────────
+
+export const subscriptionGroupsRelations = relations(
+	subscriptionGroups,
+	({ many, one }) => ({
+		app: one(apps, {
+			fields: [subscriptionGroups.appId],
+			references: [apps.id],
+		}),
+		purchases: many(inAppPurchases),
+	}),
+);
+
+export const inAppPurchasesRelations = relations(
+	inAppPurchases,
+	({ many, one }) => ({
+		app: one(apps, {
+			fields: [inAppPurchases.appId],
+			references: [apps.id],
+		}),
+		group: one(subscriptionGroups, {
+			fields: [inAppPurchases.groupId],
+			references: [subscriptionGroups.id],
+		}),
+		localizations: many(purchaseLocalizations),
+		prices: many(purchasePrices),
+	}),
+);
+
+export const purchaseLocalizationsRelations = relations(
+	purchaseLocalizations,
+	({ one }) => ({
+		purchase: one(inAppPurchases, {
+			fields: [purchaseLocalizations.purchaseId],
+			references: [inAppPurchases.id],
+		}),
+	}),
+);
+
+export const purchasePricesRelations = relations(
+	purchasePrices,
+	({ one }) => ({
+		purchase: one(inAppPurchases, {
+			fields: [purchasePrices.purchaseId],
+			references: [inAppPurchases.id],
 		}),
 	}),
 );

@@ -410,6 +410,79 @@ export const appGroupMembers = pgTable(
 	(t) => [unique().on(t.groupId, t.appId)],
 );
 
+// ── In-App Purchases & Subscriptions ────────────────────────────────
+
+export const subscriptionGroups = pgTable(
+	"subscription_groups",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		externalId: varchar({ length: 255 }).notNull(),
+		name: varchar({ length: 255 }).notNull(),
+		syncedAt: timestamp(),
+	},
+	(t) => [unique().on(t.appId, t.externalId)],
+);
+
+export const inAppPurchases = pgTable(
+	"in_app_purchases",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		duration: varchar({ length: 50 }),
+		externalId: varchar({ length: 255 }).notNull(),
+		groupId: uuid().references(() => subscriptionGroups.id, {
+			onDelete: "set null",
+		}),
+		name: varchar({ length: 255 }).notNull(),
+		productId: varchar({ length: 255 }).notNull(),
+		productType: varchar({ length: 50 }).notNull(),
+		status: varchar({ length: 50 }).notNull().default("approved"),
+		syncedAt: timestamp(),
+	},
+	(t) => [unique().on(t.appId, t.externalId)],
+);
+
+export const purchaseLocalizations = pgTable(
+	"purchase_localizations",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		description: text(),
+		externalId: varchar({ length: 255 }),
+		language: varchar({ length: 20 }).notNull(),
+		name: varchar({ length: 255 }),
+		purchaseId: uuid()
+			.notNull()
+			.references(() => inAppPurchases.id, { onDelete: "cascade" }),
+		syncedAt: timestamp(),
+	},
+	(t) => [unique().on(t.purchaseId, t.language)],
+);
+
+export const purchasePrices = pgTable(
+	"purchase_prices",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		currency: varchar({ length: 10 }).notNull(),
+		externalId: varchar({ length: 255 }),
+		price: varchar({ length: 50 }).notNull(),
+		purchaseId: uuid()
+			.notNull()
+			.references(() => inAppPurchases.id, { onDelete: "cascade" }),
+		syncedAt: timestamp(),
+		territory: varchar({ length: 10 }).notNull(),
+	},
+	(t) => [unique().on(t.purchaseId, t.territory)],
+);
+
 export const schema = {
 	account,
 	appAgeRatings,
@@ -421,12 +494,16 @@ export const schema = {
 	apps,
 	appVersions,
 	assets,
+	inAppPurchases,
 	listingHistory,
 	listings,
+	purchaseLocalizations,
+	purchasePrices,
 	reviews,
 	session,
 	settings,
 	stores,
+	subscriptionGroups,
 	user,
 	verification,
 	versionLocalizations,

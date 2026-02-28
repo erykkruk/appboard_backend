@@ -56,6 +56,13 @@
       "when": 1772183225553,
       "tag": "0007_short_absorbing_man",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1772287049256,
+      "tag": "0008_sour_jasper_sitwell",
+      "breakpoints": true
     }
   ],
   "version": "7"
