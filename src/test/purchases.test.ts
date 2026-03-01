@@ -2,19 +2,12 @@ import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { purchasesController } from "@/modules/purchases";
 import { storesController } from "@/modules/stores";
-import {
-	authGuard,
-	authRequest,
-	authRequestB,
-	cleanupStores,
-} from "./setup";
+import { authGuard, authRequest, authRequestB, cleanupStores } from "./setup";
 
 describe("Purchases module", () => {
 	const app = new Elysia()
 		.use(authGuard)
-		.group("/api", (app) =>
-			app.use(storesController).use(purchasesController),
-		);
+		.group("/api", (app) => app.use(storesController).use(purchasesController));
 
 	let storeIdGP: string;
 	let storeIdAS: string;
@@ -92,10 +85,9 @@ describe("Purchases module", () => {
 
 	it("syncs purchases for a Google Play app", async () => {
 		const res = await app.handle(
-			authRequest(
-				`http://localhost/api/apps/${appIdGP}/purchases/sync`,
-				{ method: "POST" },
-			),
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases/sync`, {
+				method: "POST",
+			}),
 		);
 
 		expect(res.status).toBe(200);
@@ -111,10 +103,9 @@ describe("Purchases module", () => {
 
 	it("syncs purchases for an App Store app", async () => {
 		const res = await app.handle(
-			authRequest(
-				`http://localhost/api/apps/${appIdAS}/purchases/sync`,
-				{ method: "POST" },
-			),
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/sync`, {
+				method: "POST",
+			}),
 		);
 
 		expect(res.status).toBe(200);
@@ -200,9 +191,7 @@ describe("Purchases module", () => {
 
 	it("lists subscription groups with subscriptions", async () => {
 		const res = await app.handle(
-			authRequest(
-				`http://localhost/api/apps/${appIdGP}/subscription-groups`,
-			),
+			authRequest(`http://localhost/api/apps/${appIdGP}/subscription-groups`),
 		);
 
 		expect(res.status).toBe(200);
@@ -228,9 +217,7 @@ describe("Purchases module", () => {
 
 	it("gets a specific subscription group", async () => {
 		const listRes = await app.handle(
-			authRequest(
-				`http://localhost/api/apps/${appIdGP}/subscription-groups`,
-			),
+			authRequest(`http://localhost/api/apps/${appIdGP}/subscription-groups`),
 		);
 		const listData = await listRes.json();
 		const groupId = listData.groups[0].id;
@@ -264,10 +251,9 @@ describe("Purchases module", () => {
 	it("re-syncing purchases is idempotent", async () => {
 		// Sync again
 		const res = await app.handle(
-			authRequest(
-				`http://localhost/api/apps/${appIdGP}/purchases/sync`,
-				{ method: "POST" },
-			),
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases/sync`, {
+				method: "POST",
+			}),
 		);
 
 		expect(res.status).toBe(200);
@@ -327,10 +313,9 @@ describe("Purchases module", () => {
 
 	it("workspace B cannot sync purchases for workspace A app", async () => {
 		const res = await app.handle(
-			authRequestB(
-				`http://localhost/api/apps/${appIdGP}/purchases/sync`,
-				{ method: "POST" },
-			),
+			authRequestB(`http://localhost/api/apps/${appIdGP}/purchases/sync`, {
+				method: "POST",
+			}),
 		);
 
 		expect(res.status).toBe(404);
@@ -346,8 +331,230 @@ describe("Purchases module", () => {
 
 	it("workspace B cannot view subscription groups for workspace A app", async () => {
 		const res = await app.handle(
+			authRequestB(`http://localhost/api/apps/${appIdGP}/subscription-groups`),
+		);
+
+		expect(res.status).toBe(404);
+	});
+
+	// ── CRUD: Create IAP ────────────────────────────────────────────
+
+	it("creates an in-app purchase (GP mock)", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases`, {
+				body: JSON.stringify({
+					localizations: [
+						{
+							description: "1000 gems pack",
+							language: "en-US",
+							name: "1000 Gems",
+						},
+					],
+					name: "1000 Gems",
+					prices: [{ currency: "USD", price: "1.99", territory: "US" }],
+					productId: "test.gems.1000",
+					productType: "consumable",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.purchase).toBeDefined();
+		expect(data.purchase.productId).toBe("test.gems.1000");
+		expect(data.purchase.name).toBe("1000 Gems");
+		expect(data.purchase.productType).toBe("consumable");
+	});
+
+	it("creates an in-app purchase (AS mock)", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases`, {
+				body: JSON.stringify({
+					name: "Premium Icons",
+					productId: "test.icons.premium",
+					productType: "non_consumable",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.purchase.productId).toBe("test.icons.premium");
+		expect(data.purchase.productType).toBe("non_consumable");
+	});
+
+	it("created IAP appears in list", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases`),
+		);
+		const data = await res.json();
+
+		const created = data.purchases.find(
+			(p: { productId: string }) => p.productId === "test.gems.1000",
+		);
+		expect(created).toBeDefined();
+		expect(created.name).toBe("1000 Gems");
+	});
+
+	// ── CRUD: Update IAP ────────────────────────────────────────────
+
+	it("updates an in-app purchase name and localizations", async () => {
+		const listRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases`),
+		);
+		const listData = await listRes.json();
+		const target = listData.purchases.find(
+			(p: { productId: string }) => p.productId === "test.gems.1000",
+		);
+
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${target.id}`,
+				{
+					body: JSON.stringify({
+						localizations: [
+							{
+								description: "1000 shiny gems",
+								language: "en-US",
+								name: "1000 Shiny Gems",
+							},
+						],
+						name: "1000 Shiny Gems",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.purchase.name).toBe("1000 Shiny Gems");
+	});
+
+	// ── CRUD: Delete IAP ────────────────────────────────────────────
+
+	it("deletes an in-app purchase", async () => {
+		const listRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases`),
+		);
+		const listData = await listRes.json();
+		const target = listData.purchases.find(
+			(p: { productId: string }) => p.productId === "test.gems.1000",
+		);
+
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${target.id}`,
+				{ method: "DELETE" },
+			),
+		);
+
+		expect(res.status).toBe(200);
+
+		// Verify it's gone
+		const checkRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${target.id}`,
+			),
+		);
+		expect(checkRes.status).toBe(404);
+	});
+
+	// ── CRUD: Subscription group ────────────────────────────────────
+
+	it("creates a subscription group", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/subscription-groups`, {
+				body: JSON.stringify({ name: "Pro Plans" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.group).toBeDefined();
+		expect(data.group.name).toBe("Pro Plans");
+		expect(data.group.id).toBeDefined();
+		expect(Array.isArray(data.group.subscriptions)).toBe(true);
+	});
+
+	// ── CRUD: Subscription in group ─────────────────────────────────
+
+	it("creates a subscription in a group", async () => {
+		const groupsRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/subscription-groups`),
+		);
+		const groupsData = await groupsRes.json();
+		const proGroup = groupsData.groups.find(
+			(g: { name: string }) => g.name === "Pro Plans",
+		);
+
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${proGroup.id}/subscriptions`,
+				{
+					body: JSON.stringify({
+						duration: "P1M",
+						localizations: [
+							{
+								description: "Monthly pro access",
+								language: "en-US",
+								name: "Pro Monthly",
+							},
+						],
+						name: "Pro Monthly",
+						prices: [{ currency: "USD", price: "9.99", territory: "US" }],
+						productId: "test.pro.monthly",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+			),
+		);
+
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.purchase).toBeDefined();
+		expect(data.purchase.productId).toBe("test.pro.monthly");
+		expect(data.purchase.productType).toBe("auto_renewable");
+		expect(data.purchase.groupId).toBe(proGroup.id);
+	});
+
+	// ── CRUD: Workspace isolation ───────────────────────────────────
+
+	it("workspace B cannot create purchase for workspace A app", async () => {
+		const res = await app.handle(
+			authRequestB(`http://localhost/api/apps/${appIdGP}/purchases`, {
+				body: JSON.stringify({
+					name: "Hacked Gems",
+					productId: "hack.gems",
+					productType: "consumable",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(404);
+	});
+
+	it("workspace B cannot delete purchase from workspace A", async () => {
+		const listRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases`),
+		);
+		const listData = await listRes.json();
+		const purchaseId = listData.purchases[0].id;
+
+		const res = await app.handle(
 			authRequestB(
-				`http://localhost/api/apps/${appIdGP}/subscription-groups`,
+				`http://localhost/api/apps/${appIdGP}/purchases/${purchaseId}`,
+				{ method: "DELETE" },
 			),
 		);
 

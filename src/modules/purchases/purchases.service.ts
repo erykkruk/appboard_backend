@@ -1,6 +1,12 @@
 import { and, eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
 import { createProvider } from "@/providers";
+import type {
+	InAppPurchaseCreateData,
+	InAppPurchaseUpdateData,
+	StoreProvider,
+	SubscriptionCreateData,
+} from "@/providers/store-provider";
 import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import {
@@ -37,15 +43,10 @@ export class PurchasesService {
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
-		const provider = createProvider(
-			app.store.type as StoreType,
-			credentials,
-		);
+		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		// Sync subscription groups
-		const groups = await provider.fetchSubscriptionGroups(
-			app.app.externalId,
-		);
+		const groups = await provider.fetchSubscriptionGroups(app.app.externalId);
 		let syncedGroups = 0;
 		let syncedSubscriptions = 0;
 
@@ -100,10 +101,7 @@ export class PurchasesService {
 					dbPurchase.id,
 					sub.localizations ?? [],
 				);
-				await PurchasesService.syncPrices(
-					dbPurchase.id,
-					sub.prices ?? [],
-				);
+				await PurchasesService.syncPrices(dbPurchase.id, sub.prices ?? []);
 			}
 		}
 
@@ -284,6 +282,274 @@ export class PurchasesService {
 		);
 
 		return { ...group, subscriptions: enrichedSubs };
+	}
+
+	static async createPurchase(
+		appId: string,
+		workspaceId: string,
+		data: InAppPurchaseCreateData,
+	) {
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			appId,
+			workspaceId,
+		);
+
+		const result = await provider.createInAppPurchase(externalAppId, data);
+
+		const [dbPurchase] = await db
+			.insert(inAppPurchases)
+			.values({
+				appId,
+				externalId: result.externalId,
+				name: result.name,
+				productId: result.productId,
+				productType: result.productType,
+				status: result.status,
+				syncedAt: new Date(),
+			})
+			.onConflictDoUpdate({
+				set: {
+					name: result.name,
+					productType: result.productType,
+					status: result.status,
+					syncedAt: new Date(),
+				},
+				target: [inAppPurchases.appId, inAppPurchases.externalId],
+			})
+			.returning();
+
+		await PurchasesService.syncLocalizations(
+			dbPurchase.id,
+			result.localizations ?? [],
+		);
+		await PurchasesService.syncPrices(dbPurchase.id, result.prices ?? []);
+
+		log.info({ appId, purchaseId: dbPurchase.id }, "Purchase created");
+		return PurchasesService.getPurchase(dbPurchase.id);
+	}
+
+	static async updatePurchase(
+		purchaseId: string,
+		workspaceId: string,
+		data: InAppPurchaseUpdateData,
+	) {
+		const purchase = await PurchasesService.getPurchaseWithApp(
+			purchaseId,
+			workspaceId,
+		);
+
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			purchase.appId,
+			workspaceId,
+		);
+
+		if (purchase.groupId) {
+			await provider.updateSubscription(
+				externalAppId,
+				purchase.externalId,
+				data,
+			);
+		} else {
+			await provider.updateInAppPurchase(
+				externalAppId,
+				purchase.externalId,
+				data,
+			);
+		}
+
+		if (data.name) {
+			await db
+				.update(inAppPurchases)
+				.set({ name: data.name, syncedAt: new Date() })
+				.where(eq(inAppPurchases.id, purchaseId));
+		}
+
+		if (data.localizations?.length) {
+			await PurchasesService.syncLocalizations(purchaseId, data.localizations);
+		}
+
+		if (data.prices?.length) {
+			await PurchasesService.syncPrices(purchaseId, data.prices);
+		}
+
+		log.info({ purchaseId }, "Purchase updated");
+		return PurchasesService.getPurchase(purchaseId);
+	}
+
+	static async deletePurchase(purchaseId: string, workspaceId: string) {
+		const purchase = await PurchasesService.getPurchaseWithApp(
+			purchaseId,
+			workspaceId,
+		);
+
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			purchase.appId,
+			workspaceId,
+		);
+
+		if (purchase.groupId) {
+			await provider.deleteSubscription(externalAppId, purchase.externalId);
+		} else {
+			await provider.deleteInAppPurchase(externalAppId, purchase.externalId);
+		}
+
+		await db.delete(inAppPurchases).where(eq(inAppPurchases.id, purchaseId));
+
+		log.info({ purchaseId }, "Purchase deleted");
+	}
+
+	static async createGroup(appId: string, workspaceId: string, name: string) {
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			appId,
+			workspaceId,
+		);
+
+		const result = await provider.createSubscriptionGroup(externalAppId, name);
+
+		const [dbGroup] = await db
+			.insert(subscriptionGroups)
+			.values({
+				appId,
+				externalId: result.externalId,
+				name: result.name,
+				syncedAt: new Date(),
+			})
+			.onConflictDoUpdate({
+				set: {
+					name: result.name,
+					syncedAt: new Date(),
+				},
+				target: [subscriptionGroups.appId, subscriptionGroups.externalId],
+			})
+			.returning();
+
+		log.info({ appId, groupId: dbGroup.id }, "Subscription group created");
+		return { ...dbGroup, subscriptions: [] };
+	}
+
+	static async createSubscription(
+		appId: string,
+		workspaceId: string,
+		groupId: string,
+		data: SubscriptionCreateData,
+	) {
+		// Verify group exists and belongs to this app
+		const [group] = await db
+			.select()
+			.from(subscriptionGroups)
+			.where(
+				and(
+					eq(subscriptionGroups.id, groupId),
+					eq(subscriptionGroups.appId, appId),
+				),
+			)
+			.limit(1);
+
+		if (!group)
+			buildError("notFound", { info: "Subscription group not found" });
+
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			appId,
+			workspaceId,
+		);
+
+		const result = await provider.createSubscription(
+			externalAppId,
+			group.externalId,
+			data,
+		);
+
+		const [dbPurchase] = await db
+			.insert(inAppPurchases)
+			.values({
+				appId,
+				duration: result.duration,
+				externalId: result.externalId,
+				groupId: group.id,
+				name: result.name,
+				productId: result.productId,
+				productType: "auto_renewable",
+				status: result.status,
+				syncedAt: new Date(),
+			})
+			.onConflictDoUpdate({
+				set: {
+					duration: result.duration,
+					groupId: group.id,
+					name: result.name,
+					status: result.status,
+					syncedAt: new Date(),
+				},
+				target: [inAppPurchases.appId, inAppPurchases.externalId],
+			})
+			.returning();
+
+		await PurchasesService.syncLocalizations(
+			dbPurchase.id,
+			result.localizations ?? [],
+		);
+		await PurchasesService.syncPrices(dbPurchase.id, result.prices ?? []);
+
+		log.info(
+			{ appId, groupId, purchaseId: dbPurchase.id },
+			"Subscription created",
+		);
+		return PurchasesService.getPurchase(dbPurchase.id);
+	}
+
+	private static async getAppProvider(
+		appId: string,
+		workspaceId: string,
+	): Promise<{ externalAppId: string; provider: StoreProvider }> {
+		const [app] = await db
+			.select({
+				app: apps,
+				store: stores,
+			})
+			.from(apps)
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(and(eq(apps.id, appId), eq(stores.workspaceId, workspaceId)))
+			.limit(1);
+
+		if (!app) buildError("notFound", { info: "App not found" });
+
+		if (!app.store.credentials) {
+			buildError("storeConnectionFailed", {
+				info: "Store has no credentials",
+			});
+		}
+
+		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const provider = createProvider(app.store.type as StoreType, credentials);
+
+		return { externalAppId: app.app.externalId, provider };
+	}
+
+	private static async getPurchaseWithApp(
+		purchaseId: string,
+		workspaceId: string,
+	) {
+		const [result] = await db
+			.select({
+				appId: inAppPurchases.appId,
+				externalId: inAppPurchases.externalId,
+				groupId: inAppPurchases.groupId,
+				id: inAppPurchases.id,
+			})
+			.from(inAppPurchases)
+			.innerJoin(apps, eq(inAppPurchases.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(
+				and(
+					eq(inAppPurchases.id, purchaseId),
+					eq(stores.workspaceId, workspaceId),
+				),
+			)
+			.limit(1);
+
+		if (!result) buildError("notFound", { info: "Purchase not found" });
+
+		return result;
 	}
 
 	private static async syncLocalizations(

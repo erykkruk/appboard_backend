@@ -83,9 +83,7 @@ describe("App Groups module", () => {
 	});
 
 	it("GET /app-groups lists groups", async () => {
-		const res = await app
-			.handle(authRequest(BASE))
-			.then((r) => r.json());
+		const res = await app.handle(authRequest(BASE)).then((r) => r.json());
 
 		expect(res.appGroups).toBeArray();
 		expect(res.appGroups.length).toBeGreaterThanOrEqual(1);
@@ -236,9 +234,7 @@ describe("App Groups module", () => {
 		// Delete second group
 		const groupId = createdGroupIds[1];
 		const res = await app
-			.handle(
-				authRequest(`${BASE}/${groupId}`, { method: "DELETE" }),
-			)
+			.handle(authRequest(`${BASE}/${groupId}`, { method: "DELETE" }))
 			.then((r) => r.json());
 
 		expect(res.success).toBe(true);
@@ -305,9 +301,7 @@ describe("App Groups module", () => {
 		});
 
 		it("new groups get auto-incremented sortOrder", async () => {
-			const res = await app
-				.handle(authRequest(BASE))
-				.then((r) => r.json());
+			const res = await app.handle(authRequest(BASE)).then((r) => r.json());
 
 			const sorted = res.appGroups as Array<{
 				id: string;
@@ -339,13 +333,11 @@ describe("App Groups module", () => {
 			expect(res.success).toBe(true);
 
 			// Verify list returns in new order
-			const listRes = await app
-				.handle(authRequest(BASE))
-				.then((r) => r.json());
+			const listRes = await app.handle(authRequest(BASE)).then((r) => r.json());
 
-			const reorderedIds = (
-				listRes.appGroups as Array<{ id: string }>
-			).map((g) => g.id);
+			const reorderedIds = (listRes.appGroups as Array<{ id: string }>).map(
+				(g) => g.id,
+			);
 			// C, A, B should appear in order (other groups may appear before/after)
 			const cIdx = reorderedIds.indexOf(groupC);
 			const aIdx = reorderedIds.indexOf(groupA);
@@ -388,10 +380,7 @@ describe("App Groups module", () => {
 			const res = await app.handle(
 				authRequest(`${BASE}/reorder`, {
 					body: JSON.stringify({
-						groupIds: [
-							groupA,
-							"00000000-0000-0000-0000-000000000099",
-						],
+						groupIds: [groupA, "00000000-0000-0000-0000-000000000099"],
 					}),
 					headers: { "Content-Type": "application/json" },
 					method: "PUT",
@@ -450,9 +439,7 @@ describe("App Groups module", () => {
 
 	describe("workspace isolation", () => {
 		it("workspace B cannot see workspace A groups", async () => {
-			const res = await app
-				.handle(authRequestB(BASE))
-				.then((r) => r.json());
+			const res = await app.handle(authRequestB(BASE)).then((r) => r.json());
 
 			expect(res.appGroups).toBeArray();
 			expect(res.appGroups.length).toBe(0);

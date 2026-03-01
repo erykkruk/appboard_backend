@@ -1,6 +1,15 @@
 import Elysia from "elysia";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
-import { appIdParams, groupIdParams, purchaseIdParams } from "./purchases.schema";
+import {
+	appIdParams,
+	createGroupBody,
+	createPurchaseBody,
+	createSubscriptionBody,
+	groupIdParams,
+	purchaseIdParams,
+	subscriptionInGroupParams,
+	updatePurchaseBody,
+} from "./purchases.schema";
 import { PurchasesService } from "./purchases.service";
 
 export const purchasesController = new Elysia({ prefix: "/apps" })
@@ -33,6 +42,26 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			params: appIdParams,
 		},
 	)
+	.post(
+		"/:appId/purchases",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const purchase = await PurchasesService.createPurchase(
+				params.appId,
+				workspaceId!,
+				body,
+			);
+			return { purchase };
+		},
+		{
+			body: createPurchaseBody,
+			detail: {
+				description: "Create a new in-app purchase",
+				tags: ["Purchases"],
+			},
+			params: appIdParams,
+		},
+	)
 	.get(
 		"/:appId/purchases/:purchaseId",
 		async ({ params, workspaceId }) => {
@@ -43,6 +72,41 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 		{
 			detail: {
 				description: "Get a specific in-app purchase",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
+	.patch(
+		"/:appId/purchases/:purchaseId",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const purchase = await PurchasesService.updatePurchase(
+				params.purchaseId,
+				workspaceId!,
+				body,
+			);
+			return { purchase };
+		},
+		{
+			body: updatePurchaseBody,
+			detail: {
+				description: "Update an in-app purchase",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
+	.delete(
+		"/:appId/purchases/:purchaseId",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.deletePurchase(params.purchaseId, workspaceId!);
+			return { success: true };
+		},
+		{
+			detail: {
+				description: "Delete an in-app purchase",
 				tags: ["Purchases"],
 			},
 			params: purchaseIdParams,
@@ -65,13 +129,31 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			params: appIdParams,
 		},
 	)
+	.post(
+		"/:appId/subscription-groups",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const group = await PurchasesService.createGroup(
+				params.appId,
+				workspaceId!,
+				body.name,
+			);
+			return { group };
+		},
+		{
+			body: createGroupBody,
+			detail: {
+				description: "Create a subscription group",
+				tags: ["Purchases"],
+			},
+			params: appIdParams,
+		},
+	)
 	.get(
 		"/:appId/subscription-groups/:groupId",
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
-			const group = await PurchasesService.getSubscriptionGroup(
-				params.groupId,
-			);
+			const group = await PurchasesService.getSubscriptionGroup(params.groupId);
 			return { group };
 		},
 		{
@@ -80,5 +162,26 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 				tags: ["Purchases"],
 			},
 			params: groupIdParams,
+		},
+	)
+	.post(
+		"/:appId/subscription-groups/:groupId/subscriptions",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const purchase = await PurchasesService.createSubscription(
+				params.appId,
+				workspaceId!,
+				params.groupId,
+				body,
+			);
+			return { purchase };
+		},
+		{
+			body: createSubscriptionBody,
+			detail: {
+				description: "Create a subscription in a group",
+				tags: ["Purchases"],
+			},
+			params: subscriptionInGroupParams,
 		},
 	);

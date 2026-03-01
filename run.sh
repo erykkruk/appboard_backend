@@ -11,6 +11,7 @@ BACKEND_PORT=6680
 PANEL_PORT=6600
 BACKEND_PID=""
 PANEL_PID=""
+NODE_VERSION="22"
 
 # Colors
 RED='\033[0;31m'
@@ -40,6 +41,29 @@ print_header() {
     echo -e "${BLUE}  $1${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo ""
+}
+
+# --- Node version management ---
+
+ensure_node_version() {
+    if ! command -v fnm &>/dev/null; then
+        echo -e "${RED}fnm not found. Install it to manage Node versions.${NC}"
+        return 1
+    fi
+
+    local current
+    current=$(node -v 2>/dev/null | sed 's/v//' | cut -d. -f1)
+
+    if [[ "$current" != "$NODE_VERSION" ]]; then
+        echo -e "${YELLOW}Switching Node.js to v${NODE_VERSION} (current: v${current:-none})...${NC}"
+        if ! fnm list | grep -q "v${NODE_VERSION}"; then
+            echo -e "${YELLOW}Installing Node.js v${NODE_VERSION}...${NC}"
+            fnm install "$NODE_VERSION"
+        fi
+        eval "$(fnm env)"
+        fnm use "$NODE_VERSION"
+        echo -e "${GREEN}Node.js $(node -v) active${NC}"
+    fi
 }
 
 # --- Config management ---
@@ -181,6 +205,12 @@ start_panel_only() {
         web_path=$(get_web_path) || return
     fi
 
+    if ! ensure_node_version; then
+        echo "Press Enter to continue..."
+        read -r
+        return
+    fi
+
     if ! free_port "$PANEL_PORT" "panel"; then
         echo "Press Enter to continue..."
         read -r
@@ -198,6 +228,13 @@ start_all() {
     if ! web_path=$(get_web_path); then
         setup_web_path || return
         web_path=$(get_web_path) || return
+    fi
+
+    # Ensure correct Node.js version for panel
+    if ! ensure_node_version; then
+        echo "Press Enter to continue..."
+        read -r
+        return
     fi
 
     # Ensure database is running

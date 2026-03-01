@@ -54,6 +54,31 @@ export interface StoreProvider {
 	): Promise<void>;
 	fetchInAppPurchases(appId: string): Promise<InAppPurchaseData[]>;
 	fetchSubscriptionGroups(appId: string): Promise<SubscriptionGroupData[]>;
+	createInAppPurchase(
+		appId: string,
+		data: InAppPurchaseCreateData,
+	): Promise<InAppPurchaseData>;
+	updateInAppPurchase(
+		appId: string,
+		externalId: string,
+		data: InAppPurchaseUpdateData,
+	): Promise<void>;
+	deleteInAppPurchase(appId: string, externalId: string): Promise<void>;
+	createSubscriptionGroup(
+		appId: string,
+		name: string,
+	): Promise<SubscriptionGroupData>;
+	createSubscription(
+		appId: string,
+		groupExternalId: string,
+		data: SubscriptionCreateData,
+	): Promise<InAppPurchaseData>;
+	updateSubscription(
+		appId: string,
+		subExternalId: string,
+		data: SubscriptionUpdateData,
+	): Promise<void>;
+	deleteSubscription(appId: string, subExternalId: string): Promise<void>;
 }
 
 export interface AppData {
@@ -173,4 +198,32 @@ export interface PurchasePriceData {
 	externalId?: string;
 	price: string;
 	territory: string;
+}
+
+export interface InAppPurchaseCreateData {
+	localizations?: PurchaseLocalizationData[];
+	name: string;
+	prices?: PurchasePriceData[];
+	productId: string;
+	productType: string;
+}
+
+export interface InAppPurchaseUpdateData {
+	localizations?: PurchaseLocalizationData[];
+	name?: string;
+	prices?: PurchasePriceData[];
+}
+
+export interface SubscriptionCreateData {
+	duration: string;
+	localizations?: PurchaseLocalizationData[];
+	name: string;
+	prices?: PurchasePriceData[];
+	productId: string;
+}
+
+export interface SubscriptionUpdateData {
+	localizations?: PurchaseLocalizationData[];
+	name?: string;
+	prices?: PurchasePriceData[];
 }

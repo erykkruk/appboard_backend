@@ -265,12 +265,9 @@ export const purchaseLocalizationsRelations = relations(
 	}),
 );
 
-export const purchasePricesRelations = relations(
-	purchasePrices,
-	({ one }) => ({
-		purchase: one(inAppPurchases, {
-			fields: [purchasePrices.purchaseId],
-			references: [inAppPurchases.id],
-		}),
+export const purchasePricesRelations = relations(purchasePrices, ({ one }) => ({
+	purchase: one(inAppPurchases, {
+		fields: [purchasePrices.purchaseId],
+		references: [inAppPurchases.id],
 	}),
-);
+}));

@@ -8,19 +8,19 @@ import {
 	ageRatingPresetsController,
 } from "@/modules/age-rating";
 import { aiController } from "@/modules/ai";
-import { appGroupsController } from "@/modules/app-groups";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
+import { appGroupsController } from "@/modules/app-groups";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
 import { authGuard } from "@/modules/auth";
 import { listingsController } from "@/modules/listings";
-import { purchasesController } from "@/modules/purchases";
 import {
 	privacyDeclarationController,
 	privacyTemplatesController,
 } from "@/modules/privacy-declaration";
 import { publishingController } from "@/modules/publishing";
+import { purchasesController } from "@/modules/purchases";
 import { reviewsController } from "@/modules/reviews";
 import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";

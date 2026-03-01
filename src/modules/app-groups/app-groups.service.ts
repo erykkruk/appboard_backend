@@ -104,11 +104,7 @@ export class AppGroupsService {
 		return { success: true };
 	}
 
-	static async addMember(
-		groupId: string,
-		appId: string,
-		workspaceId: string,
-	) {
+	static async addMember(groupId: string, appId: string, workspaceId: string) {
 		await AppGroupsService.verifyGroupOwnership(groupId, workspaceId);
 
 		// Verify app belongs to this workspace (through stores)
@@ -252,10 +248,7 @@ export class AppGroupsService {
 			.select({ id: appGroups.id })
 			.from(appGroups)
 			.where(
-				and(
-					eq(appGroups.id, groupId),
-					eq(appGroups.workspaceId, workspaceId),
-				),
+				and(eq(appGroups.id, groupId), eq(appGroups.workspaceId, workspaceId)),
 			)
 			.limit(1);
 		if (!group) buildError("notFound", { info: "App group not found" });

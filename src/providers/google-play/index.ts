@@ -11,12 +11,16 @@ import type {
 	AssetData,
 	AssetMetadata,
 	CategoryData,
+	InAppPurchaseCreateData,
 	InAppPurchaseData,
+	InAppPurchaseUpdateData,
 	ListingData,
 	ListingUpdateData,
 	ReviewData,
 	StoreProvider,
+	SubscriptionCreateData,
 	SubscriptionGroupData,
+	SubscriptionUpdateData,
 	VersionData,
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
@@ -701,7 +705,8 @@ export class GooglePlayProvider implements StoreProvider {
 					);
 
 					subscriptions.push({
-						duration: plan.autoRenewingBasePlanType?.billingPeriodDuration ?? undefined,
+						duration:
+							plan.autoRenewingBasePlanType?.billingPeriodDuration ?? undefined,
 						externalId: `${sub.productId}-${plan.basePlanId}`,
 						name:
 							sub.listings?.find((l) => l.languageCode === "en-US")?.title ??
@@ -721,7 +726,7 @@ export class GooglePlayProvider implements StoreProvider {
 						status:
 							plan.state === "ACTIVE"
 								? "approved"
-								: plan.state?.toLowerCase() ?? "draft",
+								: (plan.state?.toLowerCase() ?? "draft"),
 					});
 				}
 			}
@@ -743,6 +748,250 @@ export class GooglePlayProvider implements StoreProvider {
 			log.error({ appId, err }, "Failed to fetch subscriptions");
 			return [];
 		}
+	}
+
+	async createInAppPurchase(
+		appId: string,
+		data: InAppPurchaseCreateData,
+	): Promise<InAppPurchaseData> {
+		if (this.isMock) {
+			log.info({ appId, productId: data.productId }, "Mock: IAP created");
+			return {
+				externalId: data.productId,
+				localizations: data.localizations ?? [],
+				name: data.name,
+				prices: data.prices ?? [],
+				productId: data.productId,
+				productType: data.productType,
+				status: "draft",
+			};
+		}
+
+		const client = await this.getClient();
+
+		const listings: Record<string, { description?: string; title: string }> =
+			{};
+		for (const loc of data.localizations ?? []) {
+			listings[loc.language] = {
+				description: loc.description,
+				title: loc.name ?? data.name,
+			};
+		}
+		if (!listings["en-US"]) {
+			listings["en-US"] = { title: data.name };
+		}
+
+		await client.api.inappproducts.insert({
+			packageName: appId,
+			requestBody: {
+				defaultLanguage: "en-US",
+				listings,
+				packageName: appId,
+				purchaseType:
+					data.productType === "consumable" ? "managedUser" : "managedUser",
+				sku: data.productId,
+				status: "active",
+			},
+		});
+
+		log.info(
+			{ appId, productId: data.productId },
+			"IAP created on Google Play",
+		);
+
+		return {
+			externalId: data.productId,
+			localizations: data.localizations ?? [],
+			name: data.name,
+			prices: data.prices ?? [],
+			productId: data.productId,
+			productType: data.productType,
+			status: "active",
+		};
+	}
+
+	async updateInAppPurchase(
+		appId: string,
+		externalId: string,
+		data: InAppPurchaseUpdateData,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId, externalId }, "Mock: IAP updated");
+			return;
+		}
+
+		const client = await this.getClient();
+
+		const listings: Record<string, { description?: string; title: string }> =
+			{};
+		for (const loc of data.localizations ?? []) {
+			listings[loc.language] = {
+				description: loc.description,
+				title: loc.name ?? data.name ?? "",
+			};
+		}
+
+		await client.api.inappproducts.update({
+			packageName: appId,
+			requestBody: {
+				listings: Object.keys(listings).length > 0 ? listings : undefined,
+				packageName: appId,
+				sku: externalId,
+			},
+			sku: externalId,
+		});
+
+		log.info({ appId, externalId }, "IAP updated on Google Play");
+	}
+
+	async deleteInAppPurchase(appId: string, externalId: string): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId, externalId }, "Mock: IAP deleted");
+			return;
+		}
+
+		const client = await this.getClient();
+
+		await client.api.inappproducts.delete({
+			packageName: appId,
+			sku: externalId,
+		});
+
+		log.info({ appId, externalId }, "IAP deleted from Google Play");
+	}
+
+	async createSubscriptionGroup(
+		appId: string,
+		name: string,
+	): Promise<SubscriptionGroupData> {
+		// Google Play doesn't have subscription groups — create locally only
+		log.info(
+			{ appId, name },
+			"Subscription group created locally (GP has no group concept)",
+		);
+		return {
+			externalId: `${appId}-group-${Date.now()}`,
+			name,
+			subscriptions: [],
+		};
+	}
+
+	async createSubscription(
+		appId: string,
+		_groupExternalId: string,
+		data: SubscriptionCreateData,
+	): Promise<InAppPurchaseData> {
+		if (this.isMock) {
+			log.info(
+				{ appId, productId: data.productId },
+				"Mock: subscription created",
+			);
+			return {
+				duration: data.duration,
+				externalId: data.productId,
+				localizations: data.localizations ?? [],
+				name: data.name,
+				prices: data.prices ?? [],
+				productId: data.productId,
+				productType: "auto_renewable",
+				status: "draft",
+			};
+		}
+
+		const client = await this.getClient();
+
+		const listings = (data.localizations ?? []).map((loc) => ({
+			description: loc.description ?? "",
+			languageCode: loc.language,
+			title: loc.name ?? data.name,
+		}));
+
+		await client.api.monetization.subscriptions.create({
+			packageName: appId,
+			requestBody: {
+				basePlans: [
+					{
+						autoRenewingBasePlanType: {
+							billingPeriodDuration: data.duration,
+						},
+						basePlanId: "base",
+						state: "DRAFT",
+					},
+				],
+				listings,
+				productId: data.productId,
+			},
+		});
+
+		log.info(
+			{ appId, productId: data.productId },
+			"Subscription created on Google Play",
+		);
+
+		return {
+			duration: data.duration,
+			externalId: `${data.productId}-base`,
+			localizations: data.localizations ?? [],
+			name: data.name,
+			prices: data.prices ?? [],
+			productId: data.productId,
+			productType: "auto_renewable",
+			status: "draft",
+		};
+	}
+
+	async updateSubscription(
+		appId: string,
+		subExternalId: string,
+		data: SubscriptionUpdateData,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId, subExternalId }, "Mock: subscription updated");
+			return;
+		}
+
+		const client = await this.getClient();
+
+		// subExternalId format: "productId-basePlanId"
+		const productId = subExternalId.split("-").slice(0, -1).join("-");
+
+		const listings = (data.localizations ?? []).map((loc) => ({
+			description: loc.description ?? "",
+			languageCode: loc.language,
+			title: loc.name ?? data.name ?? "",
+		}));
+
+		await client.api.monetization.subscriptions.patch({
+			packageName: appId,
+			productId,
+			requestBody: {
+				listings: listings.length > 0 ? listings : undefined,
+				productId,
+			},
+		});
+
+		log.info({ appId, subExternalId }, "Subscription updated on Google Play");
+	}
+
+	async deleteSubscription(
+		appId: string,
+		subExternalId: string,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId, subExternalId }, "Mock: subscription deleted");
+			return;
+		}
+
+		const client = await this.getClient();
+
+		const productId = subExternalId.split("-").slice(0, -1).join("-");
+
+		await client.api.monetization.subscriptions.delete({
+			packageName: appId,
+			productId,
+		});
+
+		log.info({ appId, subExternalId }, "Subscription deleted from Google Play");
 	}
 
 	/** Lazily initializes and returns the Google Play API client */
