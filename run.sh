@@ -69,6 +69,13 @@ ensure_node_version() {
 # --- Config management ---
 
 get_web_path() {
+    # 1. Check APPBOARD_WEB_PATH env variable (set by VS Code launch.json)
+    if [[ -n "$APPBOARD_WEB_PATH" && -d "$APPBOARD_WEB_PATH" ]]; then
+        echo "$APPBOARD_WEB_PATH"
+        return 0
+    fi
+
+    # 2. Check config file
     if [[ -f "$CONFIG_FILE" ]]; then
         local path
         path=$(grep -o '"webPath"[[:space:]]*:[[:space:]]*"[^"]*"' "$CONFIG_FILE" | sed 's/.*"webPath"[[:space:]]*:[[:space:]]*"\(.*\)"/\1/')
@@ -77,6 +84,14 @@ get_web_path() {
             return 0
         fi
     fi
+
+    # 3. Auto-detect sibling directory (workspace layout)
+    local sibling_path="$SCRIPT_DIR/../appboard_web"
+    if [[ -d "$sibling_path" && -f "$sibling_path/package.json" ]]; then
+        echo "$(cd "$sibling_path" && pwd)"
+        return 0
+    fi
+
     return 1
 }
 
