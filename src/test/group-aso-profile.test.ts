@@ -1,11 +1,12 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
+import { AIService } from "@/modules/ai/ai.service";
 import { appGroupsController } from "@/modules/app-groups";
 import { asoProfileController } from "@/modules/aso-profile";
 import { groupAsoProfileController } from "@/modules/group-aso-profile";
 import { db } from "@/utils/db";
-import { appGroups } from "@/utils/db/schema";
+import { appGroups, apps } from "@/utils/db/schema";
 import {
 	authGuard,
 	authRequest,
@@ -202,5 +203,58 @@ describe("Group ASO Profile", () => {
 			}),
 		);
 		expect(res.status).toBe(404);
+	});
+
+	// ── resolveAsoProfile ────────────────────────────────────────────
+
+	it("resolveAsoProfile returns group profile when shared is enabled", async () => {
+		const profile = await AIService.resolveAsoProfile(appA.id);
+
+		expect(profile).not.toBeNull();
+		expect(profile!.oneLiner).toBe("Best app ever");
+		expect(profile!.category).toBe("Productivity");
+	});
+
+	it("resolveAsoProfile returns app profile when shared is disabled", async () => {
+		// Disable shared profile
+		await app.handle(
+			authRequest(`${GROUP_BASE}/${groupId}`, {
+				body: JSON.stringify({ useSharedProfile: false }),
+				headers: { "Content-Type": "application/json" },
+				method: "PUT",
+			}),
+		);
+
+		const profile = await AIService.resolveAsoProfile(appA.id);
+
+		// App profile was never explicitly set, so it should be null
+		expect(profile).toBeNull();
+
+		// Re-enable for subsequent tests
+		await app.handle(
+			authRequest(`${GROUP_BASE}/${groupId}`, {
+				body: JSON.stringify({ useSharedProfile: true }),
+				headers: { "Content-Type": "application/json" },
+				method: "PUT",
+			}),
+		);
+	});
+
+	it("resolveAsoProfile returns app profile for app not in any group", async () => {
+		const soloBundle = `com.test.solo.${Date.now()}`;
+		const [soloApp] = await db
+			.insert(apps)
+			.values({
+				bundleId: soloBundle,
+				externalId: soloBundle,
+				name: "Solo App",
+				platform: "android",
+				storeId: storeA.id,
+			})
+			.returning();
+		const profile = await AIService.resolveAsoProfile(soloApp.id);
+
+		// No profile set for this app
+		expect(profile).toBeNull();
 	});
 });

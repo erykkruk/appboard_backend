@@ -5,7 +5,9 @@ import {
 	getSettingKey,
 	type PromptMode,
 } from "@/modules/ai/ai.prompts";
+import { AppGroupsService } from "@/modules/app-groups/app-groups.service";
 import { AsoProfileService } from "@/modules/aso-profile/aso-profile.service";
+import { GroupAsoProfileService } from "@/modules/group-aso-profile/group-aso-profile.service";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { db } from "@/utils/db";
 import { appAiPrompts } from "@/utils/db/schema";
@@ -426,6 +428,20 @@ const PURPOSE_SETTING_KEYS: Record<AiPurpose, string> = {
 };
 
 export class AIService {
+	/**
+	 * Returns the effective ASO profile for an app.
+	 * If the app belongs to a group with shared profile enabled,
+	 * returns the group profile; otherwise returns the app's own profile.
+	 */
+	static async resolveAsoProfile(appId: string) {
+		const groupInfo = await AppGroupsService.getGroupForApp(appId);
+		if (groupInfo?.useSharedProfile) {
+			const groupProfile = await GroupAsoProfileService.get(groupInfo.groupId);
+			if (groupProfile) return groupProfile;
+		}
+		return AsoProfileService.get(appId);
+	}
+
 	private static async resolveModel(
 		workspaceId: string,
 		purpose: AiPurpose,
@@ -520,7 +536,7 @@ export class AIService {
 	): Promise<{ model: string; result: string }> {
 		const resolvedField = resolveFieldForPlatform(field, platform);
 
-		const asoProfile = await AsoProfileService.get(appId);
+		const asoProfile = await AIService.resolveAsoProfile(appId);
 		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
 
 		const mode: PromptMode = currentValue ? "rephrase" : "generate";
