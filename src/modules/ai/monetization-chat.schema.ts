@@ -14,10 +14,12 @@ const chatMessageSchema = t.Object({
 export const monetizationChatBody = t.Object({
 	appId: t.String({ format: "uuid" }),
 	messages: t.Array(chatMessageSchema, { minItems: 1 }),
+	territories: t.Optional(t.Array(t.String({ maxLength: 3, minLength: 2 }))),
 });
 
 const planGroupSchema = t.Object({
-	name: t.String({ minLength: 1 }),
+	id: t.Optional(t.String({ format: "uuid" })),
+	name: t.Optional(t.String({ minLength: 1 })),
 	subscriptions: t.Array(
 		t.Object({
 			duration: t.String({ minLength: 1 }),
@@ -68,11 +70,17 @@ const planEditSchema = t.Object({
 	purchaseId: t.String({ format: "uuid" }),
 });
 
+const planGroupEditSchema = t.Object({
+	groupId: t.String({ format: "uuid" }),
+	name: t.Optional(t.String({ minLength: 1 })),
+});
+
 export const monetizationExecuteBody = t.Object({
 	appId: t.String({ format: "uuid" }),
 	plan: t.Object({
 		deletes: t.Optional(t.Array(t.String({ format: "uuid" }))),
 		edits: t.Optional(t.Array(planEditSchema)),
+		groupEdits: t.Optional(t.Array(planGroupEditSchema)),
 		groups: t.Optional(t.Array(planGroupSchema)),
 		purchases: t.Optional(t.Array(planPurchaseSchema)),
 	}),

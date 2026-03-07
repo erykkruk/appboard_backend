@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import { ASC_TERRITORIES } from "@/config/const";
 import { PurchasesService } from "@/modules/purchases/purchases.service";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { db } from "@/utils/db";
@@ -57,8 +58,13 @@ interface PlanData {
 		prices?: Array<{ currency: string; price: string; territory: string }>;
 		purchaseId: string;
 	}>;
+	groupEdits?: Array<{
+		groupId: string;
+		name?: string;
+	}>;
 	groups?: Array<{
-		name: string;
+		id?: string;
+		name?: string;
 		subscriptions: Array<{
 			duration: string;
 			localizations?: Array<{
@@ -120,7 +126,25 @@ async function getAppContext(
 	};
 }
 
-function buildSystemPrompt(context: AppContext): string {
+function buildTerritoryBlock(territories?: string[]): string {
+	const territoryList =
+		territories && territories.length > 0
+			? ASC_TERRITORIES.filter((t) => territories.includes(t.code))
+			: ASC_TERRITORIES;
+
+	const formatted = territoryList
+		.map((t) => `${t.code} (${t.currency})`)
+		.join(", ");
+
+	return `\nPRICING TERRITORIES:
+Generate prices for the following territories: ${formatted}
+Always include prices for ALL listed territories in every product.`;
+}
+
+function buildSystemPrompt(
+	context: AppContext,
+	territories?: string[],
+): string {
 	const existingProductsBlock =
 		context.existingGroups.length > 0 || context.existingPurchases.length > 0
 			? `
@@ -175,22 +199,32 @@ When you are ready to propose a concrete plan, include it in a special block:
     {
       "name": "Group Name",
       "subscriptions": [
-        { "name": "Pro Monthly", "productId": "pro_monthly", "duration": "P1M", "prices": [{"territory":"USA","currency":"USD","price":"9.99"}] }
+        { "name": "Pro Monthly", "productId": "pro_monthly", "duration": "P1M", "prices": [{"territory":"US","currency":"USD","price":"9.99"}] }
       ]
     }
   ],
   "purchases": [
-    { "name": "Remove Ads", "productId": "remove_ads", "productType": "non_consumable", "prices": [{"territory":"USA","currency":"USD","price":"4.99"}] }
+    { "name": "Remove Ads", "productId": "remove_ads", "productType": "non_consumable", "prices": [{"territory":"US","currency":"USD","price":"4.99"}] }
   ],
   "edits": [
-    { "purchaseId": "uuid-here", "name": "New Name", "prices": [{"territory":"USA","currency":"USD","price":"5.99"}] }
+    { "purchaseId": "uuid-here", "name": "New Name", "prices": [{"territory":"US","currency":"USD","price":"5.99"}] }
+  ],
+  "groupEdits": [
+    { "groupId": "uuid-here", "name": "New Group Name" }
   ],
   "deletes": ["purchase-uuid-to-remove"]
 }
 \`\`\`
 
-Include ONLY the sections that apply (omit empty arrays). Reference existing product UUIDs in "edits" and "deletes".
-Always include the plan block when making a concrete proposal so the user can review and execute it.`;
+IMPORTANT RULES FOR GROUPS:
+- To CREATE a new group: use "groups" without "id" field — a new group will be created with the given subscriptions
+- To ADD subscriptions to an EXISTING group: use "groups" WITH "id" field set to the existing group UUID — subscriptions will be added to that group without creating a new one
+- To RENAME an existing group: use "groupEdits" with the group UUID and new name
+- Existing products have UUIDs listed above — use them in "edits", "deletes", "groupEdits", and "groups[].id"
+
+Include ONLY the sections that apply (omit empty arrays). Reference existing product UUIDs in "edits", "deletes", and "groupEdits".
+Always include the plan block when making a concrete proposal so the user can review and execute it.
+${buildTerritoryBlock(territories)}`;
 }
 
 export class MonetizationChatService {
@@ -198,6 +232,7 @@ export class MonetizationChatService {
 		appId: string,
 		workspaceId: string,
 		messages: Array<{ content: string; role: "assistant" | "user" }>,
+		territories?: string[],
 	): Promise<ReadableStream<Uint8Array>> {
 		const apiKey = await SettingsService.getRaw(
 			workspaceId,
@@ -214,7 +249,7 @@ export class MonetizationChatService {
 			DEFAULT_MODEL;
 
 		const context = await getAppContext(appId, workspaceId);
-		const systemPrompt = buildSystemPrompt(context);
+		const systemPrompt = buildSystemPrompt(context, territories);
 
 		const chatMessages: ChatMessage[] = [
 			{ content: systemPrompt, role: "system" },
@@ -344,27 +379,42 @@ export class MonetizationChatService {
 			failed: [],
 		};
 
-		// 1. Create groups + subscriptions
+		// 1. Create groups + subscriptions (or add subscriptions to existing groups)
 		if (plan.groups?.length) {
 			for (const groupData of plan.groups) {
 				try {
-					const group = await PurchasesService.createGroup(
-						appId,
-						workspaceId,
-						groupData.name,
-					);
-					results.created.push({
-						id: group.id,
-						name: group.name,
-						type: "subscription_group",
-					});
+					let groupId: string;
+
+					if (groupData.id) {
+						// Use existing group — just add subscriptions to it
+						groupId = groupData.id;
+					} else if (groupData.name) {
+						// Create new group
+						const group = await PurchasesService.createGroup(
+							appId,
+							workspaceId,
+							groupData.name,
+						);
+						groupId = group.id;
+						results.created.push({
+							id: group.id,
+							name: group.name,
+							type: "subscription_group",
+						});
+					} else {
+						results.failed.push({
+							error: "Group must have either 'id' (existing) or 'name' (new)",
+							item: "group (missing id and name)",
+						});
+						continue;
+					}
 
 					for (const subData of groupData.subscriptions) {
 						try {
 							const sub = await PurchasesService.createSubscription(
 								appId,
 								workspaceId,
-								group.id,
+								groupId,
 								{
 									duration: subData.duration,
 									localizations: subData.localizations,
@@ -397,6 +447,31 @@ export class MonetizationChatService {
 						item: `group "${groupData.name}"`,
 					});
 					log.error({ err, name: groupData.name }, "Failed to create group");
+				}
+			}
+		}
+
+		// 1b. Edit existing groups (rename)
+		if (plan.groupEdits?.length) {
+			for (const editData of plan.groupEdits) {
+				try {
+					const updated = await PurchasesService.updateGroup(
+						editData.groupId,
+						appId,
+						workspaceId,
+						{ name: editData.name },
+					);
+					results.edited.push({
+						id: updated.id,
+						name: updated.name,
+					});
+				} catch (err) {
+					const msg = err instanceof Error ? err.message : "Unknown error";
+					results.failed.push({
+						error: msg,
+						item: `edit group ${editData.groupId}`,
+					});
+					log.error({ err, groupId: editData.groupId }, "Failed to edit group");
 				}
 			}
 		}
