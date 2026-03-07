@@ -14,6 +14,24 @@ import {
 import { PurchasesService } from "./purchases.service";
 
 export const purchasesController = new Elysia({ prefix: "/apps" })
+	.get(
+		"/:appId/purchases/capabilities",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PurchasesService.checkMonetizationSupport(
+				params.appId,
+				workspaceId!,
+			);
+		},
+		{
+			detail: {
+				description:
+					"Check if the store supports monetization (IAP/subscription management)",
+				tags: ["Purchases"],
+			},
+			params: appIdParams,
+		},
+	)
 	.post(
 		"/:appId/purchases/sync",
 		async ({ params, workspaceId }) => {

@@ -84,6 +84,9 @@ export interface StoreProvider {
 		data: SubscriptionUpdateData,
 	): Promise<void>;
 	deleteSubscription(appId: string, subExternalId: string): Promise<void>;
+	checkMonetizationSupport(
+		appId: string,
+	): Promise<{ reason?: string; supported: boolean }>;
 }
 
 export interface AppData {

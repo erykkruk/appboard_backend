@@ -1008,6 +1008,60 @@ export class GooglePlayProvider implements StoreProvider {
 		log.info({ appId, subExternalId }, "Subscription deleted from Google Play");
 	}
 
+	async checkMonetizationSupport(
+		appId: string,
+	): Promise<{ reason?: string; supported: boolean }> {
+		if (this.isMock) {
+			return { supported: true };
+		}
+
+		const probeId = `__appboard_probe_${Date.now()}`;
+
+		try {
+			const client = await this.getClient();
+
+			await client.api.monetization.onetimeproducts.patch({
+				allowMissing: true,
+				packageName: appId,
+				productId: probeId,
+				"regionsVersion.version": "2025/1",
+				requestBody: {
+					listings: [
+						{
+							description: "Probe",
+							languageCode: "en-US",
+							title: "Probe",
+						},
+					],
+					productId: probeId,
+				},
+				updateMask: "listings",
+			});
+
+			// If we got here, the probe succeeded — clean up
+			try {
+				await client.api.monetization.onetimeproducts.delete({
+					packageName: appId,
+					productId: probeId,
+				});
+			} catch {
+				/* best-effort cleanup */
+			}
+
+			return { supported: true };
+		} catch (err) {
+			const msg = (err as Error).message ?? "";
+			if (msg.includes("payments profile")) {
+				return {
+					reason:
+						"No payments profile registered in Google Play Console. Set up a payments profile to manage in-app purchases and subscriptions.",
+					supported: false,
+				};
+			}
+			throw err;
+		}
+	}
+
 	/** Lazily initializes and returns the Google Play API client */
 	private async getClient(): Promise<GooglePlayClient> {
 		if (!this.client) {

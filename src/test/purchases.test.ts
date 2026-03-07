@@ -337,6 +337,56 @@ describe("Purchases module", () => {
 		expect(res.status).toBe(404);
 	});
 
+	it("workspace B cannot check capabilities for workspace A app", async () => {
+		const res = await app.handle(
+			authRequestB(
+				`http://localhost/api/apps/${appIdGP}/purchases/capabilities`,
+			),
+		);
+
+		expect(res.status).toBe(404);
+	});
+
+	// ── Capabilities ───────────────────────────────────────────────
+
+	it("returns monetization capabilities for GP mock app", async () => {
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/capabilities`,
+			),
+		);
+
+		expect(res.status).toBe(200);
+
+		const data = await res.json();
+		expect(data.supported).toBe(true);
+		expect(data.reason).toBeUndefined();
+	});
+
+	it("returns monetization capabilities for AS mock app", async () => {
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/capabilities`,
+			),
+		);
+
+		expect(res.status).toBe(200);
+
+		const data = await res.json();
+		expect(data.supported).toBe(true);
+	});
+
+	it("returns 404 for capabilities with invalid app ID", async () => {
+		const fakeAppId = "00000000-0000-0000-0000-000000000000";
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${fakeAppId}/purchases/capabilities`,
+			),
+		);
+
+		expect(res.status).toBe(404);
+	});
+
 	// ── CRUD: Create IAP ────────────────────────────────────────────
 
 	it("creates an in-app purchase (GP mock)", async () => {

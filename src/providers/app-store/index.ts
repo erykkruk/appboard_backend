@@ -1448,6 +1448,12 @@ export class AppStoreProvider implements StoreProvider {
 		log.info({ appId, subExternalId }, "Subscription deleted from ASC");
 	}
 
+	async checkMonetizationSupport(
+		_appId: string,
+	): Promise<{ reason?: string; supported: boolean }> {
+		return { supported: true };
+	}
+
 	private mapProductTypeToAsc(productType: string): string {
 		switch (productType) {
 			case "consumable":

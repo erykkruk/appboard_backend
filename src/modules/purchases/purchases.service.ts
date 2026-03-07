@@ -23,6 +23,14 @@ import { createLogger } from "@/utils/logger";
 const log = createLogger("purchases-service");
 
 export class PurchasesService {
+	static async checkMonetizationSupport(appId: string, workspaceId: string) {
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			appId,
+			workspaceId,
+		);
+		return provider.checkMonetizationSupport(externalAppId);
+	}
+
 	static async syncPurchases(appId: string, workspaceId: string) {
 		const [app] = await db
 			.select({
