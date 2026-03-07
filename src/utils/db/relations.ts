@@ -16,10 +16,13 @@ import {
 	listings,
 	purchaseLocalizations,
 	purchasePrices,
+	purchaseReviewInfo,
 	reviews,
 	session,
 	settings,
 	stores,
+	subscriptionGroupLocalizations,
+	subscriptionGroupReviewInfo,
 	subscriptionGroups,
 	user,
 	versionLocalizations,
@@ -250,7 +253,12 @@ export const subscriptionGroupsRelations = relations(
 			fields: [subscriptionGroups.appId],
 			references: [apps.id],
 		}),
+		localizations: many(subscriptionGroupLocalizations),
 		purchases: many(inAppPurchases),
+		reviewInfo: one(subscriptionGroupReviewInfo, {
+			fields: [subscriptionGroups.id],
+			references: [subscriptionGroupReviewInfo.groupId],
+		}),
 	}),
 );
 
@@ -267,6 +275,10 @@ export const inAppPurchasesRelations = relations(
 		}),
 		localizations: many(purchaseLocalizations),
 		prices: many(purchasePrices),
+		reviewInfo: one(purchaseReviewInfo, {
+			fields: [inAppPurchases.id],
+			references: [purchaseReviewInfo.purchaseId],
+		}),
 	}),
 );
 
@@ -286,3 +298,33 @@ export const purchasePricesRelations = relations(purchasePrices, ({ one }) => ({
 		references: [inAppPurchases.id],
 	}),
 }));
+
+export const subscriptionGroupLocalizationsRelations = relations(
+	subscriptionGroupLocalizations,
+	({ one }) => ({
+		group: one(subscriptionGroups, {
+			fields: [subscriptionGroupLocalizations.groupId],
+			references: [subscriptionGroups.id],
+		}),
+	}),
+);
+
+export const subscriptionGroupReviewInfoRelations = relations(
+	subscriptionGroupReviewInfo,
+	({ one }) => ({
+		group: one(subscriptionGroups, {
+			fields: [subscriptionGroupReviewInfo.groupId],
+			references: [subscriptionGroups.id],
+		}),
+	}),
+);
+
+export const purchaseReviewInfoRelations = relations(
+	purchaseReviewInfo,
+	({ one }) => ({
+		purchase: one(inAppPurchases, {
+			fields: [purchaseReviewInfo.purchaseId],
+			references: [inAppPurchases.id],
+		}),
+	}),
+);

@@ -471,6 +471,7 @@ export const subscriptionGroups = pgTable(
 		appId: uuid()
 			.notNull()
 			.references(() => apps.id, { onDelete: "cascade" }),
+		availableTerritories: jsonb().$type<string[]>(),
 		externalId: varchar({ length: 255 }).notNull(),
 		name: varchar({ length: 255 }).notNull(),
 		syncedAt: timestamp(),
@@ -486,8 +487,10 @@ export const inAppPurchases = pgTable(
 		appId: uuid()
 			.notNull()
 			.references(() => apps.id, { onDelete: "cascade" }),
+		availableTerritories: jsonb().$type<string[]>(),
 		duration: varchar({ length: 50 }),
 		externalId: varchar({ length: 255 }).notNull(),
+		familySharable: boolean().notNull().default(false),
 		groupId: uuid().references(() => subscriptionGroups.id, {
 			onDelete: "set null",
 		}),
@@ -534,6 +537,47 @@ export const purchasePrices = pgTable(
 	(t) => [unique().on(t.purchaseId, t.territory)],
 );
 
+export const subscriptionGroupLocalizations = pgTable(
+	"subscription_group_localizations",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		description: text(),
+		groupId: uuid()
+			.notNull()
+			.references(() => subscriptionGroups.id, { onDelete: "cascade" }),
+		language: varchar({ length: 20 }).notNull(),
+		name: varchar({ length: 255 }),
+	},
+	(t) => [unique().on(t.groupId, t.language)],
+);
+
+export const subscriptionGroupReviewInfo = pgTable(
+	"subscription_group_review_info",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		groupId: uuid()
+			.notNull()
+			.references(() => subscriptionGroups.id, { onDelete: "cascade" })
+			.unique(),
+		reviewNotes: text(),
+		screenshotUrl: varchar({ length: 2048 }),
+	},
+);
+
+export const purchaseReviewInfo = pgTable("purchase_review_info", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	purchaseId: uuid()
+		.notNull()
+		.references(() => inAppPurchases.id, { onDelete: "cascade" })
+		.unique(),
+	reviewNotes: text(),
+	screenshotUrl: varchar({ length: 2048 }),
+	useGroupDefault: boolean().notNull().default(true),
+});
+
 export const schema = {
 	account,
 	appAgeRatings,
@@ -551,10 +595,13 @@ export const schema = {
 	listings,
 	purchaseLocalizations,
 	purchasePrices,
+	purchaseReviewInfo,
 	reviews,
 	session,
 	settings,
 	stores,
+	subscriptionGroupLocalizations,
+	subscriptionGroupReviewInfo,
 	subscriptionGroups,
 	user,
 	verification,

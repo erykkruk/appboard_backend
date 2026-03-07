@@ -1008,6 +1008,47 @@ export class GooglePlayProvider implements StoreProvider {
 		log.info({ appId, subExternalId }, "Subscription deleted from Google Play");
 	}
 
+	async updateFamilySharing(
+		subscriptionExternalId: string,
+		familySharable: boolean,
+	): Promise<void> {
+		log.info(
+			{ familySharable, subscriptionExternalId },
+			"Family sharing not supported on Google Play",
+		);
+	}
+
+	async fetchGroupLocalizations(
+		groupExternalId: string,
+	): Promise<import("../store-provider").PurchaseLocalizationData[]> {
+		log.info(
+			{ groupExternalId },
+			"Group localizations not supported on Google Play",
+		);
+		return [];
+	}
+
+	async createGroupLocalization(
+		groupExternalId: string,
+		language: string,
+		data: { name: string },
+	): Promise<void> {
+		log.info(
+			{ data, groupExternalId, language },
+			"Group localization creation not supported on Google Play",
+		);
+	}
+
+	async updateGroupLocalization(
+		localizationExternalId: string,
+		data: { name: string },
+	): Promise<void> {
+		log.info(
+			{ data, localizationExternalId },
+			"Group localization update not supported on Google Play",
+		);
+	}
+
 	async checkMonetizationSupport(
 		appId: string,
 	): Promise<{ reason?: string; supported: boolean }> {

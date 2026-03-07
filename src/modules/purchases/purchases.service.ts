@@ -14,7 +14,10 @@ import {
 	inAppPurchases,
 	purchaseLocalizations,
 	purchasePrices,
+	purchaseReviewInfo,
 	stores,
+	subscriptionGroupLocalizations,
+	subscriptionGroupReviewInfo,
 	subscriptionGroups,
 } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -204,20 +207,27 @@ export class PurchasesService {
 
 		if (!purchase) buildError("notFound", { info: "Purchase not found" });
 
-		const locs = await db
-			.select()
-			.from(purchaseLocalizations)
-			.where(eq(purchaseLocalizations.purchaseId, purchaseId));
-
-		const prices = await db
-			.select()
-			.from(purchasePrices)
-			.where(eq(purchasePrices.purchaseId, purchaseId));
+		const [locs, prices, [revInfo]] = await Promise.all([
+			db
+				.select()
+				.from(purchaseLocalizations)
+				.where(eq(purchaseLocalizations.purchaseId, purchaseId)),
+			db
+				.select()
+				.from(purchasePrices)
+				.where(eq(purchasePrices.purchaseId, purchaseId)),
+			db
+				.select()
+				.from(purchaseReviewInfo)
+				.where(eq(purchaseReviewInfo.purchaseId, purchaseId))
+				.limit(1),
+		]);
 
 		return {
 			...purchase,
 			localizations: locs,
 			prices,
+			reviewInfo: revInfo ?? null,
 		};
 	}
 
@@ -270,10 +280,21 @@ export class PurchasesService {
 		if (!group)
 			buildError("notFound", { info: "Subscription group not found" });
 
-		const subs = await db
-			.select()
-			.from(inAppPurchases)
-			.where(eq(inAppPurchases.groupId, groupId));
+		const [subs, groupLocs, [groupRevInfo]] = await Promise.all([
+			db
+				.select()
+				.from(inAppPurchases)
+				.where(eq(inAppPurchases.groupId, groupId)),
+			db
+				.select()
+				.from(subscriptionGroupLocalizations)
+				.where(eq(subscriptionGroupLocalizations.groupId, groupId)),
+			db
+				.select()
+				.from(subscriptionGroupReviewInfo)
+				.where(eq(subscriptionGroupReviewInfo.groupId, groupId))
+				.limit(1),
+		]);
 
 		const enrichedSubs = await Promise.all(
 			subs.map(async (sub) => {
@@ -289,7 +310,12 @@ export class PurchasesService {
 			}),
 		);
 
-		return { ...group, subscriptions: enrichedSubs };
+		return {
+			...group,
+			localizations: groupLocs,
+			reviewInfo: groupRevInfo ?? null,
+			subscriptions: enrichedSubs,
+		};
 	}
 
 	static async createPurchase(
@@ -545,6 +571,322 @@ export class PurchasesService {
 			"Subscription created",
 		);
 		return PurchasesService.getPurchase(dbPurchase.id);
+	}
+
+	// ── Group Localizations ─────────────────────────────────────────
+
+	static async listGroupLocalizations(groupId: string) {
+		return db
+			.select()
+			.from(subscriptionGroupLocalizations)
+			.where(eq(subscriptionGroupLocalizations.groupId, groupId));
+	}
+
+	static async upsertGroupLocalizations(
+		groupId: string,
+		localizations: Array<{
+			description?: string | null;
+			language: string;
+			name?: string | null;
+		}>,
+	) {
+		for (const loc of localizations) {
+			await db
+				.insert(subscriptionGroupLocalizations)
+				.values({
+					description: loc.description,
+					groupId,
+					language: loc.language,
+					name: loc.name,
+				})
+				.onConflictDoUpdate({
+					set: {
+						description: loc.description,
+						name: loc.name,
+					},
+					target: [
+						subscriptionGroupLocalizations.groupId,
+						subscriptionGroupLocalizations.language,
+					],
+				});
+		}
+		log.info(
+			{ count: localizations.length, groupId },
+			"Group localizations upserted",
+		);
+		return PurchasesService.listGroupLocalizations(groupId);
+	}
+
+	static async deleteGroupLocalization(groupId: string, language: string) {
+		const result = await db
+			.delete(subscriptionGroupLocalizations)
+			.where(
+				and(
+					eq(subscriptionGroupLocalizations.groupId, groupId),
+					eq(subscriptionGroupLocalizations.language, language),
+				),
+			)
+			.returning();
+
+		if (result.length === 0)
+			buildError("notFound", { info: "Group localization not found" });
+
+		log.info({ groupId, language }, "Group localization deleted");
+	}
+
+	// ── Group Availability ──────────────────────────────────────────
+
+	static async getGroupAvailability(groupId: string) {
+		const [group] = await db
+			.select({ availableTerritories: subscriptionGroups.availableTerritories })
+			.from(subscriptionGroups)
+			.where(eq(subscriptionGroups.id, groupId))
+			.limit(1);
+
+		if (!group)
+			buildError("notFound", { info: "Subscription group not found" });
+
+		return { territories: group.availableTerritories ?? [] };
+	}
+
+	static async updateGroupAvailability(groupId: string, territories: string[]) {
+		const result = await db
+			.update(subscriptionGroups)
+			.set({ availableTerritories: territories })
+			.where(eq(subscriptionGroups.id, groupId))
+			.returning();
+
+		if (result.length === 0)
+			buildError("notFound", { info: "Subscription group not found" });
+
+		log.info(
+			{ count: territories.length, groupId },
+			"Group availability updated",
+		);
+		return { territories };
+	}
+
+	// ── Group Review Info ───────────────────────────────────────────
+
+	static async getGroupReviewInfo(groupId: string) {
+		const [info] = await db
+			.select()
+			.from(subscriptionGroupReviewInfo)
+			.where(eq(subscriptionGroupReviewInfo.groupId, groupId))
+			.limit(1);
+
+		return info ?? null;
+	}
+
+	static async upsertGroupReviewInfo(
+		groupId: string,
+		data: { reviewNotes?: string | null; screenshotUrl?: string | null },
+	) {
+		const [result] = await db
+			.insert(subscriptionGroupReviewInfo)
+			.values({
+				groupId,
+				reviewNotes: data.reviewNotes,
+				screenshotUrl: data.screenshotUrl,
+			})
+			.onConflictDoUpdate({
+				set: {
+					reviewNotes: data.reviewNotes,
+					screenshotUrl: data.screenshotUrl,
+				},
+				target: subscriptionGroupReviewInfo.groupId,
+			})
+			.returning();
+
+		log.info({ groupId }, "Group review info upserted");
+		return result;
+	}
+
+	// ── Subscription Availability Override ───────────────────────────
+
+	static async getSubscriptionAvailability(purchaseId: string) {
+		const [purchase] = await db
+			.select({ availableTerritories: inAppPurchases.availableTerritories })
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.id, purchaseId))
+			.limit(1);
+
+		if (!purchase) buildError("notFound", { info: "Purchase not found" });
+
+		return { territories: purchase.availableTerritories };
+	}
+
+	static async updateSubscriptionAvailability(
+		purchaseId: string,
+		territories: string[] | null,
+	) {
+		const result = await db
+			.update(inAppPurchases)
+			.set({ availableTerritories: territories })
+			.where(eq(inAppPurchases.id, purchaseId))
+			.returning();
+
+		if (result.length === 0)
+			buildError("notFound", { info: "Purchase not found" });
+
+		log.info(
+			{ purchaseId, territories: territories?.length ?? "group_default" },
+			"Subscription availability updated",
+		);
+		return { territories };
+	}
+
+	// ── Subscription Review Info Override ────────────────────────────
+
+	static async getSubscriptionReviewInfo(purchaseId: string) {
+		const [info] = await db
+			.select()
+			.from(purchaseReviewInfo)
+			.where(eq(purchaseReviewInfo.purchaseId, purchaseId))
+			.limit(1);
+
+		return info ?? null;
+	}
+
+	static async upsertSubscriptionReviewInfo(
+		purchaseId: string,
+		data: {
+			reviewNotes?: string | null;
+			screenshotUrl?: string | null;
+			useGroupDefault?: boolean;
+		},
+	) {
+		const [result] = await db
+			.insert(purchaseReviewInfo)
+			.values({
+				purchaseId,
+				reviewNotes: data.reviewNotes,
+				screenshotUrl: data.screenshotUrl,
+				useGroupDefault: data.useGroupDefault ?? true,
+			})
+			.onConflictDoUpdate({
+				set: {
+					reviewNotes: data.reviewNotes,
+					screenshotUrl: data.screenshotUrl,
+					useGroupDefault: data.useGroupDefault ?? true,
+				},
+				target: purchaseReviewInfo.purchaseId,
+			})
+			.returning();
+
+		log.info({ purchaseId }, "Purchase review info upserted");
+		return result;
+	}
+
+	// ── Family Sharing ──────────────────────────────────────────────
+
+	static async updateFamilySharing(
+		purchaseId: string,
+		familySharable: boolean,
+	) {
+		const result = await db
+			.update(inAppPurchases)
+			.set({ familySharable })
+			.where(eq(inAppPurchases.id, purchaseId))
+			.returning();
+
+		if (result.length === 0)
+			buildError("notFound", { info: "Purchase not found" });
+
+		log.info({ familySharable, purchaseId }, "Family sharing updated");
+		return result[0];
+	}
+
+	// ── Effective Values (Merge Logic) ──────────────────────────────
+
+	static async getEffectiveAvailability(purchaseId: string) {
+		const [purchase] = await db
+			.select({
+				availableTerritories: inAppPurchases.availableTerritories,
+				groupId: inAppPurchases.groupId,
+			})
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.id, purchaseId))
+			.limit(1);
+
+		if (!purchase) buildError("notFound", { info: "Purchase not found" });
+
+		if (purchase.availableTerritories !== null) {
+			return {
+				source: "subscription" as const,
+				territories: purchase.availableTerritories,
+			};
+		}
+
+		if (purchase.groupId) {
+			const [group] = await db
+				.select({
+					availableTerritories: subscriptionGroups.availableTerritories,
+				})
+				.from(subscriptionGroups)
+				.where(eq(subscriptionGroups.id, purchase.groupId))
+				.limit(1);
+			return {
+				source: "group" as const,
+				territories: group?.availableTerritories ?? [],
+			};
+		}
+
+		return { source: "none" as const, territories: [] };
+	}
+
+	static async getEffectiveReviewInfo(purchaseId: string) {
+		const [purchase] = await db
+			.select({ groupId: inAppPurchases.groupId })
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.id, purchaseId))
+			.limit(1);
+
+		if (!purchase) buildError("notFound", { info: "Purchase not found" });
+
+		const [subReview] = await db
+			.select()
+			.from(purchaseReviewInfo)
+			.where(eq(purchaseReviewInfo.purchaseId, purchaseId))
+			.limit(1);
+
+		if (subReview && !subReview.useGroupDefault) {
+			return { source: "subscription" as const, ...subReview };
+		}
+
+		if (purchase.groupId) {
+			const [groupReview] = await db
+				.select()
+				.from(subscriptionGroupReviewInfo)
+				.where(eq(subscriptionGroupReviewInfo.groupId, purchase.groupId))
+				.limit(1);
+
+			if (groupReview) {
+				return { source: "group" as const, ...groupReview };
+			}
+		}
+
+		return null;
+	}
+
+	// ── Verify Group Ownership ──────────────────────────────────────
+
+	static async verifyGroupOwnership(groupId: string, appId: string) {
+		const [group] = await db
+			.select()
+			.from(subscriptionGroups)
+			.where(
+				and(
+					eq(subscriptionGroups.id, groupId),
+					eq(subscriptionGroups.appId, appId),
+				),
+			)
+			.limit(1);
+
+		if (!group)
+			buildError("notFound", { info: "Subscription group not found" });
+
+		return group;
 	}
 
 	private static async getAppProvider(

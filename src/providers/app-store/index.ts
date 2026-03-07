@@ -1098,6 +1098,8 @@ export class AppStoreProvider implements StoreProvider {
 							? (ASC_TO_ISO_DURATION[rawDuration] ?? rawDuration)
 							: undefined,
 						externalId: sub.id,
+						familySharable:
+							(attrs.familySharable as boolean | undefined) ?? false,
 						groupExternalId: raw.id,
 						localizations,
 						name: (attrs.name as string) ?? localizations[0]?.name ?? "",
@@ -1446,6 +1448,114 @@ export class AppStoreProvider implements StoreProvider {
 		await remove({ id: subExternalId, type: "subscriptions" });
 
 		log.info({ appId, subExternalId }, "Subscription deleted from ASC");
+	}
+
+	async updateFamilySharing(
+		subscriptionExternalId: string,
+		familySharable: boolean,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info(
+				{ familySharable, subscriptionExternalId },
+				"Mock: family sharing updated",
+			);
+			return;
+		}
+
+		const { update } = await createAppStoreClient(this.credentials);
+
+		await update(
+			{ id: subscriptionExternalId, type: "subscriptions" },
+			{ attributes: { familySharable } },
+		);
+
+		log.info(
+			{ familySharable, subscriptionExternalId },
+			"Family sharing updated on ASC",
+		);
+	}
+
+	async fetchGroupLocalizations(
+		groupExternalId: string,
+	): Promise<PurchaseLocalizationData[]> {
+		if (this.isMock) {
+			return [
+				{ externalId: "mock-loc-1", language: "en-US", name: "Mock Group" },
+			];
+		}
+
+		const { readAll } = await createAppStoreClient(this.credentials);
+
+		const { data: locs } = await readAll(
+			`subscriptionGroups/${groupExternalId}/subscriptionGroupLocalizations`,
+		);
+
+		const localizations: PurchaseLocalizationData[] = (
+			(locs ?? []) as ApiResource[]
+		).map((loc) => ({
+			externalId: loc.id,
+			language: (loc.attributes.locale as string) ?? "en-US",
+			name: (loc.attributes.name as string) ?? undefined,
+		}));
+
+		log.info(
+			{ count: localizations.length, groupExternalId },
+			"Fetched group localizations from ASC",
+		);
+		return localizations;
+	}
+
+	async createGroupLocalization(
+		groupExternalId: string,
+		language: string,
+		data: { name: string },
+	): Promise<void> {
+		if (this.isMock) {
+			log.info(
+				{ groupExternalId, language },
+				"Mock: group localization created",
+			);
+			return;
+		}
+
+		const { create } = await createAppStoreClient(this.credentials);
+
+		await create({
+			attributes: {
+				locale: language,
+				name: data.name,
+			},
+			relationships: {
+				subscriptionGroup: {
+					data: { id: groupExternalId, type: "subscriptionGroups" },
+				},
+			},
+			type: "subscriptionGroupLocalizations",
+		});
+
+		log.info(
+			{ groupExternalId, language },
+			"Group localization created on ASC",
+		);
+	}
+
+	async updateGroupLocalization(
+		localizationExternalId: string,
+		data: { name: string },
+	): Promise<void> {
+		if (this.isMock) {
+			log.info({ localizationExternalId }, "Mock: group localization updated");
+			return;
+		}
+
+		const { update } = await createAppStoreClient(this.credentials);
+
+		await update(
+			{ id: localizationExternalId, type: "subscriptionGroupLocalizations" },
+			{ attributes: { name: data.name } },
+		);
+
+		log.info({ localizationExternalId }, "Group localization updated on ASC");
 	}
 
 	async checkMonetizationSupport(

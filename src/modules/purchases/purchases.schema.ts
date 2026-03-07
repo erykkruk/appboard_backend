@@ -60,3 +60,50 @@ export const createSubscriptionBody = t.Object({
 	prices: t.Optional(t.Array(priceSchema)),
 	productId: t.String({ minLength: 1 }),
 });
+
+// ── Group localizations ──────────────────────────────────────────
+
+const groupLocalizationSchema = t.Object({
+	description: t.Optional(t.Nullable(t.String())),
+	language: t.String({ minLength: 1 }),
+	name: t.Optional(t.Nullable(t.String())),
+});
+
+export const upsertGroupLocalizationsBody = t.Object({
+	localizations: t.Array(groupLocalizationSchema, { minItems: 1 }),
+});
+
+export const groupLocLanguageParams = t.Object({
+	appId: t.String({ format: "uuid" }),
+	groupId: t.String({ format: "uuid" }),
+	language: t.String({ minLength: 1 }),
+});
+
+// ── Availability ─────────────────────────────────────────────────
+
+export const updateAvailabilityBody = t.Object({
+	territories: t.Array(t.String({ minLength: 1 })),
+});
+
+export const updateSubscriptionAvailabilityBody = t.Object({
+	territories: t.Nullable(t.Array(t.String({ minLength: 1 }))),
+});
+
+// ── Review info ──────────────────────────────────────────────────
+
+export const upsertGroupReviewInfoBody = t.Object({
+	reviewNotes: t.Optional(t.Nullable(t.String())),
+	screenshotUrl: t.Optional(t.Nullable(t.String())),
+});
+
+export const upsertPurchaseReviewInfoBody = t.Object({
+	reviewNotes: t.Optional(t.Nullable(t.String())),
+	screenshotUrl: t.Optional(t.Nullable(t.String())),
+	useGroupDefault: t.Optional(t.Boolean()),
+});
+
+// ── Family sharing ───────────────────────────────────────────────
+
+export const updateFamilySharingBody = t.Object({
+	familySharable: t.Boolean(),
+});

@@ -84,6 +84,36 @@ export interface StoreProvider {
 		data: SubscriptionUpdateData,
 	): Promise<void>;
 	deleteSubscription(appId: string, subExternalId: string): Promise<void>;
+
+	// Optional: Availability
+	fetchSubscriptionAvailability?(
+		subscriptionExternalId: string,
+	): Promise<string[]>;
+	updateSubscriptionAvailability?(
+		subscriptionExternalId: string,
+		territories: string[],
+	): Promise<void>;
+
+	// Optional: Family sharing
+	updateFamilySharing?(
+		subscriptionExternalId: string,
+		familySharable: boolean,
+	): Promise<void>;
+
+	// Optional: Group localizations
+	fetchGroupLocalizations?(
+		groupExternalId: string,
+	): Promise<PurchaseLocalizationData[]>;
+	createGroupLocalization?(
+		groupExternalId: string,
+		language: string,
+		data: { name: string },
+	): Promise<void>;
+	updateGroupLocalization?(
+		localizationExternalId: string,
+		data: { name: string },
+	): Promise<void>;
+
 	checkMonetizationSupport(
 		appId: string,
 	): Promise<{ reason?: string; supported: boolean }>;
@@ -185,6 +215,7 @@ export interface SubscriptionGroupData {
 export interface InAppPurchaseData {
 	duration?: string;
 	externalId: string;
+	familySharable?: boolean;
 	groupExternalId?: string;
 	localizations?: PurchaseLocalizationData[];
 	name: string;

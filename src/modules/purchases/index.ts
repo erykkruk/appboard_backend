@@ -6,10 +6,17 @@ import {
 	createPurchaseBody,
 	createSubscriptionBody,
 	groupIdParams,
+	groupLocLanguageParams,
 	purchaseIdParams,
 	subscriptionInGroupParams,
+	updateAvailabilityBody,
+	updateFamilySharingBody,
 	updateGroupBody,
 	updatePurchaseBody,
+	updateSubscriptionAvailabilityBody,
+	upsertGroupLocalizationsBody,
+	upsertGroupReviewInfoBody,
+	upsertPurchaseReviewInfoBody,
 } from "./purchases.schema";
 import { PurchasesService } from "./purchases.service";
 
@@ -223,5 +230,229 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 				tags: ["Purchases"],
 			},
 			params: subscriptionInGroupParams,
+		},
+	)
+	// ── Group Localizations ──────────────────────────────────────
+	.get(
+		"/:appId/subscription-groups/:groupId/localizations",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
+			const localizations = await PurchasesService.listGroupLocalizations(
+				params.groupId,
+			);
+			return { localizations };
+		},
+		{
+			detail: {
+				description: "List localizations for a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
+	.put(
+		"/:appId/subscription-groups/:groupId/localizations",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
+			const localizations = await PurchasesService.upsertGroupLocalizations(
+				params.groupId,
+				body.localizations,
+			);
+			return { localizations };
+		},
+		{
+			body: upsertGroupLocalizationsBody,
+			detail: {
+				description: "Upsert localizations for a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
+	.delete(
+		"/:appId/subscription-groups/:groupId/localizations/:language",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
+			await PurchasesService.deleteGroupLocalization(
+				params.groupId,
+				params.language,
+			);
+			return { success: true };
+		},
+		{
+			detail: {
+				description: "Delete a localization from a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupLocLanguageParams,
+		},
+	)
+	// ── Group Availability ───────────────────────────────────────
+	.get(
+		"/:appId/subscription-groups/:groupId/availability",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
+			return PurchasesService.getGroupAvailability(params.groupId);
+		},
+		{
+			detail: {
+				description: "Get available territories for a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
+	.put(
+		"/:appId/subscription-groups/:groupId/availability",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
+			return PurchasesService.updateGroupAvailability(
+				params.groupId,
+				body.territories,
+			);
+		},
+		{
+			body: updateAvailabilityBody,
+			detail: {
+				description: "Update available territories for a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
+	// ── Group Review Info ────────────────────────────────────────
+	.get(
+		"/:appId/subscription-groups/:groupId/review-info",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
+			const reviewInfo = await PurchasesService.getGroupReviewInfo(
+				params.groupId,
+			);
+			return { reviewInfo };
+		},
+		{
+			detail: {
+				description: "Get review info for a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
+	.put(
+		"/:appId/subscription-groups/:groupId/review-info",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
+			const reviewInfo = await PurchasesService.upsertGroupReviewInfo(
+				params.groupId,
+				body,
+			);
+			return { reviewInfo };
+		},
+		{
+			body: upsertGroupReviewInfoBody,
+			detail: {
+				description: "Upsert review info for a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
+	// ── Subscription Availability Override ────────────────────────
+	.get(
+		"/:appId/purchases/:purchaseId/availability",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PurchasesService.getSubscriptionAvailability(params.purchaseId);
+		},
+		{
+			detail: {
+				description:
+					"Get available territories for a purchase (null = group default)",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
+	.put(
+		"/:appId/purchases/:purchaseId/availability",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PurchasesService.updateSubscriptionAvailability(
+				params.purchaseId,
+				body.territories,
+			);
+		},
+		{
+			body: updateSubscriptionAvailabilityBody,
+			detail: {
+				description:
+					"Update available territories for a purchase (null = reset to group default)",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
+	// ── Subscription Review Info Override ─────────────────────────
+	.get(
+		"/:appId/purchases/:purchaseId/review-info",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const reviewInfo = await PurchasesService.getSubscriptionReviewInfo(
+				params.purchaseId,
+			);
+			return { reviewInfo };
+		},
+		{
+			detail: {
+				description: "Get review info for a purchase",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
+	.put(
+		"/:appId/purchases/:purchaseId/review-info",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const reviewInfo = await PurchasesService.upsertSubscriptionReviewInfo(
+				params.purchaseId,
+				body,
+			);
+			return { reviewInfo };
+		},
+		{
+			body: upsertPurchaseReviewInfoBody,
+			detail: {
+				description: "Upsert review info for a purchase",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
+	// ── Family Sharing ───────────────────────────────────────────
+	.patch(
+		"/:appId/purchases/:purchaseId/family-sharing",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const purchase = await PurchasesService.updateFamilySharing(
+				params.purchaseId,
+				body.familySharable,
+			);
+			return { purchase };
+		},
+		{
+			body: updateFamilySharingBody,
+			detail: {
+				description: "Toggle family sharing for a purchase",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
 		},
 	);

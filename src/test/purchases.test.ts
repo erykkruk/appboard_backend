@@ -1385,4 +1385,582 @@ describe("Purchases module", () => {
 		// Cleanup
 		await cleanupStores([emptyStoreId]);
 	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Group Localizations CRUD ────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("group localizations: upsert → list → delete (AS)", async () => {
+		// Create a group for testing
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Loc Test Group" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(groupRes.status).toBe(200);
+		const groupId = (await groupRes.json()).group.id;
+
+		// Upsert localizations
+		const upsertRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/localizations`,
+				{
+					body: JSON.stringify({
+						localizations: [
+							{
+								description: "Premium features",
+								language: "en-US",
+								name: "Premium",
+							},
+							{
+								description: "Funkcje premium",
+								language: "pl-PL",
+								name: "Premium",
+							},
+						],
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(upsertRes.status).toBe(200);
+		const upsertData = await upsertRes.json();
+		expect(upsertData.localizations.length).toBe(2);
+
+		// List
+		const listRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/localizations`,
+			),
+		);
+		expect(listRes.status).toBe(200);
+		const listData = await listRes.json();
+		expect(listData.localizations.length).toBe(2);
+
+		// Update existing + add new
+		const upsert2Res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/localizations`,
+				{
+					body: JSON.stringify({
+						localizations: [
+							{
+								description: "Updated premium",
+								language: "en-US",
+								name: "Premium Updated",
+							},
+							{
+								description: "Fonctions premium",
+								language: "fr-FR",
+								name: "Premium",
+							},
+						],
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(upsert2Res.status).toBe(200);
+		const upsert2Data = await upsert2Res.json();
+		expect(upsert2Data.localizations.length).toBe(3);
+
+		// Verify updated localization
+		const enLoc = upsert2Data.localizations.find(
+			(l: { language: string }) => l.language === "en-US",
+		);
+		expect(enLoc.name).toBe("Premium Updated");
+
+		// Delete one
+		const deleteRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/localizations/pl-PL`,
+				{ method: "DELETE" },
+			),
+		);
+		expect(deleteRes.status).toBe(200);
+
+		// Verify deleted
+		const afterDeleteRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/localizations`,
+			),
+		);
+		const afterDeleteData = await afterDeleteRes.json();
+		expect(afterDeleteData.localizations.length).toBe(2);
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Group Availability ──────────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("group availability: set → get → update (AS)", async () => {
+		// Create a group
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Avail Test Group" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		// Initially empty
+		const getRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/availability`,
+			),
+		);
+		expect(getRes.status).toBe(200);
+		const getData = await getRes.json();
+		expect(getData.territories).toEqual([]);
+
+		// Set territories
+		const setRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/availability`,
+				{
+					body: JSON.stringify({ territories: ["US", "GB", "DE", "FR"] }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(setRes.status).toBe(200);
+		const setData = await setRes.json();
+		expect(setData.territories).toEqual(["US", "GB", "DE", "FR"]);
+
+		// Verify via GET
+		const verifyRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/availability`,
+			),
+		);
+		const verifyData = await verifyRes.json();
+		expect(verifyData.territories).toEqual(["US", "GB", "DE", "FR"]);
+
+		// Update to fewer territories
+		const updateRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/availability`,
+				{
+					body: JSON.stringify({ territories: ["US", "GB"] }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(updateRes.status).toBe(200);
+		expect((await updateRes.json()).territories).toEqual(["US", "GB"]);
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Group Review Info ───────────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("group review info: upsert → get → update (AS)", async () => {
+		// Create a group
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Review Test Group" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		// Initially null
+		const getRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/review-info`,
+			),
+		);
+		expect(getRes.status).toBe(200);
+		expect((await getRes.json()).reviewInfo).toBeNull();
+
+		// Upsert review info
+		const upsertRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/review-info`,
+				{
+					body: JSON.stringify({
+						reviewNotes: "Test review notes for app reviewer",
+						screenshotUrl: "https://example.com/screenshot.png",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(upsertRes.status).toBe(200);
+		const upsertData = await upsertRes.json();
+		expect(upsertData.reviewInfo.reviewNotes).toBe(
+			"Test review notes for app reviewer",
+		);
+		expect(upsertData.reviewInfo.screenshotUrl).toBe(
+			"https://example.com/screenshot.png",
+		);
+
+		// Update
+		const updateRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/review-info`,
+				{
+					body: JSON.stringify({
+						reviewNotes: "Updated review notes",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(updateRes.status).toBe(200);
+		expect((await updateRes.json()).reviewInfo.reviewNotes).toBe(
+			"Updated review notes",
+		);
+
+		// Verify group detail includes review info
+		const groupDetail = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}`,
+			),
+		);
+		const groupData = (await groupDetail.json()).group;
+		expect(groupData.reviewInfo).not.toBeNull();
+		expect(groupData.localizations).toBeDefined();
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Subscription Availability Override ──────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("subscription availability: set custom → verify → reset to group default (AS)", async () => {
+		// Create group with availability
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Sub Avail Test" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		// Set group availability
+		await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/availability`,
+				{
+					body: JSON.stringify({ territories: ["US", "GB", "DE"] }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+
+		// Create a subscription in the group
+		const subRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/subscriptions`,
+				{
+					body: JSON.stringify({
+						duration: "P1M",
+						name: "Avail Test Sub",
+						productId: "inttest.avail.sub",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+			),
+		);
+		const purchaseId = (await subRes.json()).purchase.id;
+
+		// Initially null (uses group default)
+		const getRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/availability`,
+			),
+		);
+		expect(getRes.status).toBe(200);
+		expect((await getRes.json()).territories).toBeNull();
+
+		// Set custom availability
+		const setRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/availability`,
+				{
+					body: JSON.stringify({ territories: ["US"] }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(setRes.status).toBe(200);
+		expect((await setRes.json()).territories).toEqual(["US"]);
+
+		// Reset to group default (null)
+		const resetRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/availability`,
+				{
+					body: JSON.stringify({ territories: null }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(resetRes.status).toBe(200);
+		expect((await resetRes.json()).territories).toBeNull();
+
+		// Cleanup
+		await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}`,
+				{ method: "DELETE" },
+			),
+		);
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Subscription Review Info Override ────────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("subscription review info: useGroupDefault=true vs false (AS)", async () => {
+		// Create group with review info
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Sub Review Test" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/review-info`,
+				{
+					body: JSON.stringify({
+						reviewNotes: "Group-level review notes",
+						screenshotUrl: "https://example.com/group.png",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+
+		// Create subscription
+		const subRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/subscriptions`,
+				{
+					body: JSON.stringify({
+						duration: "P1M",
+						name: "Review Test Sub",
+						productId: "inttest.review.sub",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+			),
+		);
+		const purchaseId = (await subRes.json()).purchase.id;
+
+		// Initially null (no override)
+		const getRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/review-info`,
+			),
+		);
+		expect(getRes.status).toBe(200);
+		expect((await getRes.json()).reviewInfo).toBeNull();
+
+		// Set custom review info with useGroupDefault=false
+		const setRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/review-info`,
+				{
+					body: JSON.stringify({
+						reviewNotes: "Custom sub review notes",
+						screenshotUrl: "https://example.com/sub.png",
+						useGroupDefault: false,
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(setRes.status).toBe(200);
+		const setData = await setRes.json();
+		expect(setData.reviewInfo.reviewNotes).toBe("Custom sub review notes");
+		expect(setData.reviewInfo.useGroupDefault).toBe(false);
+
+		// Switch back to group default
+		const resetRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/review-info`,
+				{
+					body: JSON.stringify({
+						useGroupDefault: true,
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(resetRes.status).toBe(200);
+		expect((await resetRes.json()).reviewInfo.useGroupDefault).toBe(true);
+
+		// Verify purchase detail includes reviewInfo
+		const detailRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}`,
+			),
+		);
+		const detail = (await detailRes.json()).purchase;
+		expect(detail.reviewInfo).not.toBeNull();
+
+		// Cleanup
+		await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}`,
+				{ method: "DELETE" },
+			),
+		);
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Family Sharing Toggle ───────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("family sharing: enable → disable (AS)", async () => {
+		// Create group + subscription
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Family Share Test" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		const subRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/subscriptions`,
+				{
+					body: JSON.stringify({
+						duration: "P1M",
+						name: "Family Test Sub",
+						productId: "inttest.family.sub",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+			),
+		);
+		const purchaseId = (await subRes.json()).purchase.id;
+
+		// Initially false
+		const detailRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}`,
+			),
+		);
+		expect((await detailRes.json()).purchase.familySharable).toBe(false);
+
+		// Enable
+		const enableRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/family-sharing`,
+				{
+					body: JSON.stringify({ familySharable: true }),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(enableRes.status).toBe(200);
+		expect((await enableRes.json()).purchase.familySharable).toBe(true);
+
+		// Verify via GET
+		const verifyRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}`,
+			),
+		);
+		expect((await verifyRes.json()).purchase.familySharable).toBe(true);
+
+		// Disable
+		const disableRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/family-sharing`,
+				{
+					body: JSON.stringify({ familySharable: false }),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(disableRes.status).toBe(200);
+		expect((await disableRes.json()).purchase.familySharable).toBe(false);
+
+		// Cleanup
+		await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}`,
+				{ method: "DELETE" },
+			),
+		);
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Workspace Isolation ─────────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("workspace B cannot access workspace A group localizations", async () => {
+		// Create a group in workspace A
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Isolation Test" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		// Workspace B tries to access — should fail (app not found for B's workspace)
+		const isolationRes = await app.handle(
+			authRequestB(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/localizations`,
+			),
+		);
+		expect(isolationRes.status).toBe(404);
+	});
+
+	it("workspace B cannot access workspace A family sharing", async () => {
+		// Get a purchase from workspace A
+		const listRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases`),
+		);
+		const purchases = (await listRes.json()).purchases;
+		if (purchases.length === 0) return;
+
+		const purchaseId = purchases[0].id;
+
+		// Workspace B tries to toggle family sharing
+		const isolationRes = await app.handle(
+			authRequestB(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/family-sharing`,
+				{
+					body: JSON.stringify({ familySharable: true }),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(isolationRes.status).toBe(404);
+	});
 });
