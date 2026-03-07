@@ -6,6 +6,12 @@ const priceSchema = t.Object({
 	territory: t.String(),
 });
 
+const localizationSchema = t.Object({
+	description: t.Optional(t.String()),
+	language: t.String(),
+	name: t.Optional(t.String()),
+});
+
 const chatMessageSchema = t.Object({
 	content: t.String({ minLength: 1 }),
 	role: t.Union([t.Literal("user"), t.Literal("assistant")]),
@@ -18,20 +24,15 @@ export const monetizationChatBody = t.Object({
 });
 
 const planGroupSchema = t.Object({
+	availability: t.Optional(t.Array(t.String())),
 	id: t.Optional(t.String()),
+	localizations: t.Optional(t.Array(localizationSchema)),
 	name: t.Optional(t.String({ minLength: 1 })),
+	reviewNotes: t.Optional(t.String()),
 	subscriptions: t.Array(
 		t.Object({
 			duration: t.String({ minLength: 1 }),
-			localizations: t.Optional(
-				t.Array(
-					t.Object({
-						description: t.Optional(t.String()),
-						language: t.String(),
-						name: t.Optional(t.String()),
-					}),
-				),
-			),
+			localizations: t.Optional(t.Array(localizationSchema)),
 			name: t.String({ minLength: 1 }),
 			prices: t.Optional(t.Array(priceSchema)),
 			productId: t.String({ minLength: 1 }),
@@ -40,15 +41,7 @@ const planGroupSchema = t.Object({
 });
 
 const planPurchaseSchema = t.Object({
-	localizations: t.Optional(
-		t.Array(
-			t.Object({
-				description: t.Optional(t.String()),
-				language: t.String(),
-				name: t.Optional(t.String()),
-			}),
-		),
-	),
+	localizations: t.Optional(t.Array(localizationSchema)),
 	name: t.String({ minLength: 1 }),
 	prices: t.Optional(t.Array(priceSchema)),
 	productId: t.String({ minLength: 1 }),
@@ -56,23 +49,18 @@ const planPurchaseSchema = t.Object({
 });
 
 const planEditSchema = t.Object({
-	localizations: t.Optional(
-		t.Array(
-			t.Object({
-				description: t.Optional(t.String()),
-				language: t.String(),
-				name: t.Optional(t.String()),
-			}),
-		),
-	),
+	localizations: t.Optional(t.Array(localizationSchema)),
 	name: t.Optional(t.String({ minLength: 1 })),
 	prices: t.Optional(t.Array(priceSchema)),
 	purchaseId: t.String(),
 });
 
 const planGroupEditSchema = t.Object({
+	availability: t.Optional(t.Array(t.String())),
 	groupId: t.String(),
+	localizations: t.Optional(t.Array(localizationSchema)),
 	name: t.Optional(t.String({ minLength: 1 })),
+	reviewNotes: t.Optional(t.String()),
 });
 
 export const quickActionBody = t.Object({
@@ -82,15 +70,7 @@ export const quickActionBody = t.Object({
 			duration: t.Optional(t.String()),
 			groupName: t.Optional(t.String()),
 			id: t.String({ format: "uuid" }),
-			localizations: t.Optional(
-				t.Array(
-					t.Object({
-						description: t.Optional(t.String()),
-						language: t.String(),
-						name: t.Optional(t.String()),
-					}),
-				),
-			),
+			localizations: t.Optional(t.Array(localizationSchema)),
 			name: t.String(),
 			prices: t.Optional(t.Array(priceSchema)),
 			productId: t.Optional(t.String()),

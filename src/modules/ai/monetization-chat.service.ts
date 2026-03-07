@@ -63,12 +63,26 @@ interface PlanData {
 	}>;
 	groupDeletes?: string[];
 	groupEdits?: Array<{
+		availability?: string[];
 		groupId: string;
+		localizations?: Array<{
+			description?: string;
+			language: string;
+			name?: string;
+		}>;
 		name?: string;
+		reviewNotes?: string;
 	}>;
 	groups?: Array<{
+		availability?: string[];
 		id?: string;
+		localizations?: Array<{
+			description?: string;
+			language: string;
+			name?: string;
+		}>;
 		name?: string;
+		reviewNotes?: string;
 		subscriptions: Array<{
 			duration: string;
 			localizations?: Array<{
@@ -211,8 +225,14 @@ When you are ready to propose a concrete plan, include it in a special block:
   "groups": [
     {
       "name": "Group Name",
+      "localizations": [
+        { "language": "en-US", "name": "Group Name", "description": "Subscribe for premium features" },
+        { "language": "pl", "name": "Nazwa Grupy", "description": "Subskrybuj premium funkcje" }
+      ],
+      "reviewNotes": "This group contains premium subscription tiers. Test account: test@example.com / password123",
+      "availability": ["US", "GB", "DE", "PL", "FR"],
       "subscriptions": [
-        { "name": "Pro Monthly", "productId": "pro_monthly", "duration": "P1M", "prices": [{"territory":"US","currency":"USD","price":"9.99"}] }
+        { "name": "Pro Monthly", "productId": "pro_monthly", "duration": "P1M", "prices": [{"territory":"US","currency":"USD","price":"9.99"}], "localizations": [{"language": "en-US", "name": "Pro Monthly", "description": "Full access, billed monthly"}] }
       ]
     }
   ],
@@ -220,15 +240,22 @@ When you are ready to propose a concrete plan, include it in a special block:
     { "name": "Remove Ads", "productId": "remove_ads", "productType": "non_consumable", "prices": [{"territory":"US","currency":"USD","price":"4.99"}] }
   ],
   "edits": [
-    { "purchaseId": "uuid-here", "name": "New Name", "prices": [{"territory":"US","currency":"USD","price":"5.99"}] }
+    { "purchaseId": "uuid-or-name", "name": "New Name", "prices": [...], "localizations": [...] }
   ],
   "groupEdits": [
-    { "groupId": "uuid-here", "name": "New Group Name" }
+    { "groupId": "uuid-or-name", "name": "New Group Name", "localizations": [...], "reviewNotes": "...", "availability": ["US", "GB"] }
   ],
-  "deletes": ["purchase-uuid-to-remove"],
-  "groupDeletes": ["group-uuid-to-remove"]
+  "deletes": ["purchase-uuid-or-name"],
+  "groupDeletes": ["group-uuid-or-name"]
 }
 \`\`\`
+
+GROUP METADATA:
+- "localizations": Translate the group name and add a marketing description for each language. Generate localizations for the app's likely target languages.
+- "reviewNotes": Write notes for the App Store Review team explaining what this group offers. Include test account info if the user provides it.
+- "availability": List of territory codes where subscriptions should be available. If not specified, defaults to all territories.
+- Subscription "localizations": Each subscription should have localized name and description explaining what the user gets and the billing period.
+When creating or editing groups/subscriptions, ALWAYS include localizations with at least "en-US". Generate descriptions that are clear, marketing-friendly, and explain the value proposition.
 
 IMPORTANT RULES FOR GROUPS:
 - ALWAYS prefer using EXISTING groups. If groups already exist, add new subscriptions to them using "groups" WITH "id" set to the existing group's UUID or name.
@@ -610,6 +637,71 @@ export class MonetizationChatService {
 			return null;
 		}
 
+		async function applyGroupMetadata(
+			groupId: string,
+			groupName: string,
+			meta: {
+				availability?: string[];
+				localizations?: Array<{
+					description?: string;
+					language: string;
+					name?: string;
+				}>;
+				reviewNotes?: string;
+			},
+		) {
+			if (meta.localizations?.length) {
+				try {
+					await PurchasesService.upsertGroupLocalizations(
+						groupId,
+						meta.localizations,
+					);
+					log.info(
+						{ groupId, count: meta.localizations.length },
+						"Group localizations applied",
+					);
+				} catch (err) {
+					results.failed.push({
+						error:
+							err instanceof Error ? err.message : "Unknown error",
+						item: `localizations for group "${groupName}"`,
+					});
+				}
+			}
+			if (meta.reviewNotes !== undefined) {
+				try {
+					await PurchasesService.upsertGroupReviewInfo(groupId, {
+						reviewNotes: meta.reviewNotes,
+					});
+					log.info({ groupId }, "Group review notes applied");
+				} catch (err) {
+					results.failed.push({
+						error:
+							err instanceof Error ? err.message : "Unknown error",
+						item: `review notes for group "${groupName}"`,
+					});
+				}
+			}
+			if (meta.availability?.length) {
+				try {
+					await PurchasesService.updateGroupAvailability(
+						groupId,
+						meta.availability,
+					);
+					log.info(
+						{ groupId, count: meta.availability.length },
+						"Group availability applied",
+					);
+				} catch (err) {
+					results.failed.push({
+						error:
+							err instanceof Error ? err.message : "Unknown error",
+						item: `availability for group "${groupName}"`,
+					});
+				}
+			}
+		}
+
 		// 1. Create groups + subscriptions (or add subscriptions to existing groups)
 		if (plan.groups?.length) {
 			for (const groupData of plan.groups) {
@@ -675,6 +767,13 @@ export class MonetizationChatService {
 							);
 						}
 					}
+
+					// Apply group metadata (localizations, review notes, availability)
+					await applyGroupMetadata(groupId, groupData.name ?? "", {
+						availability: groupData.availability,
+						localizations: groupData.localizations,
+						reviewNotes: groupData.reviewNotes,
+					});
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : "Unknown error";
 					results.failed.push({
@@ -707,6 +806,13 @@ export class MonetizationChatService {
 					results.edited.push({
 						id: updated.id,
 						name: updated.name,
+					});
+
+					// Apply group metadata
+					await applyGroupMetadata(resolvedId, editData.groupId, {
+						availability: editData.availability,
+						localizations: editData.localizations,
+						reviewNotes: editData.reviewNotes,
 					});
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : "Unknown error";
