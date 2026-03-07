@@ -189,11 +189,20 @@ MONETIZATION KNOWLEDGE:
 - Always create subscription groups to organize related subscription tiers
 - Non-consumable = one-time (e.g. remove ads, unlock feature). Consumable = repeatable (e.g. coins, gems)
 
+CRITICAL PRICING RULES — PURCHASING POWER PARITY:
+Prices MUST be adjusted per country based on local purchasing power. NEVER use flat currency conversion. Use these approximate tiers relative to US price (1.0x):
+- Tier 1 (1.0x): US, CH, NO, AU, CA, GB, SE, DK, SG, JP, NZ, IE, DE, FR, NL, BE, AT, FI, IT, ES, KR, IL, AE, SA, HK
+- Tier 2 (0.55x): PT, CZ, GR, SI, EE, HR, SK, LT, LV, TW, CL, MY, PL, HU, RO, BG, MX, BR, TH, ZA, TR, AR, CO, PE, PH
+- Tier 3 (0.30x): IN, VN, EG, NG, ID, UA, KE, PK
+Example: If US price = $4.99/week, then PL should be ~10.99 PLN (not 22 PLN), IN should be ~79 INR (not 400 INR), BR should be ~14.90 BRL, etc.
+Round prices to psychologically attractive values (.99, .49, whole numbers for large currencies like JPY, KRW, VND).
+Each territory MUST have a DIFFERENT price appropriate to its purchasing power — do NOT just convert USD to local currency at market exchange rate.
+
 CONVERSATION GUIDELINES:
-- Ask clarifying questions about the app's features and target audience
-- Propose a clear monetization structure with product names, IDs, types, and suggested prices
-- Explain your reasoning for each recommendation
-- When the user approves (or you've iterated enough), output a structured plan
+- You already have FULL context about the app and ALL its existing products (names, productIds, UUIDs, groups) in the EXISTING PRODUCTS section above. DO NOT ask the user for information that is already provided.
+- When the user references a product by name or productId, IMMEDIATELY match it to the existing products list and act on it. Never ask "does this product exist?" or "what group does it belong to?" — you already know.
+- Act decisively. Generate the monetization_plan block right away based on the user's instruction. Only ask questions if the user's request is genuinely ambiguous (e.g. they mention a product that doesn't exist at all).
+- Explain briefly what you're doing, then output the plan block. Keep explanations short.
 
 PLAN OUTPUT FORMAT:
 When you are ready to propose a concrete plan, include it in a special block:
@@ -222,15 +231,15 @@ When you are ready to propose a concrete plan, include it in a special block:
 \`\`\`
 
 IMPORTANT RULES FOR GROUPS:
-- ALWAYS prefer using EXISTING groups. If groups already exist, add new subscriptions to them using "groups" WITH "id" set to the existing group UUID.
+- ALWAYS prefer using EXISTING groups. If groups already exist, add new subscriptions to them using "groups" WITH "id" set to the existing group's UUID or name.
 - NEVER create a new group if an existing group could serve the same purpose. Only create a new group when the user EXPLICITLY asks for a new/separate group.
-- To ADD subscriptions to an EXISTING group: use "groups" WITH "id" field set to the existing group UUID from the EXISTING PRODUCTS list above.
+- To ADD subscriptions to an EXISTING group: use "groups" WITH "id" field — you can use either the UUID or the exact group name from EXISTING PRODUCTS.
 - To CREATE a new group (ONLY when explicitly requested): use "groups" WITHOUT "id" field.
-- To RENAME an existing group: use "groupEdits" with the group UUID and new name.
-- To DELETE an existing subscription group: use "groupDeletes" with the group UUID — this will delete the group and all its subscriptions.
-- To EDIT an existing subscription (price, name, localizations): use "edits" with the subscription's UUID from the EXISTING PRODUCTS list.
-- CRITICAL: Always use the REAL UUIDs from the EXISTING PRODUCTS section above. NEVER invent or generate placeholder UUIDs like "uuid-of-xxx". If you don't have the real UUID, ask the user.
-- Existing products have UUIDs listed above — use them in "edits", "deletes", "groupEdits", "groupDeletes", and "groups[].id".
+- To RENAME an existing group: use "groupEdits" with the group UUID or name.
+- To DELETE an existing subscription group: use "groupDeletes" with the group UUID or name.
+- To EDIT an existing subscription (price, name, localizations): use "edits" with the subscription's UUID, name, or productId.
+- You can reference existing products by their UUID, name, or productId — the system will resolve them automatically.
+- When the user mentions a product by name (e.g. "Museo Pro" group, "Pro Weekly" subscription), match it to the EXISTING PRODUCTS list above and use the corresponding identifier.
 
 Include ONLY the sections that apply (omit empty arrays). Reference existing product UUIDs in "edits", "deletes", "groupEdits", and "groupDeletes".
 Always include the plan block when making a concrete proposal so the user can review and execute it.
@@ -287,10 +296,11 @@ function buildFocusContextBlock(focus: FocusContext): string {
 	}
 
 	lines.push(
-		"\nApply the user's instruction primarily to this item. Use the REAL UUID shown above — never invent placeholder UUIDs.",
-		'If the user wants to add subscriptions, add them to THIS existing group (use "groups" with "id" set to the UUID above).',
+		"\nYou have ALL the information you need — the item's UUID, name, prices, and localizations are listed above.",
+		"DO NOT ask the user for any of this information. Act immediately on the instruction.",
+		'Apply the instruction to this item. If adding subscriptions, use this group (set "id" to the UUID above).',
 		'If the instruction mentions other items or "all", handle accordingly.',
-		"Always output a monetization_plan block.",
+		"Output a monetization_plan block immediately — no questions needed.",
 	);
 
 	return lines.join("\n");
@@ -552,15 +562,67 @@ export class MonetizationChatService {
 			failed: [],
 		};
 
+		// Build lookup maps for resolving names → UUIDs
+		const context = await getAppContext(appId, workspaceId);
+
+		const groupByName = new Map<string, string>();
+		const purchaseByName = new Map<string, string>();
+		const purchaseByProductId = new Map<string, string>();
+
+		for (const g of context.existingGroups) {
+			groupByName.set(g.name.toLowerCase(), g.id);
+			for (const s of g.subscriptions) {
+				purchaseByName.set(s.name.toLowerCase(), s.id);
+				purchaseByProductId.set(s.productId.toLowerCase(), s.id);
+			}
+		}
+		for (const p of context.existingPurchases) {
+			purchaseByName.set(p.name.toLowerCase(), p.id);
+			purchaseByProductId.set(p.productId.toLowerCase(), p.id);
+		}
+
+		function resolveGroupId(
+			idOrName: string | undefined,
+			name: string | undefined,
+		): string | null {
+			if (idOrName && UUID_REGEX.test(idOrName)) return idOrName;
+			// Try to resolve by name
+			if (name) {
+				const found = groupByName.get(name.toLowerCase());
+				if (found) return found;
+			}
+			// Try the id field as a name (AI sometimes puts name in id)
+			if (idOrName) {
+				const found = groupByName.get(idOrName.toLowerCase());
+				if (found) return found;
+			}
+			return null;
+		}
+
+		function resolvePurchaseId(idOrRef: string): string | null {
+			if (UUID_REGEX.test(idOrRef)) return idOrRef;
+			// Try by name
+			const byName = purchaseByName.get(idOrRef.toLowerCase());
+			if (byName) return byName;
+			// Try by productId
+			const byProductId = purchaseByProductId.get(idOrRef.toLowerCase());
+			if (byProductId) return byProductId;
+			return null;
+		}
+
 		// 1. Create groups + subscriptions (or add subscriptions to existing groups)
 		if (plan.groups?.length) {
 			for (const groupData of plan.groups) {
 				try {
 					let groupId: string;
 
-					if (groupData.id && UUID_REGEX.test(groupData.id)) {
+					const resolvedGroupId = resolveGroupId(
+						groupData.id,
+						groupData.name,
+					);
+					if (resolvedGroupId) {
 						// Use existing group — just add subscriptions to it
-						groupId = groupData.id;
+						groupId = resolvedGroupId;
 					} else if (groupData.name) {
 						// Create new group
 						const group = await PurchasesService.createGroup(
@@ -627,16 +689,17 @@ export class MonetizationChatService {
 		// 1b. Edit existing groups (rename)
 		if (plan.groupEdits?.length) {
 			for (const editData of plan.groupEdits) {
-				if (!UUID_REGEX.test(editData.groupId)) {
+				const resolvedId = resolveGroupId(editData.groupId, undefined);
+				if (!resolvedId) {
 					results.failed.push({
-						error: `Invalid group ID: "${editData.groupId}" — AI generated a placeholder instead of a real UUID`,
+						error: `Could not resolve group: "${editData.groupId}" — not a valid UUID and no matching group name found`,
 						item: `edit group ${editData.groupId}`,
 					});
 					continue;
 				}
 				try {
 					const updated = await PurchasesService.updateGroup(
-						editData.groupId,
+						resolvedId,
 						appId,
 						workspaceId,
 						{ name: editData.name },
@@ -693,16 +756,17 @@ export class MonetizationChatService {
 		// 3. Edit existing purchases
 		if (plan.edits?.length) {
 			for (const editData of plan.edits) {
-				if (!UUID_REGEX.test(editData.purchaseId)) {
+				const resolvedId = resolvePurchaseId(editData.purchaseId);
+				if (!resolvedId) {
 					results.failed.push({
-						error: `Invalid purchase ID: "${editData.purchaseId}" — AI generated a placeholder instead of a real UUID`,
+						error: `Could not resolve purchase: "${editData.purchaseId}" — not a valid UUID and no matching name/productId found`,
 						item: `edit purchase ${editData.purchaseId}`,
 					});
 					continue;
 				}
 				try {
 					const updated = await PurchasesService.updatePurchase(
-						editData.purchaseId,
+						resolvedId,
 						workspaceId,
 						{
 							localizations: editData.localizations,
@@ -731,15 +795,16 @@ export class MonetizationChatService {
 		// 4. Delete purchases
 		if (plan.deletes?.length) {
 			for (const purchaseId of plan.deletes) {
-				if (!UUID_REGEX.test(purchaseId)) {
+				const resolvedId = resolvePurchaseId(purchaseId);
+				if (!resolvedId) {
 					results.failed.push({
-						error: `Invalid purchase ID: "${purchaseId}" — AI generated a placeholder instead of a real UUID`,
+						error: `Could not resolve purchase: "${purchaseId}" — not a valid UUID and no matching name/productId found`,
 						item: `delete purchase ${purchaseId}`,
 					});
 					continue;
 				}
 				try {
-					await PurchasesService.deletePurchase(purchaseId, workspaceId);
+					await PurchasesService.deletePurchase(resolvedId, workspaceId);
 					results.deleted.push(purchaseId);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : "Unknown error";
@@ -755,15 +820,16 @@ export class MonetizationChatService {
 		// 5. Delete subscription groups
 		if (plan.groupDeletes?.length) {
 			for (const groupId of plan.groupDeletes) {
-				if (!UUID_REGEX.test(groupId)) {
+				const resolvedId = resolveGroupId(groupId, undefined);
+				if (!resolvedId) {
 					results.failed.push({
-						error: `Invalid group ID: "${groupId}" — AI generated a placeholder instead of a real UUID`,
+						error: `Could not resolve group: "${groupId}" — not a valid UUID and no matching group name found`,
 						item: `delete group ${groupId}`,
 					});
 					continue;
 				}
 				try {
-					await PurchasesService.deleteGroup(groupId, appId, workspaceId);
+					await PurchasesService.deleteGroup(resolvedId, appId, workspaceId);
 					results.deleted.push(groupId);
 				} catch (err) {
 					const msg = err instanceof Error ? err.message : "Unknown error";
