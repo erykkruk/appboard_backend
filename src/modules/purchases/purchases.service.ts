@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
 import { createProvider } from "@/providers";
 import type {
@@ -168,44 +168,59 @@ export class PurchasesService {
 		};
 	}
 
-	static async listPurchases(appId: string) {
+	static async listPurchases(appId: string, workspaceId: string) {
 		const purchases = await db
-			.select()
+			.select({ purchase: inAppPurchases })
 			.from(inAppPurchases)
-			.where(eq(inAppPurchases.appId, appId));
+			.innerJoin(apps, eq(inAppPurchases.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(
+				and(
+					eq(inAppPurchases.appId, appId),
+					eq(stores.workspaceId, workspaceId),
+				),
+			)
+			.then((rows) => rows.map((r) => r.purchase));
 
-		// Enrich with localizations and prices
-		const enriched = await Promise.all(
-			purchases.map(async (purchase) => {
-				const locs = await db
-					.select()
-					.from(purchaseLocalizations)
-					.where(eq(purchaseLocalizations.purchaseId, purchase.id));
+		if (purchases.length === 0) return [];
 
-				const prices = await db
-					.select()
-					.from(purchasePrices)
-					.where(eq(purchasePrices.purchaseId, purchase.id));
+		const purchaseIds = purchases.map((p) => p.id);
 
-				return {
-					...purchase,
-					localizations: locs,
-					prices,
-				};
-			}),
-		);
+		const [allLocs, allPrices] = await Promise.all([
+			db
+				.select()
+				.from(purchaseLocalizations)
+				.where(inArray(purchaseLocalizations.purchaseId, purchaseIds)),
+			db
+				.select()
+				.from(purchasePrices)
+				.where(inArray(purchasePrices.purchaseId, purchaseIds)),
+		]);
 
-		return enriched;
+		return purchases.map((purchase) => ({
+			...purchase,
+			localizations: allLocs.filter((l) => l.purchaseId === purchase.id),
+			prices: allPrices.filter((p) => p.purchaseId === purchase.id),
+		}));
 	}
 
-	static async getPurchase(purchaseId: string) {
-		const [purchase] = await db
-			.select()
+	static async getPurchase(purchaseId: string, workspaceId: string) {
+		const [result] = await db
+			.select({ purchase: inAppPurchases })
 			.from(inAppPurchases)
-			.where(eq(inAppPurchases.id, purchaseId))
+			.innerJoin(apps, eq(inAppPurchases.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(
+				and(
+					eq(inAppPurchases.id, purchaseId),
+					eq(stores.workspaceId, workspaceId),
+				),
+			)
 			.limit(1);
 
-		if (!purchase) buildError("notFound", { info: "Purchase not found" });
+		if (!result) buildError("notFound", { info: "Purchase not found" });
+
+		const purchase = result.purchase;
 
 		const [locs, prices, [revInfo]] = await Promise.all([
 			db
@@ -231,54 +246,81 @@ export class PurchasesService {
 		};
 	}
 
-	static async listSubscriptionGroups(appId: string) {
+	static async listSubscriptionGroups(appId: string, workspaceId: string) {
 		const groups = await db
-			.select()
+			.select({ group: subscriptionGroups })
 			.from(subscriptionGroups)
-			.where(eq(subscriptionGroups.appId, appId));
+			.innerJoin(apps, eq(subscriptionGroups.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(
+				and(
+					eq(subscriptionGroups.appId, appId),
+					eq(stores.workspaceId, workspaceId),
+				),
+			)
+			.then((rows) => rows.map((r) => r.group));
 
-		const enriched = await Promise.all(
-			groups.map(async (group) => {
-				const subs = await db
-					.select()
-					.from(inAppPurchases)
-					.where(
-						and(
-							eq(inAppPurchases.groupId, group.id),
-							eq(inAppPurchases.productType, "auto_renewable"),
-						),
-					);
+		if (groups.length === 0) return [];
 
-				const enrichedSubs = await Promise.all(
-					subs.map(async (sub) => {
-						const locs = await db
-							.select()
-							.from(purchaseLocalizations)
-							.where(eq(purchaseLocalizations.purchaseId, sub.id));
-						const prices = await db
-							.select()
-							.from(purchasePrices)
-							.where(eq(purchasePrices.purchaseId, sub.id));
-						return { ...sub, localizations: locs, prices };
-					}),
-				);
+		const groupIds = groups.map((g) => g.id);
 
-				return { ...group, subscriptions: enrichedSubs };
-			}),
-		);
+		const allSubs = await db
+			.select()
+			.from(inAppPurchases)
+			.where(
+				and(
+					inArray(inAppPurchases.groupId, groupIds),
+					eq(inAppPurchases.productType, "auto_renewable"),
+				),
+			);
 
-		return enriched;
+		if (allSubs.length === 0) {
+			return groups.map((group) => ({ ...group, subscriptions: [] }));
+		}
+
+		const subIds = allSubs.map((s) => s.id);
+
+		const [allLocs, allPrices] = await Promise.all([
+			db
+				.select()
+				.from(purchaseLocalizations)
+				.where(inArray(purchaseLocalizations.purchaseId, subIds)),
+			db
+				.select()
+				.from(purchasePrices)
+				.where(inArray(purchasePrices.purchaseId, subIds)),
+		]);
+
+		return groups.map((group) => ({
+			...group,
+			subscriptions: allSubs
+				.filter((s) => s.groupId === group.id)
+				.map((sub) => ({
+					...sub,
+					localizations: allLocs.filter((l) => l.purchaseId === sub.id),
+					prices: allPrices.filter((p) => p.purchaseId === sub.id),
+				})),
+		}));
 	}
 
-	static async getSubscriptionGroup(groupId: string) {
-		const [group] = await db
-			.select()
+	static async getSubscriptionGroup(groupId: string, workspaceId: string) {
+		const [result] = await db
+			.select({ group: subscriptionGroups })
 			.from(subscriptionGroups)
-			.where(eq(subscriptionGroups.id, groupId))
+			.innerJoin(apps, eq(subscriptionGroups.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(
+				and(
+					eq(subscriptionGroups.id, groupId),
+					eq(stores.workspaceId, workspaceId),
+				),
+			)
 			.limit(1);
 
-		if (!group)
+		if (!result)
 			buildError("notFound", { info: "Subscription group not found" });
+
+		const group = result.group;
 
 		const [subs, groupLocs, [groupRevInfo]] = await Promise.all([
 			db
@@ -296,25 +338,37 @@ export class PurchasesService {
 				.limit(1),
 		]);
 
-		const enrichedSubs = await Promise.all(
-			subs.map(async (sub) => {
-				const locs = await db
-					.select()
-					.from(purchaseLocalizations)
-					.where(eq(purchaseLocalizations.purchaseId, sub.id));
-				const prices = await db
-					.select()
-					.from(purchasePrices)
-					.where(eq(purchasePrices.purchaseId, sub.id));
-				return { ...sub, localizations: locs, prices };
-			}),
-		);
+		if (subs.length === 0) {
+			return {
+				...group,
+				localizations: groupLocs,
+				reviewInfo: groupRevInfo ?? null,
+				subscriptions: [],
+			};
+		}
+
+		const subIds = subs.map((s) => s.id);
+
+		const [allLocs, allPrices] = await Promise.all([
+			db
+				.select()
+				.from(purchaseLocalizations)
+				.where(inArray(purchaseLocalizations.purchaseId, subIds)),
+			db
+				.select()
+				.from(purchasePrices)
+				.where(inArray(purchasePrices.purchaseId, subIds)),
+		]);
 
 		return {
 			...group,
 			localizations: groupLocs,
 			reviewInfo: groupRevInfo ?? null,
-			subscriptions: enrichedSubs,
+			subscriptions: subs.map((sub) => ({
+				...sub,
+				localizations: allLocs.filter((l) => l.purchaseId === sub.id),
+				prices: allPrices.filter((p) => p.purchaseId === sub.id),
+			})),
 		};
 	}
 
@@ -359,7 +413,7 @@ export class PurchasesService {
 		await PurchasesService.syncPrices(dbPurchase.id, result.prices ?? []);
 
 		log.info({ appId, purchaseId: dbPurchase.id }, "Purchase created");
-		return PurchasesService.getPurchase(dbPurchase.id);
+		return PurchasesService.getPurchase(dbPurchase.id, workspaceId);
 	}
 
 	static async updatePurchase(
@@ -407,7 +461,7 @@ export class PurchasesService {
 		}
 
 		log.info({ purchaseId }, "Purchase updated");
-		return PurchasesService.getPurchase(purchaseId);
+		return PurchasesService.getPurchase(purchaseId, workspaceId);
 	}
 
 	static async deletePurchase(purchaseId: string, workspaceId: string) {
@@ -500,7 +554,7 @@ export class PurchasesService {
 		}
 
 		log.info({ groupId }, "Subscription group updated");
-		return PurchasesService.getSubscriptionGroup(groupId);
+		return PurchasesService.getSubscriptionGroup(groupId, workspaceId);
 	}
 
 	static async createSubscription(
@@ -570,7 +624,7 @@ export class PurchasesService {
 			{ appId, groupId, purchaseId: dbPurchase.id },
 			"Subscription created",
 		);
-		return PurchasesService.getPurchase(dbPurchase.id);
+		return PurchasesService.getPurchase(dbPurchase.id, workspaceId);
 	}
 
 	// ── Group Localizations ─────────────────────────────────────────

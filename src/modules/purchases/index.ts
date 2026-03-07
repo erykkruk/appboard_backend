@@ -57,7 +57,10 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 		"/:appId/purchases",
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
-			const purchases = await PurchasesService.listPurchases(params.appId);
+			const purchases = await PurchasesService.listPurchases(
+				params.appId,
+				workspaceId!,
+			);
 			return { purchases };
 		},
 		{
@@ -92,7 +95,10 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 		"/:appId/purchases/:purchaseId",
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
-			const purchase = await PurchasesService.getPurchase(params.purchaseId);
+			const purchase = await PurchasesService.getPurchase(
+				params.purchaseId,
+				workspaceId!,
+			);
 			return { purchase };
 		},
 		{
@@ -144,6 +150,7 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			await verifyAppOwnership(params.appId, workspaceId!);
 			const groups = await PurchasesService.listSubscriptionGroups(
 				params.appId,
+				workspaceId!,
 			);
 			return { groups };
 		},
@@ -179,7 +186,10 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 		"/:appId/subscription-groups/:groupId",
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
-			const group = await PurchasesService.getSubscriptionGroup(params.groupId);
+			const group = await PurchasesService.getSubscriptionGroup(
+				params.groupId,
+				workspaceId!,
+			);
 			return { group };
 		},
 		{
