@@ -87,6 +87,19 @@ const INTERNAL_TO_ASC_VALUE: Record<string, string> = {
 	NONE: "NONE",
 };
 
+const ISO_TO_ASC_DURATION: Record<string, string> = {
+	P1M: "ONE_MONTH",
+	P1W: "ONE_WEEK",
+	P1Y: "ONE_YEAR",
+	P2M: "TWO_MONTHS",
+	P3M: "THREE_MONTHS",
+	P6M: "SIX_MONTHS",
+};
+
+const ASC_TO_ISO_DURATION: Record<string, string> = Object.fromEntries(
+	Object.entries(ISO_TO_ASC_DURATION).map(([k, v]) => [v, k]),
+);
+
 const EDITABLE_STATES = [
 	"PREPARE_FOR_SUBMISSION",
 	"DEVELOPER_REJECTED",
@@ -134,12 +147,11 @@ export class AppStoreProvider implements StoreProvider {
 		});
 
 		const state =
-			(result.data.attributes?.appStoreState as string) ??
-			"PREPARE_FOR_SUBMISSION";
+			(result.attributes?.appStoreState as string) ?? "PREPARE_FOR_SUBMISSION";
 
 		log.info({ appId, state, versionString }, "Created new App Store version");
 
-		return { state, versionId: result.data.id, versionString };
+		return { state, versionId: result.id, versionString };
 	}
 
 	async getLatestVersion(appId: string): Promise<VersionData | null> {
@@ -354,7 +366,7 @@ export class AppStoreProvider implements StoreProvider {
 						{ appId, fields: Object.keys(infoAttributes), language },
 						"Updated appInfoLocalization",
 					);
-				} catch (infoErr) {
+				} catch (_infoErr) {
 					log.warn(
 						{ appId, fields: Object.keys(infoAttributes), language },
 						"Could not update appInfoLocalization (name/subtitle/privacyUrl) - app may not have an editable version. Continuing with version-level fields.",
@@ -416,7 +428,7 @@ export class AppStoreProvider implements StoreProvider {
 						{ appId, fields: Object.keys(versionAttributes), language },
 						"Updated appStoreVersionLocalization",
 					);
-				} catch (versionErr) {
+				} catch (_versionErr) {
 					log.warn(
 						{ appId, fields: Object.keys(versionAttributes), language },
 						"Could not update appStoreVersionLocalization - version may not be editable.",
@@ -963,7 +975,7 @@ export class AppStoreProvider implements StoreProvider {
 				let localizations: PurchaseLocalizationData[] = [];
 				try {
 					const { data: locs } = await readAll(
-						`inAppPurchases/${raw.id}/inAppPurchaseLocalizations`,
+						`v2/inAppPurchases/${raw.id}/inAppPurchaseLocalizations`,
 					);
 					localizations = ((locs ?? []) as ApiResource[]).map((loc) => ({
 						description: (loc.attributes.description as string) ?? undefined,
@@ -979,7 +991,7 @@ export class AppStoreProvider implements StoreProvider {
 				let prices: PurchasePriceData[] = [];
 				try {
 					const { data: priceSchedule } = await readAll(
-						`inAppPurchases/${raw.id}/iapPriceSchedule`,
+						`v2/inAppPurchases/${raw.id}/iapPriceSchedule`,
 					);
 					if (priceSchedule) {
 						const schedule = (
@@ -1080,8 +1092,11 @@ export class AppStoreProvider implements StoreProvider {
 						);
 					}
 
+					const rawDuration = (attrs.subscriptionPeriod as string) ?? undefined;
 					subscriptions.push({
-						duration: (attrs.subscriptionPeriod as string) ?? undefined,
+						duration: rawDuration
+							? (ASC_TO_ISO_DURATION[rawDuration] ?? rawDuration)
+							: undefined,
 						externalId: sub.id,
 						groupExternalId: raw.id,
 						localizations,
@@ -1128,7 +1143,7 @@ export class AppStoreProvider implements StoreProvider {
 			};
 		}
 
-		const { create, readAll } = await createAppStoreClient(this.credentials);
+		const { create } = await createAppStoreClient(this.credentials);
 
 		const ascType = this.mapProductTypeToAsc(data.productType);
 
@@ -1143,9 +1158,10 @@ export class AppStoreProvider implements StoreProvider {
 				app: { data: { id: appId, type: "apps" } },
 			},
 			type: "inAppPurchases",
+			version: 2,
 		});
 
-		const iapId = result.data.id;
+		const iapId = result.id;
 
 		// Create localizations
 		for (const loc of data.localizations ?? []) {
@@ -1190,14 +1206,14 @@ export class AppStoreProvider implements StoreProvider {
 		if (data.name) {
 			await update(
 				{ id: externalId, type: "inAppPurchases" },
-				{ attributes: { name: data.name } },
+				{ attributes: { name: data.name }, version: 2 },
 			);
 		}
 
 		// Update localizations
 		if (data.localizations?.length) {
 			const { data: existingLocs } = await readAll(
-				`inAppPurchases/${externalId}/inAppPurchaseLocalizations`,
+				`v2/inAppPurchases/${externalId}/inAppPurchaseLocalizations`,
 			);
 
 			for (const loc of data.localizations) {
@@ -1229,9 +1245,35 @@ export class AppStoreProvider implements StoreProvider {
 		}
 
 		const { remove } = await createAppStoreClient(this.credentials);
-		await remove({ id: externalId, type: "inAppPurchases" });
+		await remove({ id: externalId, type: "inAppPurchases" }, { version: 2 });
 
 		log.info({ appId, externalId }, "IAP deleted from ASC");
+	}
+
+	async updateSubscriptionGroup(
+		appId: string,
+		groupExternalId: string,
+		name: string,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info(
+				{ appId, groupExternalId, name },
+				"Mock: subscription group updated",
+			);
+			return;
+		}
+
+		const { update } = await createAppStoreClient(this.credentials);
+
+		await update(
+			{ id: groupExternalId, type: "subscriptionGroups" },
+			{ attributes: { referenceName: name } },
+		);
+
+		log.info(
+			{ appId, groupExternalId, name },
+			"Subscription group updated on ASC",
+		);
 	}
 
 	async createSubscriptionGroup(
@@ -1258,12 +1300,12 @@ export class AppStoreProvider implements StoreProvider {
 		});
 
 		log.info(
-			{ appId, groupId: result.data.id, name },
+			{ appId, groupId: result.id, name },
 			"Subscription group created on ASC",
 		);
 
 		return {
-			externalId: result.data.id,
+			externalId: result.id,
 			name,
 			subscriptions: [],
 		};
@@ -1294,11 +1336,13 @@ export class AppStoreProvider implements StoreProvider {
 
 		const { create } = await createAppStoreClient(this.credentials);
 
+		const ascDuration = ISO_TO_ASC_DURATION[data.duration] ?? data.duration;
+
 		const result = await create({
 			attributes: {
 				name: data.name,
 				productId: data.productId,
-				subscriptionPeriod: data.duration,
+				subscriptionPeriod: ascDuration,
 			},
 			relationships: {
 				group: {
@@ -1308,7 +1352,7 @@ export class AppStoreProvider implements StoreProvider {
 			type: "subscriptions",
 		});
 
-		const subId = result.data.id;
+		const subId = result.id;
 
 		// Create localizations
 		for (const loc of data.localizations ?? []) {

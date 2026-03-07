@@ -8,6 +8,7 @@ import {
 	groupIdParams,
 	purchaseIdParams,
 	subscriptionInGroupParams,
+	updateGroupBody,
 	updatePurchaseBody,
 } from "./purchases.schema";
 import { PurchasesService } from "./purchases.service";
@@ -159,6 +160,27 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 		{
 			detail: {
 				description: "Get a specific subscription group with subscriptions",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
+	.patch(
+		"/:appId/subscription-groups/:groupId",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const group = await PurchasesService.updateGroup(
+				params.groupId,
+				params.appId,
+				workspaceId!,
+				body,
+			);
+			return { group };
+		},
+		{
+			body: updateGroupBody,
+			detail: {
+				description: "Update a subscription group",
 				tags: ["Purchases"],
 			},
 			params: groupIdParams,

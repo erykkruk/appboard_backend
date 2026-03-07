@@ -860,6 +860,17 @@ export class GooglePlayProvider implements StoreProvider {
 		log.info({ appId, externalId }, "IAP deleted from Google Play");
 	}
 
+	async updateSubscriptionGroup(
+		_appId: string,
+		_groupExternalId: string,
+		name: string,
+	): Promise<void> {
+		log.info(
+			{ name },
+			"Subscription group updated locally (GP has no group concept)",
+		);
+	}
+
 	async createSubscriptionGroup(
 		appId: string,
 		name: string,

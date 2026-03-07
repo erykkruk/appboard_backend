@@ -68,6 +68,11 @@ export interface StoreProvider {
 		appId: string,
 		name: string,
 	): Promise<SubscriptionGroupData>;
+	updateSubscriptionGroup(
+		appId: string,
+		groupExternalId: string,
+		name: string,
+	): Promise<void>;
 	createSubscription(
 		appId: string,
 		groupExternalId: string,

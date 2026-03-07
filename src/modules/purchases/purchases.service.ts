@@ -427,6 +427,48 @@ export class PurchasesService {
 		return { ...dbGroup, subscriptions: [] };
 	}
 
+	static async updateGroup(
+		groupId: string,
+		appId: string,
+		workspaceId: string,
+		data: { name?: string },
+	) {
+		const [group] = await db
+			.select()
+			.from(subscriptionGroups)
+			.where(
+				and(
+					eq(subscriptionGroups.id, groupId),
+					eq(subscriptionGroups.appId, appId),
+				),
+			)
+			.limit(1);
+
+		if (!group)
+			buildError("notFound", { info: "Subscription group not found" });
+
+		if (data.name) {
+			const { provider, externalAppId } = await PurchasesService.getAppProvider(
+				appId,
+				workspaceId,
+			);
+
+			await provider.updateSubscriptionGroup(
+				externalAppId,
+				group.externalId,
+				data.name,
+			);
+
+			await db
+				.update(subscriptionGroups)
+				.set({ name: data.name, syncedAt: new Date() })
+				.where(eq(subscriptionGroups.id, groupId));
+		}
+
+		log.info({ groupId }, "Subscription group updated");
+		return PurchasesService.getSubscriptionGroup(groupId);
+	}
+
 	static async createSubscription(
 		appId: string,
 		workspaceId: string,

@@ -49,6 +49,10 @@ export const createGroupBody = t.Object({
 	name: t.String({ minLength: 1 }),
 });
 
+export const updateGroupBody = t.Object({
+	name: t.Optional(t.String({ minLength: 1 })),
+});
+
 export const createSubscriptionBody = t.Object({
 	duration: t.String({ minLength: 1 }),
 	localizations: t.Optional(t.Array(localizationSchema)),
