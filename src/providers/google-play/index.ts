@@ -647,25 +647,25 @@ export class GooglePlayProvider implements StoreProvider {
 		try {
 			const purchases: InAppPurchaseData[] = [];
 
-			// Fetch one-time products via legacy inappproducts API
-			const { data } = await client.api.inappproducts.list({
+			// Fetch one-time products via monetization API
+			const { data } = await client.api.monetization.onetimeproducts.list({
 				packageName: appId,
 			});
 
-			for (const product of data.inappproduct ?? []) {
+			for (const product of data.oneTimeProducts ?? []) {
+				const listing = product.listings?.find(
+					(l) => l.languageCode === "en-US",
+				);
+
 				purchases.push({
-					externalId: product.sku ?? "",
-					name:
-						product.listings?.["en-US"]?.title ??
-						product.defaultLanguage ??
-						product.sku ??
-						"",
-					productId: product.sku ?? "",
-					productType:
-						product.purchaseType === "subscription"
-							? "auto_renewable"
-							: "consumable",
-					status: product.status ?? "active",
+					externalId: product.productId ?? "",
+					name: listing?.title ?? product.productId ?? "",
+					productId: product.productId ?? "",
+					productType: "consumable",
+					status:
+						product.purchaseType === "PURCHASE_TYPE_UNSPECIFIED"
+							? "draft"
+							: "active",
 				});
 			}
 
@@ -769,29 +769,29 @@ export class GooglePlayProvider implements StoreProvider {
 
 		const client = await this.getClient();
 
-		const listings: Record<string, { description?: string; title: string }> =
-			{};
-		for (const loc of data.localizations ?? []) {
-			listings[loc.language] = {
-				description: loc.description,
-				title: loc.name ?? data.name,
-			};
-		}
-		if (!listings["en-US"]) {
-			listings["en-US"] = { title: data.name };
+		const listings = (data.localizations ?? []).map((loc) => ({
+			description: loc.description ?? "",
+			languageCode: loc.language,
+			title: loc.name ?? data.name,
+		}));
+		if (!listings.find((l) => l.languageCode === "en-US")) {
+			listings.push({
+				description: data.name,
+				languageCode: "en-US",
+				title: data.name,
+			});
 		}
 
-		await client.api.inappproducts.insert({
+		await client.api.monetization.onetimeproducts.patch({
+			allowMissing: true,
 			packageName: appId,
+			productId: data.productId,
+			"regionsVersion.version": "2025/1",
 			requestBody: {
-				defaultLanguage: "en-US",
 				listings,
-				packageName: appId,
-				purchaseType:
-					data.productType === "consumable" ? "managedUser" : "managedUser",
-				sku: data.productId,
-				status: "active",
+				productId: data.productId,
 			},
+			updateMask: "listings",
 		});
 
 		log.info(
@@ -822,23 +822,24 @@ export class GooglePlayProvider implements StoreProvider {
 
 		const client = await this.getClient();
 
-		const listings: Record<string, { description?: string; title: string }> =
-			{};
-		for (const loc of data.localizations ?? []) {
-			listings[loc.language] = {
-				description: loc.description,
-				title: loc.name ?? data.name ?? "",
-			};
-		}
+		const listings = (data.localizations ?? []).map((loc) => ({
+			description: loc.description ?? "",
+			languageCode: loc.language,
+			title: loc.name ?? data.name ?? "",
+		}));
 
-		await client.api.inappproducts.update({
+		const updateFields: string[] = [];
+		if (listings.length > 0) updateFields.push("listings");
+
+		await client.api.monetization.onetimeproducts.patch({
 			packageName: appId,
+			productId: externalId,
+			"regionsVersion.version": "2025/1",
 			requestBody: {
-				listings: Object.keys(listings).length > 0 ? listings : undefined,
-				packageName: appId,
-				sku: externalId,
+				listings: listings.length > 0 ? listings : undefined,
+				productId: externalId,
 			},
-			sku: externalId,
+			updateMask: updateFields.join(","),
 		});
 
 		log.info({ appId, externalId }, "IAP updated on Google Play");
@@ -852,9 +853,9 @@ export class GooglePlayProvider implements StoreProvider {
 
 		const client = await this.getClient();
 
-		await client.api.inappproducts.delete({
+		await client.api.monetization.onetimeproducts.delete({
 			packageName: appId,
-			sku: externalId,
+			productId: externalId,
 		});
 
 		log.info({ appId, externalId }, "IAP deleted from Google Play");
@@ -919,6 +920,8 @@ export class GooglePlayProvider implements StoreProvider {
 
 		await client.api.monetization.subscriptions.create({
 			packageName: appId,
+			productId: data.productId,
+			"regionsVersion.version": "2025/1",
 			requestBody: {
 				basePlans: [
 					{

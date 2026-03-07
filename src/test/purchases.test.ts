@@ -954,6 +954,346 @@ describe("Purchases module", () => {
 		);
 	});
 
+	// ═══════════════════════════════════════════════════════════════
+	// ── Full integration: IAP consumable (GP mock) ──────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("IAP consumable: create with localizations + prices → verify → update → delete (GP)", async () => {
+		// Create
+		const createRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/purchases`, {
+				body: JSON.stringify({
+					localizations: [
+						{
+							description: "500 gems pack",
+							language: "en-US",
+							name: "500 Gems",
+						},
+						{
+							description: "Paczka 500 klejnotów",
+							language: "pl-PL",
+							name: "500 Klejnotów",
+						},
+					],
+					name: "500 Gems",
+					prices: [
+						{ currency: "USD", price: "4.99", territory: "US" },
+						{ currency: "PLN", price: "19.99", territory: "PL" },
+					],
+					productId: "inttest.gp.gems.500",
+					productType: "consumable",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(createRes.status).toBe(200);
+		const created = (await createRes.json()).purchase;
+		expect(created.productId).toBe("inttest.gp.gems.500");
+		expect(created.productType).toBe("consumable");
+		expect(created.name).toBe("500 Gems");
+
+		// Verify detail
+		const detailRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${created.id}`,
+			),
+		);
+		expect(detailRes.status).toBe(200);
+		const detail = (await detailRes.json()).purchase;
+		expect(detail.localizations.length).toBeGreaterThanOrEqual(2);
+		expect(detail.prices.length).toBeGreaterThanOrEqual(2);
+
+		// Update name + localizations
+		const updateRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${created.id}`,
+				{
+					body: JSON.stringify({
+						localizations: [
+							{
+								description: "1000 gems pack",
+								language: "en-US",
+								name: "1000 Gems",
+							},
+						],
+						name: "1000 Gems",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(updateRes.status).toBe(200);
+		const updated = (await updateRes.json()).purchase;
+		expect(updated.name).toBe("1000 Gems");
+
+		// Delete
+		const deleteRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${created.id}`,
+				{ method: "DELETE" },
+			),
+		);
+		expect(deleteRes.status).toBe(200);
+
+		// Verify gone
+		const goneRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${created.id}`,
+			),
+		);
+		expect(goneRes.status).toBe(404);
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Full integration: Subscription group lifecycle (GP mock) ─
+	// ═══════════════════════════════════════════════════════════════
+
+	it("subscription group: create → rename → verify rename (GP)", async () => {
+		// Create group
+		const createRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/subscription-groups`, {
+				body: JSON.stringify({ name: "GP Original Premium" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(createRes.status).toBe(200);
+		const group = (await createRes.json()).group;
+		expect(group.name).toBe("GP Original Premium");
+
+		// Rename
+		const renameRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${group.id}`,
+				{
+					body: JSON.stringify({ name: "GP Renamed Premium" }),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(renameRes.status).toBe(200);
+		const renamed = (await renameRes.json()).group;
+		expect(renamed.name).toBe("GP Renamed Premium");
+
+		// Verify via GET
+		const getRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${group.id}`,
+			),
+		);
+		expect(getRes.status).toBe(200);
+		const fetched = (await getRes.json()).group;
+		expect(fetched.name).toBe("GP Renamed Premium");
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Full integration: All subscription durations (GP mock) ───
+	// ═══════════════════════════════════════════════════════════════
+
+	it("subscriptions: create all durations → verify in group → update → delete all (GP)", async () => {
+		// Create dedicated group
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/subscription-groups`, {
+				body: JSON.stringify({ name: "GP All Durations" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		const durations = [
+			{ duration: "P1W", label: "weekly" },
+			{ duration: "P1M", label: "monthly" },
+			{ duration: "P2M", label: "bimonthly" },
+			{ duration: "P3M", label: "quarterly" },
+			{ duration: "P6M", label: "semi_annual" },
+			{ duration: "P1Y", label: "annual" },
+		];
+
+		const createdSubs: Array<{ duration: string; id: string; label: string }> =
+			[];
+
+		// Create each duration variant with localizations + prices
+		for (const { duration, label } of durations) {
+			const res = await app.handle(
+				authRequest(
+					`http://localhost/api/apps/${appIdGP}/subscription-groups/${groupId}/subscriptions`,
+					{
+						body: JSON.stringify({
+							duration,
+							localizations: [
+								{
+									description: `${label} subscription`,
+									language: "en-US",
+									name: `GP Pro ${label}`,
+								},
+								{
+									description: `Subskrypcja ${label}`,
+									language: "pl-PL",
+									name: `GP Pro ${label}`,
+								},
+							],
+							name: `GP Pro ${label}`,
+							prices: [
+								{ currency: "USD", price: "9.99", territory: "US" },
+								{ currency: "PLN", price: "39.99", territory: "PL" },
+							],
+							productId: `inttest.gp.pro.${label}`,
+						}),
+						headers: { "Content-Type": "application/json" },
+						method: "POST",
+					},
+				),
+			);
+
+			expect(res.status).toBe(200);
+			const data = await res.json();
+			expect(data.purchase.productId).toBe(`inttest.gp.pro.${label}`);
+			expect(data.purchase.duration).toBe(duration);
+			expect(data.purchase.productType).toBe("auto_renewable");
+			expect(data.purchase.groupId).toBe(groupId);
+			createdSubs.push({ duration, id: data.purchase.id, label });
+		}
+
+		// Verify all 6 subscriptions in group
+		const verifyRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${groupId}`,
+			),
+		);
+		const groupData = (await verifyRes.json()).group;
+		expect(groupData.subscriptions.length).toBe(6);
+
+		// Verify each subscription has localizations + prices
+		for (const sub of groupData.subscriptions) {
+			expect(sub.localizations.length).toBeGreaterThanOrEqual(2);
+			expect(sub.prices.length).toBeGreaterThanOrEqual(2);
+		}
+
+		// Update one subscription (name + localization)
+		const firstSub = createdSubs[0];
+		const updateRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${firstSub.id}`,
+				{
+					body: JSON.stringify({
+						localizations: [
+							{
+								description: "Updated weekly sub",
+								language: "en-US",
+								name: "GP Pro Weekly Updated",
+							},
+						],
+						name: "GP Pro Weekly Updated",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(updateRes.status).toBe(200);
+		expect((await updateRes.json()).purchase.name).toBe(
+			"GP Pro Weekly Updated",
+		);
+
+		// Delete all subscriptions
+		for (const sub of createdSubs) {
+			const delRes = await app.handle(
+				authRequest(
+					`http://localhost/api/apps/${appIdGP}/purchases/${sub.id}`,
+					{ method: "DELETE" },
+				),
+			);
+			expect(delRes.status).toBe(200);
+		}
+
+		// Verify group is empty
+		const emptyRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${groupId}`,
+			),
+		);
+		expect((await emptyRes.json()).group.subscriptions.length).toBe(0);
+
+		// Verify individual subs are gone (404)
+		for (const sub of createdSubs) {
+			const goneRes = await app.handle(
+				authRequest(`http://localhost/api/apps/${appIdGP}/purchases/${sub.id}`),
+			);
+			expect(goneRes.status).toBe(404);
+		}
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Full integration: Add subs to existing group (GP mock) ───
+	// ═══════════════════════════════════════════════════════════════
+
+	it("adds subscriptions to a synced existing group → delete (GP)", async () => {
+		// Get groups from sync (should have "Subscriptions" group from GP mock data)
+		const groupsRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdGP}/subscription-groups`),
+		);
+		const groups = (await groupsRes.json()).groups;
+		const syncedGroup = groups.find(
+			(g: { name: string }) => g.name === "Subscriptions",
+		);
+
+		// If no synced group, skip gracefully (depends on mock data)
+		if (!syncedGroup) return;
+
+		const existingSubCount = syncedGroup.subscriptions.length;
+
+		// Add a new subscription to the existing synced group
+		const addRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${syncedGroup.id}/subscriptions`,
+				{
+					body: JSON.stringify({
+						duration: "P3M",
+						name: "GP Premium Quarterly",
+						productId: "inttest.gp.premium.quarterly",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+			),
+		);
+		expect(addRes.status).toBe(200);
+		const added = (await addRes.json()).purchase;
+		expect(added.groupId).toBe(syncedGroup.id);
+
+		// Verify group now has one more subscription
+		const afterRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${syncedGroup.id}`,
+			),
+		);
+		const afterGroup = (await afterRes.json()).group;
+		expect(afterGroup.subscriptions.length).toBe(existingSubCount + 1);
+
+		// Clean up: delete the added subscription
+		const delRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/purchases/${added.id}`,
+				{ method: "DELETE" },
+			),
+		);
+		expect(delRes.status).toBe(200);
+
+		// Verify count is back to original
+		const cleanRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdGP}/subscription-groups/${syncedGroup.id}`,
+			),
+		);
+		expect((await cleanRes.json()).group.subscriptions.length).toBe(
+			existingSubCount,
+		);
+	});
+
 	// ── Empty state ─────────────────────────────────────────────────
 
 	it("returns empty purchases for app with no synced purchases", async () => {
