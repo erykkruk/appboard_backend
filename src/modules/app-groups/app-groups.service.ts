@@ -78,13 +78,19 @@ export class AppGroupsService {
 	static async update(
 		groupId: string,
 		workspaceId: string,
-		data: { iconUrl?: string | null; name?: string },
+		data: {
+			iconUrl?: string | null;
+			name?: string;
+			useSharedProfile?: boolean;
+		},
 	) {
 		await AppGroupsService.verifyGroupOwnership(groupId, workspaceId);
 
 		const updateData: Record<string, unknown> = {};
 		if (data.name !== undefined) updateData.name = data.name;
 		if (data.iconUrl !== undefined) updateData.iconUrl = data.iconUrl;
+		if (data.useSharedProfile !== undefined)
+			updateData.useSharedProfile = data.useSharedProfile;
 
 		if (Object.keys(updateData).length === 0) {
 			return AppGroupsService.getById(groupId, workspaceId);
@@ -96,6 +102,22 @@ export class AppGroupsService {
 			.where(eq(appGroups.id, groupId))
 			.returning();
 		return updated;
+	}
+
+	static async getGroupForApp(
+		appId: string,
+	): Promise<{ groupId: string; useSharedProfile: boolean } | null> {
+		const [membership] = await db
+			.select({
+				groupId: appGroupMembers.groupId,
+				useSharedProfile: appGroups.useSharedProfile,
+			})
+			.from(appGroupMembers)
+			.innerJoin(appGroups, eq(appGroupMembers.groupId, appGroups.id))
+			.where(eq(appGroupMembers.appId, appId))
+			.limit(1);
+
+		return membership ?? null;
 	}
 
 	static async remove(groupId: string, workspaceId: string) {

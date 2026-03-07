@@ -15,6 +15,7 @@ import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
 import { authGuard } from "@/modules/auth";
+import { groupAsoProfileController } from "@/modules/group-aso-profile";
 import { listingsController } from "@/modules/listings";
 import {
 	privacyDeclarationController,
@@ -61,6 +62,7 @@ const app = new Elysia()
 			.use(assetsController)
 			.use(listingsController)
 			.use(appGroupsController)
+			.use(groupAsoProfileController)
 			.use(purchasesController)
 			.use(monetizationChatController),
 	)

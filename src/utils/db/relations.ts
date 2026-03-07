@@ -10,6 +10,7 @@ import {
 	apps,
 	appVersions,
 	assets,
+	groupAsoProfiles,
 	inAppPurchases,
 	listingHistory,
 	listings,
@@ -205,12 +206,26 @@ export const appAgeRatingsRelations = relations(appAgeRatings, ({ one }) => ({
 // ── App Group relations ────────────────────────────────────────────
 
 export const appGroupsRelations = relations(appGroups, ({ many, one }) => ({
+	asoProfile: one(groupAsoProfiles, {
+		fields: [appGroups.id],
+		references: [groupAsoProfiles.groupId],
+	}),
 	members: many(appGroupMembers),
 	workspace: one(workspaces, {
 		fields: [appGroups.workspaceId],
 		references: [workspaces.id],
 	}),
 }));
+
+export const groupAsoProfilesRelations = relations(
+	groupAsoProfiles,
+	({ one }) => ({
+		group: one(appGroups, {
+			fields: [groupAsoProfiles.groupId],
+			references: [appGroups.id],
+		}),
+	}),
+);
 
 export const appGroupMembersRelations = relations(
 	appGroupMembers,

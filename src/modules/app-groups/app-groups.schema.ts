@@ -8,6 +8,7 @@ export const createGroupBody = t.Object({
 export const updateGroupBody = t.Object({
 	iconUrl: t.Optional(t.Nullable(t.String({ maxLength: 1024 }))),
 	name: t.Optional(t.String({ maxLength: 255, minLength: 1 })),
+	useSharedProfile: t.Optional(t.Boolean()),
 });
 
 export const groupIdParams = t.Object({

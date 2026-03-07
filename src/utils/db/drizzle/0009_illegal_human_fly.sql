@@ -1,0 +1,37 @@
+CREATE TABLE "group_aso_profiles" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"group_id" uuid NOT NULL,
+	"awards" jsonb,
+	"brand_voice_example" text,
+	"category" text,
+	"competitive_advantage" text,
+	"competitors" jsonb,
+	"differentiator" text,
+	"download_count" text,
+	"exclude_keywords" jsonb,
+	"free_features" jsonb,
+	"key_features" jsonb,
+	"long_tail_keywords" jsonb,
+	"main_benefit" text,
+	"must_include_keywords" jsonb,
+	"one_liner" text,
+	"pain_points" jsonb,
+	"positioning" text,
+	"premium_features" jsonb,
+	"press_quotes" jsonb,
+	"price" text,
+	"pricing_model" text,
+	"problem" text,
+	"target_audience" text,
+	"testimonials" jsonb,
+	"tone" text,
+	"user_language" text,
+	"words_to_avoid" jsonb,
+	"words_to_include" jsonb,
+	CONSTRAINT "group_aso_profiles_groupId_unique" UNIQUE("group_id")
+);
+--> statement-breakpoint
+ALTER TABLE "app_groups" ADD COLUMN "use_shared_profile" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "group_aso_profiles" ADD CONSTRAINT "group_aso_profiles_group_id_app_groups_id_fk" FOREIGN KEY ("group_id") REFERENCES "public"."app_groups"("id") ON DELETE cascade ON UPDATE no action;

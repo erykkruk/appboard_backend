@@ -387,6 +387,7 @@ export const appGroups = pgTable(
 		iconUrl: varchar({ length: 1024 }),
 		name: varchar({ length: 255 }).notNull(),
 		sortOrder: integer().notNull().default(0),
+		useSharedProfile: boolean().notNull().default(false),
 		workspaceId: uuid()
 			.notNull()
 			.references(() => workspaces.id, { onDelete: "cascade" }),
@@ -409,6 +410,56 @@ export const appGroupMembers = pgTable(
 	},
 	(t) => [unique().on(t.groupId, t.appId)],
 );
+
+export const groupAsoProfiles = pgTable("group_aso_profiles", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+
+	// Social Proof
+	awards: jsonb().$type<string[]>(),
+
+	// Tone & Branding
+	brandVoiceExample: text(),
+
+	// Core Information
+	category: text(),
+
+	// Competitors
+	competitiveAdvantage: text(),
+	competitors: jsonb().$type<string[]>(),
+	differentiator: text(),
+	downloadCount: text(),
+
+	// Keywords
+	excludeKeywords: jsonb().$type<string[]>(),
+
+	// Product Details
+	freeFeatures: jsonb().$type<string[]>(),
+	groupId: uuid()
+		.notNull()
+		.references(() => appGroups.id, { onDelete: "cascade" })
+		.unique(),
+	keyFeatures: jsonb().$type<string[]>(),
+	longTailKeywords: jsonb().$type<string[]>(),
+	mainBenefit: text(),
+	mustIncludeKeywords: jsonb().$type<string[]>(),
+	oneLiner: text(),
+
+	// Audience
+	painPoints: jsonb().$type<string[]>(),
+	positioning: text(),
+	premiumFeatures: jsonb().$type<string[]>(),
+	pressQuotes: jsonb().$type<string[]>(),
+	price: text(),
+	pricingModel: text(),
+	problem: text(),
+	targetAudience: text(),
+	testimonials: jsonb().$type<string[]>(),
+	tone: text(),
+	userLanguage: text(),
+	wordsToAvoid: jsonb().$type<string[]>(),
+	wordsToInclude: jsonb().$type<string[]>(),
+});
 
 // ── In-App Purchases & Subscriptions ────────────────────────────────
 
@@ -494,6 +545,7 @@ export const schema = {
 	apps,
 	appVersions,
 	assets,
+	groupAsoProfiles,
 	inAppPurchases,
 	listingHistory,
 	listings,

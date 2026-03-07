@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { AppGroupsService } from "@/modules/app-groups/app-groups.service";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { buildError } from "@/utils/errors";
 import {
@@ -16,6 +17,16 @@ export const asoProfileController = new Elysia({
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
 			const profile = await AsoProfileService.get(params.appId);
+
+			const groupInfo = await AppGroupsService.getGroupForApp(params.appId);
+			if (groupInfo?.useSharedProfile) {
+				return {
+					asoProfile: profile,
+					groupId: groupInfo.groupId,
+					locked: true,
+				};
+			}
+
 			return { asoProfile: profile };
 		},
 		{
@@ -30,6 +41,14 @@ export const asoProfileController = new Elysia({
 		"/",
 		async ({ params, body, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
+
+			const groupInfo = await AppGroupsService.getGroupForApp(params.appId);
+			if (groupInfo?.useSharedProfile) {
+				throw buildError("forbidden", {
+					info: "ASO profile is managed at group level",
+				});
+			}
+
 			const profile = await AsoProfileService.upsert(params.appId, body);
 			return { asoProfile: profile };
 		},
