@@ -486,6 +486,69 @@ export class PurchasesService {
 		log.info({ purchaseId }, "Purchase deleted");
 	}
 
+	static async deleteGroup(
+		groupId: string,
+		appId: string,
+		workspaceId: string,
+	) {
+		const [group] = await db
+			.select()
+			.from(subscriptionGroups)
+			.where(
+				and(
+					eq(subscriptionGroups.id, groupId),
+					eq(subscriptionGroups.appId, appId),
+				),
+			)
+			.limit(1);
+
+		if (!group)
+			buildError("notFound", { info: "Subscription group not found" });
+
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			appId,
+			workspaceId,
+		);
+
+		// Delete all subscriptions from store API first
+		const subs = await db
+			.select({ externalId: inAppPurchases.externalId, id: inAppPurchases.id })
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.groupId, groupId));
+
+		for (const sub of subs) {
+			try {
+				await provider.deleteSubscription(externalAppId, sub.externalId);
+			} catch (err) {
+				log.warn(
+					{ err, subId: sub.id },
+					"Failed to delete subscription from store — continuing",
+				);
+			}
+		}
+
+		// Delete group from store API
+		try {
+			await provider.deleteSubscriptionGroup(externalAppId, group.externalId);
+		} catch (err) {
+			log.warn(
+				{ err, groupId },
+				"Failed to delete subscription group from store — removing locally",
+			);
+		}
+
+		// Clean up local DB
+		await db
+			.delete(inAppPurchases)
+			.where(eq(inAppPurchases.groupId, groupId));
+
+		await db
+			.delete(subscriptionGroups)
+			.where(eq(subscriptionGroups.id, groupId));
+
+		log.info({ appId, groupId }, "Subscription group deleted");
+	}
+
 	static async createGroup(appId: string, workspaceId: string, name: string) {
 		const { provider, externalAppId } = await PurchasesService.getAppProvider(
 			appId,

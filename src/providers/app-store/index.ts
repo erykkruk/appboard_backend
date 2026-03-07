@@ -1450,6 +1450,24 @@ export class AppStoreProvider implements StoreProvider {
 		log.info({ appId, subExternalId }, "Subscription deleted from ASC");
 	}
 
+	async deleteSubscriptionGroup(
+		appId: string,
+		groupExternalId: string,
+	): Promise<void> {
+		if (this.isMock) {
+			log.info({ appId, groupExternalId }, "Mock: subscription group deleted");
+			return;
+		}
+
+		const { remove } = await createAppStoreClient(this.credentials);
+		await remove({ id: groupExternalId, type: "subscriptionGroups" });
+
+		log.info(
+			{ appId, groupExternalId },
+			"Subscription group deleted from ASC",
+		);
+	}
+
 	async updateFamilySharing(
 		subscriptionExternalId: string,
 		familySharable: boolean,

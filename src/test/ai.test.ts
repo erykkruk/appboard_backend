@@ -88,6 +88,113 @@ describe("AI module", () => {
 		expect(response.ok).toBe(false);
 	});
 
+	it("POST /api/ai/generate-purchase-field returns not found for invalid app", async () => {
+		const response = await app.handle(
+			authRequest("http://localhost/api/ai/generate-purchase-field", {
+				body: JSON.stringify({
+					appId: "nonexistent-app-id",
+					context: { appName: "TestApp" },
+					field: "purchaseName",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(response.ok).toBe(false);
+	});
+
+	it("POST /api/ai/generate-purchase-field validates field enum", async () => {
+		const response = await app.handle(
+			authRequest("http://localhost/api/ai/generate-purchase-field", {
+				body: JSON.stringify({
+					appId: "test-app-id",
+					context: { appName: "TestApp" },
+					field: "invalidField",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(response.status).toBe(422);
+	});
+
+	it("POST /api/ai/generate-purchase-field requires appId", async () => {
+		const response = await app.handle(
+			authRequest("http://localhost/api/ai/generate-purchase-field", {
+				body: JSON.stringify({
+					context: { appName: "TestApp" },
+					field: "purchaseName",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(response.status).toBe(422);
+	});
+
+	it("POST /api/ai/generate-purchase-field requires context.appName", async () => {
+		const response = await app.handle(
+			authRequest("http://localhost/api/ai/generate-purchase-field", {
+				body: JSON.stringify({
+					appId: "test-app-id",
+					context: {},
+					field: "purchaseName",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(response.status).toBe(422);
+	});
+
+	it("POST /api/ai/generate-purchase-field accepts all valid field types", async () => {
+		const validFields = [
+			"purchaseName",
+			"purchaseDescription",
+			"reviewNotes",
+			"productId",
+			"groupName",
+			"groupDescription",
+		];
+
+		for (const field of validFields) {
+			const response = await app.handle(
+				authRequest("http://localhost/api/ai/generate-purchase-field", {
+					body: JSON.stringify({
+						appId: "nonexistent-app-id",
+						context: { appName: "TestApp" },
+						field,
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				}),
+			);
+
+			// Should fail with ownership error (not 422 validation)
+			expect(response.status).not.toBe(422);
+		}
+	});
+
+	it("POST /api/ai/generate-purchase-field requires authentication", async () => {
+		const response = await app.handle(
+			new Request("http://localhost/api/ai/generate-purchase-field", {
+				body: JSON.stringify({
+					appId: "test-app-id",
+					context: { appName: "TestApp" },
+					field: "purchaseName",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(response.status).toBe(401);
+	});
+
 	it("POST /api/ai/translate requires authentication", async () => {
 		const response = await app.handle(
 			new Request("http://localhost/api/ai/translate", {

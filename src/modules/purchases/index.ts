@@ -221,6 +221,25 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			params: groupIdParams,
 		},
 	)
+	.delete(
+		"/:appId/subscription-groups/:groupId",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await PurchasesService.deleteGroup(
+				params.groupId,
+				params.appId,
+				workspaceId!,
+			);
+			return { success: true };
+		},
+		{
+			detail: {
+				description: "Delete a subscription group",
+				tags: ["Purchases"],
+			},
+			params: groupIdParams,
+		},
+	)
 	.post(
 		"/:appId/subscription-groups/:groupId/subscriptions",
 		async ({ body, params, workspaceId }) => {

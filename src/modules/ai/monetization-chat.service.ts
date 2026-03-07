@@ -9,6 +9,9 @@ import { createLogger } from "@/utils/logger";
 
 const log = createLogger("monetization-chat");
 
+const UUID_REGEX =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const DEFAULT_MODEL = "google/gemini-2.0-flash-001";
 
@@ -58,6 +61,7 @@ interface PlanData {
 		prices?: Array<{ currency: string; price: string; territory: string }>;
 		purchaseId: string;
 	}>;
+	groupDeletes?: string[];
 	groupEdits?: Array<{
 		groupId: string;
 		name?: string;
@@ -212,22 +216,191 @@ When you are ready to propose a concrete plan, include it in a special block:
   "groupEdits": [
     { "groupId": "uuid-here", "name": "New Group Name" }
   ],
-  "deletes": ["purchase-uuid-to-remove"]
+  "deletes": ["purchase-uuid-to-remove"],
+  "groupDeletes": ["group-uuid-to-remove"]
 }
 \`\`\`
 
 IMPORTANT RULES FOR GROUPS:
-- To CREATE a new group: use "groups" without "id" field — a new group will be created with the given subscriptions
-- To ADD subscriptions to an EXISTING group: use "groups" WITH "id" field set to the existing group UUID — subscriptions will be added to that group without creating a new one
-- To RENAME an existing group: use "groupEdits" with the group UUID and new name
-- Existing products have UUIDs listed above — use them in "edits", "deletes", "groupEdits", and "groups[].id"
+- ALWAYS prefer using EXISTING groups. If groups already exist, add new subscriptions to them using "groups" WITH "id" set to the existing group UUID.
+- NEVER create a new group if an existing group could serve the same purpose. Only create a new group when the user EXPLICITLY asks for a new/separate group.
+- To ADD subscriptions to an EXISTING group: use "groups" WITH "id" field set to the existing group UUID from the EXISTING PRODUCTS list above.
+- To CREATE a new group (ONLY when explicitly requested): use "groups" WITHOUT "id" field.
+- To RENAME an existing group: use "groupEdits" with the group UUID and new name.
+- To DELETE an existing subscription group: use "groupDeletes" with the group UUID — this will delete the group and all its subscriptions.
+- To EDIT an existing subscription (price, name, localizations): use "edits" with the subscription's UUID from the EXISTING PRODUCTS list.
+- CRITICAL: Always use the REAL UUIDs from the EXISTING PRODUCTS section above. NEVER invent or generate placeholder UUIDs like "uuid-of-xxx". If you don't have the real UUID, ask the user.
+- Existing products have UUIDs listed above — use them in "edits", "deletes", "groupEdits", "groupDeletes", and "groups[].id".
 
-Include ONLY the sections that apply (omit empty arrays). Reference existing product UUIDs in "edits", "deletes", and "groupEdits".
+Include ONLY the sections that apply (omit empty arrays). Reference existing product UUIDs in "edits", "deletes", "groupEdits", and "groupDeletes".
 Always include the plan block when making a concrete proposal so the user can review and execute it.
 ${buildTerritoryBlock(territories)}`;
 }
 
+interface FocusContext {
+	duration?: string;
+	groupName?: string;
+	id: string;
+	localizations?: Array<{
+		description?: string;
+		language: string;
+		name?: string;
+	}>;
+	name: string;
+	prices?: Array<{ currency: string; price: string; territory: string }>;
+	productId?: string;
+	productType?: string;
+	type: "group" | "purchase";
+}
+
+function buildFocusContextBlock(focus: FocusContext): string {
+	const lines: string[] = ["\nFOCUS CONTEXT:"];
+
+	if (focus.type === "purchase") {
+		lines.push(
+			`User is viewing purchase "${focus.name}" (id: ${focus.id}${focus.productId ? `, productId: ${focus.productId}` : ""}${focus.productType ? `, type: ${focus.productType}` : ""}${focus.duration ? `, duration: ${focus.duration}` : ""}).`,
+		);
+	} else {
+		lines.push(
+			`User is viewing subscription group "${focus.name}" (id: ${focus.id}).`,
+		);
+	}
+
+	if (focus.prices && focus.prices.length > 0) {
+		const pricesStr = focus.prices
+			.map(
+				(p) =>
+					`{territory: "${p.territory}", currency: "${p.currency}", price: "${p.price}"}`,
+			)
+			.join(", ");
+		lines.push(`Current prices: [${pricesStr}]`);
+	}
+
+	if (focus.localizations && focus.localizations.length > 0) {
+		const locsStr = focus.localizations
+			.map(
+				(l) =>
+					`{language: "${l.language}"${l.name ? `, name: "${l.name}"` : ""}${l.description ? `, description: "${l.description}"` : ""}}`,
+			)
+			.join(", ");
+		lines.push(`Current localizations: [${locsStr}]`);
+	}
+
+	lines.push(
+		"\nApply the user's instruction primarily to this item. Use the REAL UUID shown above — never invent placeholder UUIDs.",
+		'If the user wants to add subscriptions, add them to THIS existing group (use "groups" with "id" set to the UUID above).',
+		'If the instruction mentions other items or "all", handle accordingly.',
+		"Always output a monetization_plan block.",
+	);
+
+	return lines.join("\n");
+}
+
+function extractPlanFromResponse(text: string): PlanData | null {
+	const match = text.match(/```monetization_plan\s*\n([\s\S]*?)\n```/);
+	if (!match) return null;
+	try {
+		return JSON.parse(match[1]) as PlanData;
+	} catch {
+		return null;
+	}
+}
+
 export class MonetizationChatService {
+	static async quickAction(
+		appId: string,
+		workspaceId: string,
+		instruction: string,
+		focusContext?: FocusContext,
+		territories?: string[],
+	): Promise<{ explanation: string; plan: PlanData | null }> {
+		const apiKey = await SettingsService.getRaw(
+			workspaceId,
+			"OPENROUTER_API_KEY",
+		);
+		if (!apiKey) {
+			buildError("badRequest", {
+				info: "OpenRouter API key not configured. Go to Settings to add it.",
+			});
+		}
+
+		const selectedModel =
+			(await SettingsService.getRaw(workspaceId, "AI_MODEL_GENERATE")) ||
+			DEFAULT_MODEL;
+
+		const context = await getAppContext(appId, workspaceId);
+		let systemPrompt = buildSystemPrompt(context, territories);
+
+		if (focusContext) {
+			systemPrompt += buildFocusContextBlock(focusContext);
+		}
+
+		const messages: ChatMessage[] = [
+			{ content: systemPrompt, role: "system" },
+			{ content: instruction, role: "user" },
+		];
+
+		log.info(
+			{ appId, focusType: focusContext?.type, instruction },
+			"Quick action request",
+		);
+
+		const response = await fetch(OPENROUTER_URL, {
+			body: JSON.stringify({
+				messages,
+				model: selectedModel,
+				stream: false,
+				temperature: 0.3,
+			}),
+			headers: {
+				Authorization: `Bearer ${apiKey}`,
+				"Content-Type": "application/json",
+			},
+			method: "POST",
+		});
+
+		if (!response.ok) {
+			const errorBody = await response.text().catch(() => "Unknown error");
+			log.error(
+				{ errorBody, status: response.status },
+				"OpenRouter API error in quickAction",
+			);
+
+			if (response.status === 402) {
+				buildError("badRequest", {
+					info: "OpenRouter API: out of credits.",
+				});
+			}
+			if (response.status === 401) {
+				buildError("badRequest", {
+					info: "OpenRouter API: invalid API key.",
+				});
+			}
+			if (response.status === 429) {
+				buildError("badRequest", {
+					info: "OpenRouter API: rate limit exceeded.",
+				});
+			}
+			buildError("storeApiError", {
+				info: `OpenRouter API error: ${response.status}`,
+			});
+		}
+
+		const data = (await response.json()) as {
+			choices?: Array<{
+				message?: { content?: string };
+			}>;
+		};
+
+		const content = data.choices?.[0]?.message?.content ?? "";
+		const plan = extractPlanFromResponse(content);
+		const explanation = content
+			.replace(/```monetization_plan\s*\n[\s\S]*?\n```/g, "")
+			.trim();
+
+		return { explanation, plan };
+	}
+
 	static async chat(
 		appId: string,
 		workspaceId: string,
@@ -385,7 +558,7 @@ export class MonetizationChatService {
 				try {
 					let groupId: string;
 
-					if (groupData.id) {
+					if (groupData.id && UUID_REGEX.test(groupData.id)) {
 						// Use existing group — just add subscriptions to it
 						groupId = groupData.id;
 					} else if (groupData.name) {
@@ -454,6 +627,13 @@ export class MonetizationChatService {
 		// 1b. Edit existing groups (rename)
 		if (plan.groupEdits?.length) {
 			for (const editData of plan.groupEdits) {
+				if (!UUID_REGEX.test(editData.groupId)) {
+					results.failed.push({
+						error: `Invalid group ID: "${editData.groupId}" — AI generated a placeholder instead of a real UUID`,
+						item: `edit group ${editData.groupId}`,
+					});
+					continue;
+				}
 				try {
 					const updated = await PurchasesService.updateGroup(
 						editData.groupId,
@@ -513,6 +693,13 @@ export class MonetizationChatService {
 		// 3. Edit existing purchases
 		if (plan.edits?.length) {
 			for (const editData of plan.edits) {
+				if (!UUID_REGEX.test(editData.purchaseId)) {
+					results.failed.push({
+						error: `Invalid purchase ID: "${editData.purchaseId}" — AI generated a placeholder instead of a real UUID`,
+						item: `edit purchase ${editData.purchaseId}`,
+					});
+					continue;
+				}
 				try {
 					const updated = await PurchasesService.updatePurchase(
 						editData.purchaseId,
@@ -544,6 +731,13 @@ export class MonetizationChatService {
 		// 4. Delete purchases
 		if (plan.deletes?.length) {
 			for (const purchaseId of plan.deletes) {
+				if (!UUID_REGEX.test(purchaseId)) {
+					results.failed.push({
+						error: `Invalid purchase ID: "${purchaseId}" — AI generated a placeholder instead of a real UUID`,
+						item: `delete purchase ${purchaseId}`,
+					});
+					continue;
+				}
 				try {
 					await PurchasesService.deletePurchase(purchaseId, workspaceId);
 					results.deleted.push(purchaseId);
@@ -554,6 +748,30 @@ export class MonetizationChatService {
 						item: `delete purchase ${purchaseId}`,
 					});
 					log.error({ err, purchaseId }, "Failed to delete purchase");
+				}
+			}
+		}
+
+		// 5. Delete subscription groups
+		if (plan.groupDeletes?.length) {
+			for (const groupId of plan.groupDeletes) {
+				if (!UUID_REGEX.test(groupId)) {
+					results.failed.push({
+						error: `Invalid group ID: "${groupId}" — AI generated a placeholder instead of a real UUID`,
+						item: `delete group ${groupId}`,
+					});
+					continue;
+				}
+				try {
+					await PurchasesService.deleteGroup(groupId, appId, workspaceId);
+					results.deleted.push(groupId);
+				} catch (err) {
+					const msg = err instanceof Error ? err.message : "Unknown error";
+					results.failed.push({
+						error: msg,
+						item: `delete group ${groupId}`,
+					});
+					log.error({ err, groupId }, "Failed to delete group");
 				}
 			}
 		}

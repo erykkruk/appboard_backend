@@ -1,7 +1,7 @@
-# ASO Best Practices — Baza wiedzy AppBoard
+# ASO & Monetization Best Practices — Baza wiedzy AppBoard
 
-> Zbiór najlepszych praktyk App Store Optimization na luty 2026.
-> Wykorzystywany do generowania opisów, screenshotów i listingów w AppBoard.
+> Zbiór najlepszych praktyk App Store Optimization i monetyzacji na marzec 2026.
+> Wykorzystywany do generowania opisów, screenshotów, listingów i rekomendacji monetyzacyjnych w AppBoard.
 
 ---
 
@@ -17,6 +17,9 @@
 | [copywriting-skill.md](./copywriting-skill.md) | **Skill: Copywriting** | Ze skills.sh — zasady pisania konwertujących tekstów, struktura, CTA |
 | [marketing-psychology-skill.md](./marketing-psychology-skill.md) | **Skill: Marketing Psychology** | Ze skills.sh — modele mentalne, psychologia perswazji, pricing psychology |
 | [content-strategy-skill.md](./content-strategy-skill.md) | **Skill: Content Strategy** | Ze skills.sh — strategia treści, klasyfikacja, priorytetyzacja |
+| [monetization-complete-guide.md](./monetization-complete-guide.md) | **Monetization — Complete Guide** | All monetization models, subscriptions, IAP, paywalls, pricing psychology, benchmarks, LTV, Apple/Google policies |
+| [monetization-purchases-tips.md](./monetization-purchases-tips.md) | **Monetization — 5 Purchases Tips** | 5 key tips: model selection, pricing, paywall design, trial optimization, A/B testing |
+| [monetization-strategy-selector.md](./monetization-strategy-selector.md) | **Monetization — Strategy Selector** | AI framework for suggesting monetization based on app description, category, current purchases |
 
 ---
 
@@ -67,6 +70,18 @@ Te pliki służą jako **baza wiedzy** dla AI do generowania:
 17. **Persona-driven ASO** — użyj `aso-data-requirements.md` sekcja A (z przykładem "Fitness Fiona")
 18. **Super Geo Localization** — użyj `aso-complete-guide.md` sekcja 3
 
+### Monetization (Purchases)
+
+19. **Monetization strategy suggestions** — use `monetization-strategy-selector.md` (AI framework + category→model matrix)
+20. **Purchases section tips** — use `monetization-purchases-tips.md` (5 quick-win tips)
+21. **Pricing model selection** — use `monetization-complete-guide.md` section 2 (matrix + decision tree)
+22. **Pricing psychology** — use `monetization-complete-guide.md` section 4.2 + `marketing-psychology-skill.md`
+23. **Subscriptions: trials, plans, benchmarks** — use `monetization-complete-guide.md` section 3
+24. **Paywall design** — use `monetization-complete-guide.md` section 5
+25. **Monetization red flags** — use `monetization-strategy-selector.md` section 5 (automatic warnings)
+26. **Pricing benchmarks per category** — use `monetization-strategy-selector.md` section 4
+27. **Lifetime deals** — use `monetization-complete-guide.md` section 6
+
 ---
 
 ## Źródła (luty 2026)
@@ -92,6 +107,18 @@ Te pliki służą jako **baza wiedzy** dla AI do generowania:
 - [AppFollow — Advanced ASO Strategies Webinar 2026](https://appfollow.io/blog/advanced-aso-strategies-2026)
 - [Yodel Mobile — App Growth Playbook 2026](https://www.businessofapps.com/insights/your-essential-guide-to-aso-success-in-2026-is-here/)
 - [MobiLoud — Practical Guide to ASO](https://www.mobiloud.com/blog/app-store-optimization)
+
+### Monetization & purchases:
+- [AppInventiv — Mobile App Monetisation Strategies 2026](https://appinventiv.com/blog/app-monetization-strategies-guide/)
+- [Plotline — Top Mobile App Monetization Strategies 2026](https://www.plotline.so/blog/mobile-app-monetization-strategies)
+- [Adapty — Subscription Economy Trends 2026](https://adapty.io/blog/9-subscription-trends-dominating-2025/)
+- [Adapty — App Pricing Models 2026](https://adapty.io/blog/app-pricing-models/)
+- [RevenueCat — Lifetime Subscriptions Guide](https://www.revenuecat.com/blog/growth/lifetime-subscriptions/)
+- [RevenueCat — Trial Conversion Rate Insights](https://www.revenuecat.com/blog/growth/app-trial-conversion-rate-insights/)
+- [FunnelFox — App Pricing Models 2026](https://blog.funnelfox.com/app-pricing-models-guide/)
+- [Business of Apps — LTV App Rates 2026](https://www.businessofapps.com/data/ltv-app-rates/)
+- [Airbridge — Subscription Churn Reasons 2026](https://www.airbridge.io/blog/why-subscription-churn-happens-top-5-cancellation-reasons-forecast-for-mobile-apps-in-2026)
+- [MoldStud — 5 Monetization Mistakes](https://moldstud.com/articles/p-5-common-app-monetization-mistakes-and-how-to-avoid-them)
 
 ### Skills:
 - [skills.sh — Agent Skills Directory](https://skills.sh/)

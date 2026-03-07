@@ -4,6 +4,7 @@ import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	monetizationChatBody,
 	monetizationExecuteBody,
+	quickActionBody,
 } from "./monetization-chat.schema";
 import { MonetizationChatService } from "./monetization-chat.service";
 
@@ -44,6 +45,26 @@ export const monetizationChatController = new Elysia({
 			body: monetizationChatBody,
 			detail: {
 				description: "AI monetization chat with SSE streaming",
+				tags: ["AI"],
+			},
+		},
+	)
+	.post(
+		"/purchase-quick-action",
+		async ({ body, workspaceId }) => {
+			await verifyAppOwnership(body.appId, workspaceId!);
+			return MonetizationChatService.quickAction(
+				body.appId,
+				workspaceId!,
+				body.instruction,
+				body.focusContext,
+				body.territories,
+			);
+		},
+		{
+			body: quickActionBody,
+			detail: {
+				description: "AI quick action for purchases",
 				tags: ["AI"],
 			},
 		},

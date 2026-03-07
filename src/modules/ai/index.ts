@@ -5,6 +5,7 @@ import {
 	generateDescriptionBody,
 	generateListingFieldBody,
 	generatePrivacyBody,
+	generatePurchaseFieldBody,
 	generateReleaseNotesBody,
 	suggestCategoryBody,
 	suggestKeywordsBody,
@@ -33,6 +34,29 @@ export const aiController = new Elysia({ prefix: "/ai" })
 			body: generateListingFieldBody,
 			detail: {
 				description: "Generate or rephrase a listing field using AI",
+				tags: ["AI"],
+			},
+		},
+	)
+	.post(
+		"/generate-purchase-field",
+		async ({ body, workspaceId }) => {
+			await verifyAppOwnership(body.appId, workspaceId!);
+			const { model, result } = await AIService.generatePurchaseField(
+				workspaceId!,
+				body.appId,
+				body.field,
+				body.context,
+				body.currentValue,
+				body.language,
+			);
+			return { mock: false, model, result };
+		},
+		{
+			body: generatePurchaseFieldBody,
+			detail: {
+				description:
+					"Generate or improve purchase/subscription field content using AI",
 				tags: ["AI"],
 			},
 		},

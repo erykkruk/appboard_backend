@@ -1008,6 +1008,16 @@ export class GooglePlayProvider implements StoreProvider {
 		log.info({ appId, subExternalId }, "Subscription deleted from Google Play");
 	}
 
+	async deleteSubscriptionGroup(
+		appId: string,
+		groupExternalId: string,
+	): Promise<void> {
+		log.info(
+			{ appId, groupExternalId },
+			"Google Play does not support subscription group deletion via API — local only",
+		);
+	}
+
 	async updateFamilySharing(
 		subscriptionExternalId: string,
 		familySharable: boolean,

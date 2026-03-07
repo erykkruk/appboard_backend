@@ -54,6 +54,28 @@ export const translateLocalizationBody = t.Object({
 	targetLanguage: t.String({ minLength: 1 }),
 });
 
+export const generatePurchaseFieldBody = t.Object({
+	appId: t.String({ minLength: 1 }),
+	context: t.Object({
+		appName: t.String({ minLength: 1 }),
+		bundleId: t.Optional(t.String()),
+		duration: t.Optional(t.String()),
+		groupName: t.Optional(t.String()),
+		productName: t.Optional(t.String()),
+		productType: t.Optional(t.String()),
+	}),
+	currentValue: t.Optional(t.String()),
+	field: t.Union([
+		t.Literal("purchaseName"),
+		t.Literal("purchaseDescription"),
+		t.Literal("reviewNotes"),
+		t.Literal("productId"),
+		t.Literal("groupName"),
+		t.Literal("groupDescription"),
+	]),
+	language: t.Optional(t.String()),
+});
+
 export const generateListingFieldBody = t.Object({
 	appId: t.String({ minLength: 1 }),
 	appName: t.String({ minLength: 1 }),

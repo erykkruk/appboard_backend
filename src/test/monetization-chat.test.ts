@@ -309,6 +309,114 @@ describe("Monetization Chat", () => {
 		expect(data.results.edited.length).toBe(0);
 	});
 
+	// ── Quick Action endpoint ─────────────────────────────────────
+
+	it("quick action returns 400 without API key configured", async () => {
+		const res = await app.handle(
+			authRequest("http://localhost/api/ai/purchase-quick-action", {
+				body: JSON.stringify({
+					appId,
+					instruction: "Set price to $4.99 for US",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(400);
+		const data = await res.json();
+		expect(data.code).toBe("BAD_REQUEST");
+	});
+
+	it("quick action returns 400 without API key when focusContext provided", async () => {
+		const res = await app.handle(
+			authRequest("http://localhost/api/ai/purchase-quick-action", {
+				body: JSON.stringify({
+					appId,
+					focusContext: {
+						id: "00000000-0000-0000-0000-000000000001",
+						name: "Test Purchase",
+						productId: "test_product",
+						productType: "auto_renewable",
+						type: "purchase",
+					},
+					instruction: "Set price to $4.99 for US",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(400);
+		const data = await res.json();
+		expect(data.code).toBe("BAD_REQUEST");
+	});
+
+	it("quick action requires app ownership", async () => {
+		const res = await app.handle(
+			authRequestB("http://localhost/api/ai/purchase-quick-action", {
+				body: JSON.stringify({
+					appId,
+					instruction: "Set price to $4.99",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(404);
+	});
+
+	it("quick action validates instruction is not empty", async () => {
+		const res = await app.handle(
+			authRequest("http://localhost/api/ai/purchase-quick-action", {
+				body: JSON.stringify({
+					appId,
+					instruction: "",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(422);
+	});
+
+	it("quick action requires authentication", async () => {
+		const res = await app.handle(
+			new Request("http://localhost/api/ai/purchase-quick-action", {
+				body: JSON.stringify({
+					appId: "test",
+					instruction: "test",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(401);
+	});
+
+	it("quick action validates focusContext type enum", async () => {
+		const res = await app.handle(
+			authRequest("http://localhost/api/ai/purchase-quick-action", {
+				body: JSON.stringify({
+					appId,
+					focusContext: {
+						id: "00000000-0000-0000-0000-000000000001",
+						name: "Test",
+						type: "invalid_type",
+					},
+					instruction: "test",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(422);
+	});
+
 	// ── Workspace isolation ────────────────────────────────────────
 
 	it("workspace B cannot execute plan on workspace A app", async () => {
