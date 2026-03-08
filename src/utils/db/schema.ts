@@ -566,6 +566,23 @@ export const subscriptionGroupReviewInfo = pgTable(
 	},
 );
 
+// ── AI Chat ─────────────────────────────────────────────────────────
+
+export const aiChatMessages = pgTable("ai_chat_messages", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	appId: uuid()
+		.notNull()
+		.references(() => apps.id, { onDelete: "cascade" }),
+	chatType: varchar({ length: 50 }).notNull(),
+	content: text().notNull(),
+	role: varchar({ length: 20 }).notNull(),
+	sortOrder: integer().notNull().default(0),
+	workspaceId: uuid()
+		.notNull()
+		.references(() => workspaces.id, { onDelete: "cascade" }),
+});
+
 export const purchaseReviewInfo = pgTable("purchase_review_info", {
 	id: uuid().defaultRandom().primaryKey(),
 	...timeColumns,
@@ -580,6 +597,7 @@ export const purchaseReviewInfo = pgTable("purchase_review_info", {
 
 export const schema = {
 	account,
+	aiChatMessages,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,

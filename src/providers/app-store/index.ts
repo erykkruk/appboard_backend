@@ -1462,10 +1462,7 @@ export class AppStoreProvider implements StoreProvider {
 		const { remove } = await createAppStoreClient(this.credentials);
 		await remove({ id: groupExternalId, type: "subscriptionGroups" });
 
-		log.info(
-			{ appId, groupExternalId },
-			"Subscription group deleted from ASC",
-		);
+		log.info({ appId, groupExternalId }, "Subscription group deleted from ASC");
 	}
 
 	async updateFamilySharing(

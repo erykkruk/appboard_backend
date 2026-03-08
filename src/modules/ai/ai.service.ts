@@ -5,6 +5,12 @@ import {
 	getSettingKey,
 	type PromptMode,
 } from "@/modules/ai/ai.prompts";
+import {
+	getDefaultPurchasePrompt,
+	getPurchaseSettingKey,
+	type PurchasePromptField,
+	type PurchasePromptMode,
+} from "@/modules/ai/monetization.prompts";
 import { AppGroupsService } from "@/modules/app-groups/app-groups.service";
 import { AsoProfileService } from "@/modules/aso-profile/aso-profile.service";
 import { GroupAsoProfileService } from "@/modules/group-aso-profile/group-aso-profile.service";
@@ -435,76 +441,35 @@ const PURCHASE_FIELD_CHAR_LIMITS: Partial<Record<PurchaseField, number>> = {
 	reviewNotes: 4000,
 };
 
-function buildPurchaseSystemPrompt(
-	field: PurchaseField,
-	asoContext: string,
-): string {
-	const core = `You are an expert in mobile app monetization and App Store / Google Play in-app purchase optimization.
-Write compelling, clear content that:
-- Clearly communicates value to users
-- Passes App Store / Google Play review guidelines
-- Uses benefit-focused language
-NEVER use emoji or special Unicode symbols.`;
-
-	const fieldRules = buildPurchaseFieldRules(field);
-
-	let prompt = `${core}\n\n${fieldRules}`;
-
-	if (asoContext) {
-		prompt += `\n\nApp context:\n${asoContext}`;
+async function resolvePurchasePrompt(
+	field: PurchasePromptField,
+	mode: PurchasePromptMode,
+	workspaceId: string,
+	appId?: string,
+): Promise<string> {
+	// 1. Per-app custom prompt
+	if (appId) {
+		const [row] = await db
+			.select()
+			.from(appAiPrompts)
+			.where(
+				and(
+					eq(appAiPrompts.appId, appId),
+					eq(appAiPrompts.field, field),
+					eq(appAiPrompts.mode, mode),
+				),
+			)
+			.limit(1);
+		if (row?.prompt) return row.prompt;
 	}
 
-	return prompt;
-}
+	// 2. Global custom prompt from settings
+	const settingKey = getPurchaseSettingKey(field, mode);
+	const globalPrompt = await SettingsService.getRaw(workspaceId, settingKey);
+	if (globalPrompt) return globalPrompt;
 
-function buildPurchaseFieldRules(field: PurchaseField): string {
-	switch (field) {
-		case "purchaseName":
-			return `You are writing an IN-APP PURCHASE DISPLAY NAME (max 30 characters).
-This is the name shown to users in the purchase sheet.
-Formula: [Benefit] [Tier] or [Feature] [Level]
-- Must clearly communicate what the user is buying
-- Keep it short and scannable
-- Do NOT use generic words like "subscription" or "purchase" unless necessary`;
-
-		case "purchaseDescription":
-			return `You are writing an IN-APP PURCHASE DESCRIPTION (max 45 characters).
-This appears below the purchase name in the purchase sheet.
-- Must complement the name, NOT repeat it
-- Focus on the key benefit or what the user unlocks
-- Be specific about the value proposition`;
-
-		case "reviewNotes":
-			return `You are writing REVIEW NOTES for App Store review team (max 4000 characters).
-These notes help the App Store review team understand the in-app purchase.
-- Explain what the purchase unlocks or provides
-- Describe how to test the purchase flow
-- Mention any demo accounts or test credentials if applicable
-- Be clear and structured (use bullet points)
-- This is NOT user-facing content — write for a reviewer`;
-
-		case "productId":
-			return `You are generating a PRODUCT ID for an in-app purchase.
-Product IDs use reverse-domain format: {bundleId}.{type}.{name}
-- Must be lowercase
-- Use dots or underscores as separators
-- Should be descriptive and follow naming conventions
-- Example: com.myapp.premium.monthly, com.myapp.coins.100`;
-
-		case "groupName":
-			return `You are writing a SUBSCRIPTION GROUP NAME (max 30 characters).
-This is the internal name for a group of related subscriptions.
-- Should describe the tier or category of subscriptions
-- Examples: "Premium Plans", "Pro Access", "Creator Tools"
-- Keep it concise and descriptive`;
-
-		case "groupDescription":
-			return `You are writing a SUBSCRIPTION GROUP DESCRIPTION (max 45 characters).
-This describes what the subscription group offers.
-- Should summarize the value proposition of the group
-- Complement the group name, do not repeat it
-- Focus on what subscribers get access to`;
-	}
+	// 3. Built-in default
+	return getDefaultPurchasePrompt(field, mode);
 }
 
 function buildPurchaseUserPrompt(
@@ -681,7 +646,16 @@ export class AIService {
 		const asoProfile = await AIService.resolveAsoProfile(appId);
 		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
 
-		const systemPrompt = buildPurchaseSystemPrompt(field, asoContext);
+		const mode: PurchasePromptMode = currentValue ? "rephrase" : "generate";
+		let systemPrompt = await resolvePurchasePrompt(
+			field,
+			mode,
+			workspaceId,
+			appId,
+		);
+		if (asoContext) {
+			systemPrompt += `\n\nApp context:\n${asoContext}`;
+		}
 		const userPrompt = buildPurchaseUserPrompt(
 			field,
 			context,
@@ -694,12 +668,11 @@ export class AIService {
 			"Generating purchase field",
 		);
 
-		const purpose: AiPurpose = currentValue ? "rephrase" : "generate";
 		const { content, model } = await AIService.callOpenRouter(
 			workspaceId,
 			systemPrompt,
 			userPrompt,
-			purpose,
+			mode as AiPurpose,
 		);
 
 		const cleaned = stripEmoji(content);

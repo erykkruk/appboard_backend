@@ -77,6 +77,13 @@
 			"tag": "0010_thick_barracuda",
 			"version": "7",
 			"when": 1772886691452
+		},
+		{
+			"breakpoints": true,
+			"idx": 11,
+			"tag": "0011_moaning_goblin_queen",
+			"version": "7",
+			"when": 1772926168952
 		}
 	],
 	"version": "7"

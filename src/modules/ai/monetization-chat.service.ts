@@ -1,9 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { ASC_TERRITORIES } from "@/config/const";
+import {
+	getDefaultMonetizationPrompt,
+	getMonetizationSettingKey,
+	type MonetizationChatField,
+} from "@/modules/ai/monetization.prompts";
 import { PurchasesService } from "@/modules/purchases/purchases.service";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { db } from "@/utils/db";
-import { apps } from "@/utils/db/schema";
+import { appAiPrompts, apps } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
@@ -110,14 +115,17 @@ interface PlanData {
 
 async function getAppContext(
 	appId: string,
-	_workspaceId: string,
+	workspaceId: string,
 ): Promise<AppContext> {
 	const [app] = await db.select().from(apps).where(eq(apps.id, appId)).limit(1);
 
 	if (!app) buildError("notFound", { info: "App not found" });
 
-	const groups = await PurchasesService.listSubscriptionGroups(appId);
-	const purchases = await PurchasesService.listPurchases(appId);
+	const groups = await PurchasesService.listSubscriptionGroups(
+		appId,
+		workspaceId,
+	);
+	const purchases = await PurchasesService.listPurchases(appId, workspaceId);
 
 	const iaps = purchases.filter((p) => !p.groupId);
 
@@ -159,10 +167,49 @@ Generate prices for the following territories: ${formatted}
 Always include prices for ALL listed territories in every product.`;
 }
 
-function buildSystemPrompt(
+async function resolveMonetizationPrompt(
+	field: MonetizationChatField,
+	workspaceId: string,
+	appId?: string,
+): Promise<string> {
+	// 1. Per-app custom prompt
+	if (appId) {
+		const [row] = await db
+			.select()
+			.from(appAiPrompts)
+			.where(
+				and(
+					eq(appAiPrompts.appId, appId),
+					eq(appAiPrompts.field, field),
+					eq(appAiPrompts.mode, "chat"),
+				),
+			)
+			.limit(1);
+		if (row?.prompt) return row.prompt;
+	}
+
+	// 2. Global custom prompt from settings
+	const settingKey = getMonetizationSettingKey(field);
+	const globalPrompt = await SettingsService.getRaw(workspaceId, settingKey);
+	if (globalPrompt) return globalPrompt;
+
+	// 3. Built-in default
+	return getDefaultMonetizationPrompt(field);
+}
+
+async function buildSystemPrompt(
 	context: AppContext,
+	workspaceId: string,
 	territories?: string[],
-): string {
+	appId?: string,
+): Promise<string> {
+	const [role, knowledge, pricing, guidelines] = await Promise.all([
+		resolveMonetizationPrompt("monetizationRole", workspaceId, appId),
+		resolveMonetizationPrompt("monetizationKnowledge", workspaceId, appId),
+		resolveMonetizationPrompt("pricingRules", workspaceId, appId),
+		resolveMonetizationPrompt("conversationGuidelines", workspaceId, appId),
+	]);
+
 	const existingProductsBlock =
 		context.existingGroups.length > 0 || context.existingPurchases.length > 0
 			? `
@@ -187,7 +234,7 @@ ${context.existingPurchases.map((p) => `  - "${p.name}" productId: ${p.productId
 }`
 			: "\nNo existing products configured yet.";
 
-	return `You are an expert mobile app monetization consultant. You help developers plan and implement in-app purchases and subscriptions.
+	return `${role}
 
 APP CONTEXT:
 - Name: ${context.name}
@@ -195,28 +242,11 @@ APP CONTEXT:
 - Bundle ID: ${context.bundleId ?? "unknown"}
 ${existingProductsBlock}
 
-MONETIZATION KNOWLEDGE:
-- Product types: "consumable", "non_consumable", "auto_renewable" (subscriptions)
-- Subscription durations use ISO 8601: P1W (weekly), P1M (monthly), P3M (quarterly), P6M (semi-annual), P1Y (annual)
-- Product IDs should follow convention: lowercase_snake_case (e.g. "pro_monthly", "remove_ads", "coins_100")
-- Common pricing: subscriptions at $4.99/mo, $29.99/yr (40% discount), $49.99/yr (premium)
-- Always create subscription groups to organize related subscription tiers
-- Non-consumable = one-time (e.g. remove ads, unlock feature). Consumable = repeatable (e.g. coins, gems)
+${knowledge}
 
-CRITICAL PRICING RULES — PURCHASING POWER PARITY:
-Prices MUST be adjusted per country based on local purchasing power. NEVER use flat currency conversion. Use these approximate tiers relative to US price (1.0x):
-- Tier 1 (1.0x): US, CH, NO, AU, CA, GB, SE, DK, SG, JP, NZ, IE, DE, FR, NL, BE, AT, FI, IT, ES, KR, IL, AE, SA, HK
-- Tier 2 (0.55x): PT, CZ, GR, SI, EE, HR, SK, LT, LV, TW, CL, MY, PL, HU, RO, BG, MX, BR, TH, ZA, TR, AR, CO, PE, PH
-- Tier 3 (0.30x): IN, VN, EG, NG, ID, UA, KE, PK
-Example: If US price = $4.99/week, then PL should be ~10.99 PLN (not 22 PLN), IN should be ~79 INR (not 400 INR), BR should be ~14.90 BRL, etc.
-Round prices to psychologically attractive values (.99, .49, whole numbers for large currencies like JPY, KRW, VND).
-Each territory MUST have a DIFFERENT price appropriate to its purchasing power — do NOT just convert USD to local currency at market exchange rate.
+${pricing}
 
-CONVERSATION GUIDELINES:
-- You already have FULL context about the app and ALL its existing products (names, productIds, UUIDs, groups) in the EXISTING PRODUCTS section above. DO NOT ask the user for information that is already provided.
-- When the user references a product by name or productId, IMMEDIATELY match it to the existing products list and act on it. Never ask "does this product exist?" or "what group does it belong to?" — you already know.
-- Act decisively. Generate the monetization_plan block right away based on the user's instruction. Only ask questions if the user's request is genuinely ambiguous (e.g. they mention a product that doesn't exist at all).
-- Explain briefly what you're doing, then output the plan block. Keep explanations short.
+${guidelines}
 
 PLAN OUTPUT FORMAT:
 When you are ready to propose a concrete plan, include it in a special block:
@@ -366,7 +396,12 @@ export class MonetizationChatService {
 			DEFAULT_MODEL;
 
 		const context = await getAppContext(appId, workspaceId);
-		let systemPrompt = buildSystemPrompt(context, territories);
+		let systemPrompt = await buildSystemPrompt(
+			context,
+			workspaceId,
+			territories,
+			appId,
+		);
 
 		if (focusContext) {
 			systemPrompt += buildFocusContextBlock(focusContext);
@@ -459,7 +494,12 @@ export class MonetizationChatService {
 			DEFAULT_MODEL;
 
 		const context = await getAppContext(appId, workspaceId);
-		const systemPrompt = buildSystemPrompt(context, territories);
+		const systemPrompt = await buildSystemPrompt(
+			context,
+			workspaceId,
+			territories,
+			appId,
+		);
 
 		const chatMessages: ChatMessage[] = [
 			{ content: systemPrompt, role: "system" },
@@ -657,13 +697,12 @@ export class MonetizationChatService {
 						meta.localizations,
 					);
 					log.info(
-						{ groupId, count: meta.localizations.length },
+						{ count: meta.localizations.length, groupId },
 						"Group localizations applied",
 					);
 				} catch (err) {
 					results.failed.push({
-						error:
-							err instanceof Error ? err.message : "Unknown error",
+						error: err instanceof Error ? err.message : "Unknown error",
 						item: `localizations for group "${groupName}"`,
 					});
 				}
@@ -676,8 +715,7 @@ export class MonetizationChatService {
 					log.info({ groupId }, "Group review notes applied");
 				} catch (err) {
 					results.failed.push({
-						error:
-							err instanceof Error ? err.message : "Unknown error",
+						error: err instanceof Error ? err.message : "Unknown error",
 						item: `review notes for group "${groupName}"`,
 					});
 				}
@@ -689,13 +727,12 @@ export class MonetizationChatService {
 						meta.availability,
 					);
 					log.info(
-						{ groupId, count: meta.availability.length },
+						{ count: meta.availability.length, groupId },
 						"Group availability applied",
 					);
 				} catch (err) {
 					results.failed.push({
-						error:
-							err instanceof Error ? err.message : "Unknown error",
+						error: err instanceof Error ? err.message : "Unknown error",
 						item: `availability for group "${groupName}"`,
 					});
 				}
@@ -708,10 +745,7 @@ export class MonetizationChatService {
 				try {
 					let groupId: string;
 
-					const resolvedGroupId = resolveGroupId(
-						groupData.id,
-						groupData.name,
-					);
+					const resolvedGroupId = resolveGroupId(groupData.id, groupData.name);
 					if (resolvedGroupId) {
 						// Use existing group — just add subscriptions to it
 						groupId = resolvedGroupId;

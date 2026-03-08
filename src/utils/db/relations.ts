@@ -1,6 +1,7 @@
 import { relations } from "drizzle-orm";
 import {
 	account,
+	aiChatMessages,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
@@ -55,6 +56,7 @@ export const accountRelations = relations(account, ({ one }) => ({
 // ── Workspace relations ─────────────────────────────────────────────
 
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
+	aiChatMessages: many(aiChatMessages),
 	appGroups: many(appGroups),
 	members: many(workspaceMembers),
 	settings: many(settings),
@@ -97,6 +99,7 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 		fields: [apps.id],
 		references: [appAgeRatings.appId],
 	}),
+	aiChatMessages: many(aiChatMessages),
 	aiPrompts: many(appAiPrompts),
 	asoProfile: one(appAsoProfiles, {
 		fields: [apps.id],
@@ -328,3 +331,16 @@ export const purchaseReviewInfoRelations = relations(
 		}),
 	}),
 );
+
+// ── AI Chat relations ──────────────────────────────────────────────
+
+export const aiChatMessagesRelations = relations(aiChatMessages, ({ one }) => ({
+	app: one(apps, {
+		fields: [aiChatMessages.appId],
+		references: [apps.id],
+	}),
+	workspace: one(workspaces, {
+		fields: [aiChatMessages.workspaceId],
+		references: [workspaces.id],
+	}),
+}));

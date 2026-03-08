@@ -9,6 +9,7 @@ import {
 } from "@/modules/age-rating";
 import { aiController } from "@/modules/ai";
 import { monetizationChatController } from "@/modules/ai/monetization-chat.controller";
+import { aiChatHistoryController } from "@/modules/ai-chat-history";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appGroupsController } from "@/modules/app-groups";
 import { appsController } from "@/modules/apps";
@@ -58,6 +59,7 @@ const app = new Elysia()
 			.use(ageRatingController)
 			.use(settingsController)
 			.use(aiController)
+			.use(aiChatHistoryController)
 			.use(appAiPromptsController)
 			.use(assetsController)
 			.use(listingsController)

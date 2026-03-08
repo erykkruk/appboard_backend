@@ -538,9 +538,7 @@ export class PurchasesService {
 		}
 
 		// Clean up local DB
-		await db
-			.delete(inAppPurchases)
-			.where(eq(inAppPurchases.groupId, groupId));
+		await db.delete(inAppPurchases).where(eq(inAppPurchases.groupId, groupId));
 
 		await db
 			.delete(subscriptionGroups)
