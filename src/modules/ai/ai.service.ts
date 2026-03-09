@@ -16,7 +16,7 @@ import { AsoProfileService } from "@/modules/aso-profile/aso-profile.service";
 import { GroupAsoProfileService } from "@/modules/group-aso-profile/group-aso-profile.service";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { db } from "@/utils/db";
-import { appAiPrompts } from "@/utils/db/schema";
+import { appAiPrompts, apps, listings } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
@@ -1234,6 +1234,163 @@ Suggest the best primary and secondary category. Return ONLY the JSON.`;
 			);
 			buildError("somethingWentWrong", {
 				info: "AI returned invalid category suggestion format",
+			});
+			throw new Error("unreachable");
+		}
+	}
+
+	static async generateAgeRating(
+		workspaceId: string,
+		appId: string,
+	): Promise<{
+		appleQuestionnaire: Record<string, string>;
+		appleRating: string;
+		googleQuestionnaire: Record<string, string | boolean>;
+		model: string;
+		presetId: string;
+		reasoning: string;
+	}> {
+		// Fetch app info
+		const [app] = await db
+			.select()
+			.from(apps)
+			.where(eq(apps.id, appId))
+			.limit(1);
+
+		if (!app) {
+			buildError("notFound", { info: "App not found" });
+			throw new Error("unreachable");
+		}
+
+		// Fetch listing (prefer English, fallback to first available)
+		const appListings = await db
+			.select()
+			.from(listings)
+			.where(eq(listings.appId, appId));
+
+		const listing =
+			appListings.find((l) => l.language.startsWith("en")) ??
+			appListings[0] ??
+			null;
+
+		// Fetch ASO profile for additional context
+		const asoProfile = await AIService.resolveAsoProfile(appId);
+
+		const appContext = [
+			`App name: ${app.name}`,
+			`Platform: ${app.platform === "ios" ? "iOS" : "Android"}`,
+			app.primaryCategory ? `Category: ${app.primaryCategory}` : null,
+			listing?.fullDesc
+				? `Description: ${listing.fullDesc.substring(0, 1500)}`
+				: null,
+			asoProfile?.keyFeatures?.length
+				? `Key features: ${asoProfile.keyFeatures.join(", ")}`
+				: null,
+			asoProfile?.targetAudience
+				? `Target audience: ${asoProfile.targetAudience}`
+				: null,
+		]
+			.filter(Boolean)
+			.join("\n");
+
+		const systemPrompt = `You are an expert app content classifier specializing in age rating declarations for Apple App Store and Google Play.
+
+Given information about a mobile app, determine the appropriate age rating by answering the content questionnaire.
+
+For Apple, answer each question with one of: "NONE", "INFREQUENT_MILD", "FREQUENT_INTENSE"
+These are the Apple content questions:
+- CARTOON_FANTASY_VIOLENCE: Cartoon or Fantasy Violence
+- REALISTIC_VIOLENCE: Realistic Violence
+- PROLONGED_GRAPHIC_SADISTIC_REALISTIC_VIOLENCE: Prolonged Graphic or Sadistic Realistic Violence
+- PROFANITY_CRUDE_HUMOR: Profanity or Crude Humor
+- MATURE_SUGGESTIVE: Mature/Suggestive Themes
+- HORROR_FEAR_THEMES: Horror/Fear Themes
+- MEDICAL_TREATMENT_INFO: Medical/Treatment Information
+- ALCOHOL_TOBACCO_DRUG_USE: Alcohol, Tobacco, or Drug Use or References
+- SIMULATED_GAMBLING: Simulated Gambling
+- SEXUAL_CONTENT_NUDITY: Sexual Content or Nudity
+- GRAPHIC_SEXUAL_CONTENT_NUDITY: Graphic Sexual Content and Nudity
+- UNRESTRICTED_WEB_ACCESS: Unrestricted Web Access
+- GAMBLING_CONTESTS: Gambling and Contests
+- LOOT_BOX: Loot Boxes
+- CONTESTS: Contests
+- HEALTH_OR_WELLNESS_TOPICS: Health or Wellness Topics
+- GUNS_OR_OTHER_WEAPONS: Guns or Other Weapons
+- USER_GENERATED_CONTENT: User Generated Content
+- PARENTAL_CONTROLS: Parental Controls
+- GAMBLING: Gambling
+- ADVERTISING: Advertising
+- AGE_ASSURANCE: Age Assurance
+- MESSAGING_AND_CHAT: Messaging and Chat
+
+For Google Play, provide these fields:
+- violence: "none" | "mild" | "moderate" | "intense"
+- sexual_content: "none" | "mild" | "moderate"
+- profanity: "none" | "mild" | "strong"
+- drugs: "none" | "reference" | "use"
+- gambling: boolean
+- user_interaction: boolean
+- shares_location: boolean
+- contains_ads: boolean
+
+Rules:
+- Be conservative — when in doubt, rate higher rather than lower
+- Productivity, utility, and educational apps with no objectionable content should be "everyone"
+- Social apps with user-generated content need appropriate UGC and messaging flags
+- Games should carefully evaluate violence, loot boxes, and gambling elements
+- Health/medical apps should flag HEALTH_OR_WELLNESS_TOPICS and MEDICAL_TREATMENT_INFO
+- Apps with ads should flag ADVERTISING
+- Apps with chat/messaging should flag MESSAGING_AND_CHAT
+
+Return ONLY valid JSON with this exact structure:
+{
+  "presetId": "everyone" | "everyone_mild" | "teen" | "mature",
+  "appleQuestionnaire": { ... all 23 questions with values ... },
+  "googleQuestionnaire": { ... all 8 fields ... },
+  "reasoning": "Brief explanation of the classification"
+}`;
+
+		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
+			systemPrompt,
+			appContext,
+			"generate",
+		);
+
+		let cleaned = content.trim();
+		if (cleaned.startsWith("```")) {
+			cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+		}
+
+		try {
+			const result = JSON.parse(cleaned) as {
+				appleQuestionnaire: Record<string, string>;
+				googleQuestionnaire: Record<string, string | boolean>;
+				presetId: string;
+				reasoning: string;
+			};
+
+			// Import computeAppleRating dynamically to avoid circular deps
+			const { computeAppleRating } = await import(
+				"@/modules/age-rating/age-rating.templates"
+			);
+			const appleRating = computeAppleRating(result.appleQuestionnaire);
+
+			return {
+				appleQuestionnaire: result.appleQuestionnaire,
+				appleRating,
+				googleQuestionnaire: result.googleQuestionnaire,
+				model,
+				presetId: result.presetId,
+				reasoning: result.reasoning,
+			};
+		} catch {
+			log.error(
+				{ content },
+				"AI returned invalid JSON for age rating generation",
+			);
+			buildError("somethingWentWrong", {
+				info: "AI returned invalid age rating format",
 			});
 			throw new Error("unreachable");
 		}

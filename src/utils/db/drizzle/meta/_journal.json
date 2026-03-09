@@ -84,6 +84,13 @@
 			"tag": "0011_moaning_goblin_queen",
 			"version": "7",
 			"when": 1772926168952
+		},
+		{
+			"breakpoints": true,
+			"idx": 12,
+			"tag": "0012_abandoned_slapstick",
+			"version": "7",
+			"when": 1772984995833
 		}
 	],
 	"version": "7"

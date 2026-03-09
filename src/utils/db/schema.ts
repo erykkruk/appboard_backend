@@ -499,6 +499,7 @@ export const inAppPurchases = pgTable(
 		productType: varchar({ length: 50 }).notNull(),
 		status: varchar({ length: 50 }).notNull().default("approved"),
 		syncedAt: timestamp(),
+		useGroupLocalizations: boolean().notNull().default(true),
 	},
 	(t) => [unique().on(t.appId, t.externalId)],
 );
@@ -543,6 +544,7 @@ export const subscriptionGroupLocalizations = pgTable(
 		id: uuid().defaultRandom().primaryKey(),
 		...timeColumns,
 		description: text(),
+		externalId: varchar({ length: 255 }),
 		groupId: uuid()
 			.notNull()
 			.references(() => subscriptionGroups.id, { onDelete: "cascade" }),

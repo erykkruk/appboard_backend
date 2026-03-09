@@ -678,12 +678,18 @@ export class ListingsService {
 
 	static async publishCategories(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
+
+		if (!app.primaryCategory) {
+			log.info({ appId }, "No primary category set — skipping publish");
+			return { skipped: true, success: true };
+		}
+
 		const credentials = JSON.parse(decrypt(app.store.credentials!));
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		await provider.updateCategories(
 			app.externalId,
-			app.primaryCategory ?? "",
+			app.primaryCategory,
 			app.secondaryCategory ?? undefined,
 		);
 

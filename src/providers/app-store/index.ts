@@ -62,8 +62,10 @@ const DEVICE_TO_SCREENSHOT_DISPLAY_TYPE: Record<string, string> =
 const APPLE_QUESTION_TO_ASC_ATTRIBUTE: Record<string, string> = {
 	ALCOHOL_TOBACCO_DRUG_USE: "alcoholTobaccoOrDrugUseOrReferences",
 	CARTOON_FANTASY_VIOLENCE: "violenceCartoonOrFantasy",
+	CONTESTS: "contests",
 	GAMBLING_CONTESTS: "gamblingSimulated",
 	GRAPHIC_SEXUAL_CONTENT_NUDITY: "sexualContentGraphicAndNudity",
+	GUNS_OR_OTHER_WEAPONS: "gunsOrOtherWeapons",
 	HORROR_FEAR_THEMES: "horrorOrFearThemes",
 	MATURE_SUGGESTIVE: "matureOrSuggestiveThemes",
 	MEDICAL_TREATMENT_INFO: "medicalOrTreatmentInformation",
@@ -77,7 +79,15 @@ const APPLE_QUESTION_TO_ASC_ATTRIBUTE: Record<string, string> = {
 
 // Maps internal question keys to boolean ASC attributes
 const APPLE_QUESTION_TO_ASC_BOOLEAN: Record<string, string> = {
+	ADVERTISING: "advertising",
+	AGE_ASSURANCE: "ageAssurance",
+	GAMBLING: "gambling",
+	HEALTH_OR_WELLNESS_TOPICS: "healthOrWellnessTopics",
+	LOOT_BOX: "lootBox",
+	MESSAGING_AND_CHAT: "messagingAndChat",
+	PARENTAL_CONTROLS: "parentalControls",
 	UNRESTRICTED_WEB_ACCESS: "unrestrictedWebAccess",
+	USER_GENERATED_CONTENT: "userGeneratedContent",
 };
 
 // ASC API uses INFREQUENT_OR_MILD / FREQUENT_OR_INTENSE (with _OR_)
@@ -824,13 +834,34 @@ export class AppStoreProvider implements StoreProvider {
 				}
 			}
 
+			// Ensure all required new fields are present (Apple returns 409 without them)
+			const requiredBooleanDefaults: Record<string, boolean> = {
+				advertising: false,
+				ageAssurance: false,
+				gambling: false,
+				healthOrWellnessTopics: false,
+				lootBox: false,
+				messagingAndChat: false,
+				parentalControls: false,
+				userGeneratedContent: false,
+			};
+			const requiredStringDefaults: Record<string, string> = {
+				contests: "NONE",
+				gunsOrOtherWeapons: "NONE",
+			};
+			const finalAttributes = {
+				...requiredBooleanDefaults,
+				...requiredStringDefaults,
+				...ascAttributes,
+			};
+
 			await update(
 				{ id: declaration.id, type: "ageRatingDeclarations" },
-				{ attributes: ascAttributes },
+				{ attributes: finalAttributes },
 			);
 
 			log.info(
-				{ appId, fields: Object.keys(ascAttributes) },
+				{ appId, fields: Object.keys(finalAttributes) },
 				"Updated age rating declaration on App Store Connect",
 			);
 		} catch (err) {
@@ -1055,7 +1086,7 @@ export class AppStoreProvider implements StoreProvider {
 		if (this.isMock) return getMockSubscriptionGroups(appId);
 
 		try {
-			const { readAll } = await createAppStoreClient(this.credentials);
+			const { read, readAll } = await createAppStoreClient(this.credentials);
 
 			const { data: groupsData } = await readAll(
 				`apps/${appId}/subscriptionGroups`,
@@ -1092,6 +1123,71 @@ export class AppStoreProvider implements StoreProvider {
 						);
 					}
 
+					// Fetch subscription prices with customer price resolution
+					let prices: PurchasePriceData[] = [];
+					try {
+						const { data: subPricesData } = await readAll(
+							`subscriptions/${sub.id}/subscriptionPrices`,
+						);
+
+						// Parse raw price entries (territory + pricePointId)
+						const rawPrices = ((subPricesData ?? []) as ApiResource[]).map(
+							(p) => {
+								const ppId = (
+									p.relationships?.subscriptionPricePoint?.data as
+										| { id: string }
+										| undefined
+								)?.id;
+								const territory = (
+									p.relationships?.territory?.data as { id: string } | undefined
+								)?.id;
+								return {
+									externalId: p.id,
+									pricePointId: ppId,
+									territory: territory ?? "US",
+								};
+							},
+						);
+
+						// Resolve each price point to customerPrice via single-page read
+						prices = await Promise.all(
+							rawPrices.map(async (rp) => {
+								if (!rp.pricePointId) {
+									return {
+										currency: "USD",
+										externalId: rp.externalId,
+										price: "0",
+										territory: rp.territory,
+									};
+								}
+
+								try {
+									const { data: pt } = await read(
+										`subscriptionPricePoints/${rp.pricePointId}`,
+									);
+									const cp = (pt as ApiResource)?.attributes?.customerPrice as
+										| string
+										| undefined;
+									return {
+										currency: "USD",
+										externalId: rp.externalId,
+										price: cp ?? rp.pricePointId,
+										territory: rp.territory,
+									};
+								} catch {
+									return {
+										currency: "USD",
+										externalId: rp.externalId,
+										price: rp.pricePointId,
+										territory: rp.territory,
+									};
+								}
+							}),
+						);
+					} catch {
+						log.debug({ subId: sub.id }, "Could not fetch subscription prices");
+					}
+
 					const rawDuration = (attrs.subscriptionPeriod as string) ?? undefined;
 					subscriptions.push({
 						duration: rawDuration
@@ -1103,6 +1199,7 @@ export class AppStoreProvider implements StoreProvider {
 						groupExternalId: raw.id,
 						localizations,
 						name: (attrs.name as string) ?? localizations[0]?.name ?? "",
+						prices,
 						productId: (attrs.productId as string) ?? "",
 						productType: "auto_renewable",
 						status: this.mapSubState(attrs.state as string),
@@ -1180,6 +1277,11 @@ export class AppStoreProvider implements StoreProvider {
 			});
 		}
 
+		// Push prices if provided
+		if (data.prices?.length) {
+			await this.updateIapPrices(iapId, data.prices);
+		}
+
 		log.info({ appId, iapId, productId: data.productId }, "IAP created on ASC");
 
 		return {
@@ -1203,7 +1305,9 @@ export class AppStoreProvider implements StoreProvider {
 			return;
 		}
 
-		const { readAll, update } = await createAppStoreClient(this.credentials);
+		const { create, readAll, update } = await createAppStoreClient(
+			this.credentials,
+		);
 
 		if (data.name) {
 			await update(
@@ -1212,7 +1316,7 @@ export class AppStoreProvider implements StoreProvider {
 			);
 		}
 
-		// Update localizations
+		// Update or create localizations
 		if (data.localizations?.length) {
 			const { data: existingLocs } = await readAll(
 				`v2/inAppPurchases/${externalId}/inAppPurchaseLocalizations`,
@@ -1233,8 +1337,27 @@ export class AppStoreProvider implements StoreProvider {
 							},
 						},
 					);
+				} else {
+					await create({
+						attributes: {
+							description: loc.description ?? "",
+							locale: loc.language,
+							name: loc.name ?? data.name ?? "",
+						},
+						relationships: {
+							inAppPurchaseV2: {
+								data: { id: externalId, type: "inAppPurchases" },
+							},
+						},
+						type: "inAppPurchaseLocalizations",
+					});
 				}
 			}
+		}
+
+		// Push prices if provided
+		if (data.prices?.length) {
+			await this.updateIapPrices(externalId, data.prices);
 		}
 
 		log.info({ appId, externalId }, "IAP updated on ASC");
@@ -1371,6 +1494,11 @@ export class AppStoreProvider implements StoreProvider {
 			});
 		}
 
+		// Push prices if provided
+		if (data.prices?.length) {
+			await this.updateSubscriptionPrices(subId, data.prices);
+		}
+
 		log.info(
 			{ appId, productId: data.productId, subId },
 			"Subscription created on ASC",
@@ -1399,7 +1527,9 @@ export class AppStoreProvider implements StoreProvider {
 			return;
 		}
 
-		const { readAll, update } = await createAppStoreClient(this.credentials);
+		const { create, readAll, update } = await createAppStoreClient(
+			this.credentials,
+		);
 
 		if (data.name) {
 			await update(
@@ -1413,23 +1543,65 @@ export class AppStoreProvider implements StoreProvider {
 				`subscriptions/${subExternalId}/subscriptionLocalizations`,
 			);
 
-			for (const loc of data.localizations) {
-				const existing = (existingLocs as ApiResource[])?.find(
-					(l) => l.attributes.locale === loc.language,
-				);
+			const SUB_DESCRIPTION_MAX = 55;
 
-				if (existing) {
-					await update(
-						{ id: existing.id, type: "subscriptionLocalizations" },
-						{
-							attributes: {
-								description: loc.description ?? "",
-								name: loc.name ?? "",
-							},
-						},
+			await Promise.allSettled(
+				data.localizations.map(async (loc) => {
+					const existing = (existingLocs as ApiResource[])?.find(
+						(l) => l.attributes.locale === loc.language,
 					);
-				}
-			}
+
+					// Truncate description to Apple's 55-char limit for subscriptions
+					const description = (loc.description ?? "").slice(
+						0,
+						SUB_DESCRIPTION_MAX,
+					);
+
+					try {
+						if (existing) {
+							await update(
+								{
+									id: existing.id,
+									type: "subscriptionLocalizations",
+								},
+								{
+									attributes: {
+										description,
+										name: loc.name ?? "",
+									},
+								},
+							);
+						} else {
+							await create({
+								attributes: {
+									description,
+									locale: loc.language,
+									name: loc.name ?? data.name ?? "",
+								},
+								relationships: {
+									subscription: {
+										data: {
+											id: subExternalId,
+											type: "subscriptions",
+										},
+									},
+								},
+								type: "subscriptionLocalizations",
+							});
+						}
+					} catch (err) {
+						log.warn(
+							{ err, language: loc.language, subExternalId },
+							"Failed to push subscription localization — skipping",
+						);
+					}
+				}),
+			);
+		}
+
+		// Push prices if provided
+		if (data.prices?.length) {
+			await this.updateSubscriptionPrices(subExternalId, data.prices);
 		}
 
 		log.info({ appId, subExternalId }, "Subscription updated on ASC");
@@ -1524,18 +1696,18 @@ export class AppStoreProvider implements StoreProvider {
 		groupExternalId: string,
 		language: string,
 		data: { name: string },
-	): Promise<void> {
+	): Promise<{ externalId: string }> {
 		if (this.isMock) {
 			log.info(
 				{ groupExternalId, language },
 				"Mock: group localization created",
 			);
-			return;
+			return { externalId: `mock-gloc-${Date.now()}` };
 		}
 
 		const { create } = await createAppStoreClient(this.credentials);
 
-		await create({
+		const result = await create({
 			attributes: {
 				locale: language,
 				name: data.name,
@@ -1549,9 +1721,27 @@ export class AppStoreProvider implements StoreProvider {
 		});
 
 		log.info(
-			{ groupExternalId, language },
+			{ externalId: result.id, groupExternalId, language },
 			"Group localization created on ASC",
 		);
+
+		return { externalId: result.id };
+	}
+
+	async deleteGroupLocalization(localizationExternalId: string): Promise<void> {
+		if (this.isMock) {
+			log.info({ localizationExternalId }, "Mock: group localization deleted");
+			return;
+		}
+
+		const { remove } = await createAppStoreClient(this.credentials);
+
+		await remove({
+			id: localizationExternalId,
+			type: "subscriptionGroupLocalizations",
+		});
+
+		log.info({ localizationExternalId }, "Group localization deleted from ASC");
 	}
 
 	async updateGroupLocalization(
@@ -1571,6 +1761,276 @@ export class AppStoreProvider implements StoreProvider {
 		);
 
 		log.info({ localizationExternalId }, "Group localization updated on ASC");
+	}
+
+	async updateIapPrices(
+		iapExternalId: string,
+		prices: PurchasePriceData[],
+	): Promise<void> {
+		if (this.isMock) {
+			log.info(
+				{ count: prices.length, iapExternalId },
+				"Mock: IAP prices updated",
+			);
+			return;
+		}
+
+		const { create, readAll, remove } = await createAppStoreClient(
+			this.credentials,
+		);
+
+		// Get or create price schedule
+		let scheduleId: string;
+		try {
+			const { data: scheduleData } = await readAll(
+				`v2/inAppPurchases/${iapExternalId}/iapPriceSchedule`,
+			);
+			const schedule = (
+				Array.isArray(scheduleData) ? scheduleData[0] : scheduleData
+			) as ApiResource | undefined;
+
+			if (schedule) {
+				scheduleId = schedule.id;
+			} else {
+				const newSchedule = await create({
+					relationships: {
+						inAppPurchase: {
+							data: { id: iapExternalId, type: "inAppPurchases" },
+						},
+					},
+					type: "inAppPurchasePriceSchedules",
+				});
+				scheduleId = newSchedule.id;
+			}
+		} catch {
+			const newSchedule = await create({
+				relationships: {
+					inAppPurchase: {
+						data: { id: iapExternalId, type: "inAppPurchases" },
+					},
+				},
+				type: "inAppPurchasePriceSchedules",
+			});
+			scheduleId = newSchedule.id;
+		}
+
+		// Delete existing manual prices
+		try {
+			const { data: existingPrices } = await readAll(
+				`inAppPurchasePriceSchedules/${scheduleId}/manualPrices`,
+			);
+			for (const existing of (existingPrices ?? []) as ApiResource[]) {
+				try {
+					await remove({
+						id: existing.id,
+						type: "inAppPurchasePrices",
+					});
+				} catch (err) {
+					log.warn(
+						{ err, priceId: existing.id },
+						"Failed to delete existing IAP price — continuing",
+					);
+				}
+			}
+		} catch {
+			log.debug({ scheduleId }, "No existing manual prices to delete");
+		}
+
+		// Create new manual prices
+		for (const price of prices) {
+			await create({
+				relationships: {
+					inAppPurchasePricePoint: {
+						data: { id: price.price, type: "inAppPurchasePricePoints" },
+					},
+					inAppPurchasePriceSchedule: {
+						data: { id: scheduleId, type: "inAppPurchasePriceSchedules" },
+					},
+					territory: {
+						data: { id: price.territory, type: "territories" },
+					},
+				},
+				type: "inAppPurchasePrices",
+			});
+		}
+
+		log.info(
+			{ count: prices.length, iapExternalId },
+			"IAP prices updated on ASC",
+		);
+	}
+
+	async updateSubscriptionPrices(
+		subExternalId: string,
+		prices: PurchasePriceData[],
+	): Promise<void> {
+		if (this.isMock) {
+			log.info(
+				{ count: prices.length, subExternalId },
+				"Mock: subscription prices updated",
+			);
+			return;
+		}
+
+		const { create, read } = await createAppStoreClient(this.credentials);
+
+		let created = 0;
+		for (const price of prices) {
+			const isCustomerPrice = /^\d+(\.\d+)?$/.test(price.price);
+
+			let pricePointId: string | undefined;
+			if (isCustomerPrice) {
+				// Look up price point by territory + customerPrice (single page, fast)
+				try {
+					const { data: points } = await read(
+						`subscriptions/${subExternalId}/pricePoints`,
+						{
+							filter: {
+								customerPrice: price.price,
+								territory: price.territory,
+							},
+							params: { limit: 1 },
+						},
+					);
+					const pt = (points as ApiResource[] | undefined)?.[0];
+					pricePointId = pt?.id;
+				} catch {
+					log.warn(
+						{
+							customerPrice: price.price,
+							subExternalId,
+							territory: price.territory,
+						},
+						"Failed to look up price point — skipping",
+					);
+					continue;
+				}
+			} else {
+				// Already a price point ID
+				pricePointId = price.price;
+			}
+
+			if (!pricePointId) {
+				log.warn(
+					{
+						customerPrice: price.price,
+						subExternalId,
+						territory: price.territory,
+					},
+					"No matching price point found — skipping territory",
+				);
+				continue;
+			}
+
+			await create({
+				attributes: {
+					preserveCurrentPrice: false,
+					startDate: null,
+				},
+				relationships: {
+					subscription: {
+						data: { id: subExternalId, type: "subscriptions" },
+					},
+					subscriptionPricePoint: {
+						data: {
+							id: pricePointId,
+							type: "subscriptionPricePoints",
+						},
+					},
+					territory: {
+						data: { id: price.territory, type: "territories" },
+					},
+				},
+				type: "subscriptionPrices",
+			});
+			created++;
+		}
+
+		log.info(
+			{ count: created, subExternalId, total: prices.length },
+			"Subscription prices updated on ASC",
+		);
+	}
+
+	async updateSubscriptionAvailability(
+		subscriptionExternalId: string,
+		territories: string[],
+	): Promise<void> {
+		if (this.isMock) {
+			log.info(
+				{ count: territories.length, subscriptionExternalId },
+				"Mock: subscription availability updated",
+			);
+			return;
+		}
+
+		const { create, readAll, remove } = await createAppStoreClient(
+			this.credentials,
+		);
+
+		// Get existing availability
+		try {
+			const { data: availabilityData } = await readAll(
+				`subscriptions/${subscriptionExternalId}/subscriptionAvailability`,
+			);
+			const availability = (
+				Array.isArray(availabilityData) ? availabilityData[0] : availabilityData
+			) as ApiResource | undefined;
+
+			if (availability) {
+				// Delete existing territory entries and recreate
+				const { data: existingTerritories } = await readAll(
+					`subscriptionAvailabilities/${availability.id}/availableTerritories`,
+				);
+
+				for (const t of (existingTerritories ?? []) as ApiResource[]) {
+					try {
+						await remove({ id: t.id, type: "territories" });
+					} catch {
+						// Territory removal may not be supported individually
+					}
+				}
+			}
+		} catch {
+			log.debug(
+				{ subscriptionExternalId },
+				"No existing subscription availability found",
+			);
+		}
+
+		// Create/update availability with territory relationships
+		try {
+			await create({
+				attributes: {
+					availableInNewTerritories: false,
+				},
+				relationships: {
+					availableTerritories: {
+						data: territories.map((t) => ({
+							id: t,
+							type: "territories",
+						})),
+					},
+					subscription: {
+						data: {
+							id: subscriptionExternalId,
+							type: "subscriptions",
+						},
+					},
+				},
+				type: "subscriptionAvailabilities",
+			});
+		} catch (err) {
+			log.warn(
+				{ err, subscriptionExternalId },
+				"Failed to create subscription availability — may need PATCH instead",
+			);
+		}
+
+		log.info(
+			{ count: territories.length, subscriptionExternalId },
+			"Subscription availability updated on ASC",
+		);
 	}
 
 	async checkMonetizationSupport(

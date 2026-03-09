@@ -694,6 +694,8 @@ export class MonetizationChatService {
 				try {
 					await PurchasesService.upsertGroupLocalizations(
 						groupId,
+						appId,
+						workspaceId,
 						meta.localizations,
 					);
 					log.info(

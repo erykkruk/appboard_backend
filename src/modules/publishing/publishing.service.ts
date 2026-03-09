@@ -1,9 +1,11 @@
-import { and, desc, eq, notInArray } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
 import type { ApiResource } from "node-app-store-connect-api";
 import sharp from "sharp";
 import type { StoreType } from "@/config/const";
+import { AgeRatingService } from "@/modules/age-rating/age-rating.service";
 import { AssetsService } from "@/modules/assets/assets.service";
 import { ListingsService } from "@/modules/listings/listings.service";
+import { PrivacyDeclarationService } from "@/modules/privacy-declaration/privacy-declaration.service";
 import { createProvider } from "@/providers";
 import { createAppStoreClient } from "@/providers/app-store/client";
 import { decrypt } from "@/utils/crypto";
@@ -12,8 +14,12 @@ import {
 	apps,
 	appVersions,
 	assets,
+	inAppPurchases,
 	listings,
+	purchaseLocalizations,
+	purchasePrices,
 	stores,
+	subscriptionGroups,
 	versionLocalizations,
 } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -327,6 +333,94 @@ export class PublishingService {
 				count: listingChanges.length,
 			},
 			version,
+		};
+	}
+
+	static async getPushPreview(appId: string) {
+		const app = await PublishingService.getAppWithStore(appId);
+		const isIos = app.store.type === "app_store";
+
+		// Reuse overview for listings + assets
+		const overview = await PublishingService.getOverview(appId);
+
+		// Categories (from apps table)
+		const categories =
+			app.primaryCategory || app.secondaryCategory
+				? {
+						primaryCategory: app.primaryCategory ?? null,
+						secondaryCategory: app.secondaryCategory ?? null,
+					}
+				: null;
+
+		// Age Rating
+		const ageRating = await AgeRatingService.get(appId);
+		const ageRatingPreview = ageRating
+			? {
+					appleRating: ageRating.appleRating,
+					configured: true,
+					googleRating: ageRating.googleRating,
+					presetId: ageRating.presetId,
+				}
+			: { configured: false };
+
+		// Privacy Declaration
+		const privacy = await PrivacyDeclarationService.get(appId);
+		const privacyPreview = privacy
+			? {
+					configured: true,
+					dataCollectionCount: Array.isArray(privacy.dataCollections)
+						? privacy.dataCollections.length
+						: 0,
+					templateId: privacy.templateId,
+					trackingEnabled: privacy.trackingEnabled,
+				}
+			: { configured: false };
+
+		// Purchases summary
+		const allPurchases = await db
+			.select({ id: inAppPurchases.id, name: inAppPurchases.name })
+			.from(inAppPurchases)
+			.where(eq(inAppPurchases.appId, appId));
+
+		const allGroups = await db
+			.select({ id: subscriptionGroups.id, name: subscriptionGroups.name })
+			.from(subscriptionGroups)
+			.where(eq(subscriptionGroups.appId, appId));
+
+		const purchaseIds = allPurchases.map((p) => p.id);
+		let localizationCount = 0;
+		let priceCount = 0;
+
+		if (purchaseIds.length > 0) {
+			const locs = await db
+				.select({ id: purchaseLocalizations.id })
+				.from(purchaseLocalizations)
+				.where(inArray(purchaseLocalizations.purchaseId, purchaseIds));
+			localizationCount = locs.length;
+
+			const prices = await db
+				.select({ id: purchasePrices.id })
+				.from(purchasePrices)
+				.where(inArray(purchasePrices.purchaseId, purchaseIds));
+			priceCount = prices.length;
+		}
+
+		const purchasesPreview = {
+			groupCount: allGroups.length,
+			localizationCount,
+			priceCount,
+			purchaseCount: allPurchases.length,
+		};
+
+		return {
+			ageRating: ageRatingPreview,
+			assets: overview.assets,
+			categories,
+			isIos,
+			listings: overview.listings,
+			privacy: privacyPreview,
+			purchases: purchasesPreview,
+			version: overview.version,
 		};
 	}
 

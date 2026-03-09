@@ -14,6 +14,7 @@ import {
 	updateGroupBody,
 	updatePurchaseBody,
 	updateSubscriptionAvailabilityBody,
+	updateUseGroupLocalizationsBody,
 	upsertGroupLocalizationsBody,
 	upsertGroupReviewInfoBody,
 	upsertPurchaseReviewInfoBody,
@@ -48,6 +49,21 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 		{
 			detail: {
 				description: "Sync in-app purchases and subscriptions from store",
+				tags: ["Purchases"],
+			},
+			params: appIdParams,
+		},
+	)
+	.post(
+		"/:appId/purchases/publish",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PurchasesService.publishPurchases(params.appId, workspaceId!);
+		},
+		{
+			detail: {
+				description:
+					"Publish all purchase data (prices, localizations, availability) to store",
 				tags: ["Purchases"],
 			},
 			params: appIdParams,
@@ -287,6 +303,8 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
 			const localizations = await PurchasesService.upsertGroupLocalizations(
 				params.groupId,
+				params.appId,
+				workspaceId!,
 				body.localizations,
 			);
 			return { localizations };
@@ -307,6 +325,8 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
 			await PurchasesService.deleteGroupLocalization(
 				params.groupId,
+				params.appId,
+				workspaceId!,
 				params.language,
 			);
 			return { success: true };
@@ -342,6 +362,8 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			await PurchasesService.verifyGroupOwnership(params.groupId, params.appId);
 			return PurchasesService.updateGroupAvailability(
 				params.groupId,
+				params.appId,
+				workspaceId!,
 				body.territories,
 			);
 		},
@@ -415,6 +437,8 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			await verifyAppOwnership(params.appId, workspaceId!);
 			return PurchasesService.updateSubscriptionAvailability(
 				params.purchaseId,
+				params.appId,
+				workspaceId!,
 				body.territories,
 			);
 		},
@@ -465,6 +489,40 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			params: purchaseIdParams,
 		},
 	)
+	// ── Effective Localizations ──────────────────────────────────
+	.get(
+		"/:appId/purchases/:purchaseId/effective-localizations",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PurchasesService.getEffectiveLocalizations(params.purchaseId);
+		},
+		{
+			detail: {
+				description:
+					"Get effective localizations (own or inherited from group)",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
+	.put(
+		"/:appId/purchases/:purchaseId/use-group-localizations",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PurchasesService.updateUseGroupLocalizations(
+				params.purchaseId,
+				body.useGroupLocalizations,
+			);
+		},
+		{
+			body: updateUseGroupLocalizationsBody,
+			detail: {
+				description: "Toggle whether this purchase uses group localizations",
+				tags: ["Purchases"],
+			},
+			params: purchaseIdParams,
+		},
+	)
 	// ── Family Sharing ───────────────────────────────────────────
 	.patch(
 		"/:appId/purchases/:purchaseId/family-sharing",
@@ -472,6 +530,8 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			await verifyAppOwnership(params.appId, workspaceId!);
 			const purchase = await PurchasesService.updateFamilySharing(
 				params.purchaseId,
+				params.appId,
+				workspaceId!,
 				body.familySharable,
 			);
 			return { purchase };

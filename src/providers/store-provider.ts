@@ -89,6 +89,16 @@ export interface StoreProvider {
 		groupExternalId: string,
 	): Promise<void>;
 
+	// Optional: Price push
+	updateIapPrices?(
+		iapExternalId: string,
+		prices: PurchasePriceData[],
+	): Promise<void>;
+	updateSubscriptionPrices?(
+		subExternalId: string,
+		prices: PurchasePriceData[],
+	): Promise<void>;
+
 	// Optional: Availability
 	fetchSubscriptionAvailability?(
 		subscriptionExternalId: string,
@@ -112,11 +122,12 @@ export interface StoreProvider {
 		groupExternalId: string,
 		language: string,
 		data: { name: string },
-	): Promise<void>;
+	): Promise<{ externalId: string }>;
 	updateGroupLocalization?(
 		localizationExternalId: string,
 		data: { name: string },
 	): Promise<void>;
+	deleteGroupLocalization?(localizationExternalId: string): Promise<void>;
 
 	checkMonetizationSupport(
 		appId: string,

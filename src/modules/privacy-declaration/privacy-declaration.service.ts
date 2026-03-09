@@ -90,10 +90,11 @@ export class PrivacyDeclarationService {
 	static async publish(appId: string) {
 		const declaration = await PrivacyDeclarationService.get(appId);
 		if (!declaration) {
-			buildError("notFound", {
-				info: "Privacy declaration not found — save first",
-			});
-			throw new Error("unreachable");
+			log.info(
+				{ appId },
+				"No privacy declaration configured — skipping publish",
+			);
+			return { skipped: true, success: true };
 		}
 
 		const result = await db

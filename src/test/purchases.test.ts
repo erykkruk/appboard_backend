@@ -1940,6 +1940,158 @@ describe("Purchases module", () => {
 		expect(isolationRes.status).toBe(404);
 	});
 
+	// ═══════════════════════════════════════════════════════════════
+	// ── Push Operations: Prices ─────────────────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("update IAP with prices pushes to store (AS mock)", async () => {
+		// Create IAP
+		const createRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases`, {
+				body: JSON.stringify({
+					name: "Price Push Test",
+					prices: [{ currency: "USD", price: "tier1", territory: "US" }],
+					productId: "inttest.price.push",
+					productType: "consumable",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(createRes.status).toBe(200);
+		const created = (await createRes.json()).purchase;
+		expect(created.prices.length).toBeGreaterThanOrEqual(1);
+
+		// Update with new prices
+		const updateRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${created.id}`,
+				{
+					body: JSON.stringify({
+						prices: [
+							{ currency: "USD", price: "tier2", territory: "US" },
+							{ currency: "EUR", price: "tier2_eu", territory: "DE" },
+						],
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(updateRes.status).toBe(200);
+		const updated = (await updateRes.json()).purchase;
+		expect(updated.prices.length).toBeGreaterThanOrEqual(2);
+
+		// Cleanup
+		await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${created.id}`,
+				{ method: "DELETE" },
+			),
+		);
+	});
+
+	it("create subscription with prices pushes to store (AS mock)", async () => {
+		// Create group
+		const groupRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`, {
+				body: JSON.stringify({ name: "Price Push Sub Group" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		const groupId = (await groupRes.json()).group.id;
+
+		// Create subscription with prices
+		const subRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/subscriptions`,
+				{
+					body: JSON.stringify({
+						duration: "P1M",
+						name: "Price Push Sub",
+						prices: [
+							{ currency: "USD", price: "sub_tier1", territory: "US" },
+							{ currency: "PLN", price: "sub_tier1_pl", territory: "PL" },
+						],
+						productId: "inttest.price.push.sub",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+			),
+		);
+		expect(subRes.status).toBe(200);
+		const sub = (await subRes.json()).purchase;
+		expect(sub.prices.length).toBeGreaterThanOrEqual(2);
+
+		// Update subscription with new prices
+		const updateRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/${sub.id}`, {
+				body: JSON.stringify({
+					prices: [{ currency: "USD", price: "sub_tier2", territory: "US" }],
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "PATCH",
+			}),
+		);
+		expect(updateRes.status).toBe(200);
+
+		// Cleanup
+		await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/${sub.id}`, {
+				method: "DELETE",
+			}),
+		);
+	});
+
+	// ═══════════════════════════════════════════════════════════════
+	// ── Push Operations: Workspace Isolation ────────────────────
+	// ═══════════════════════════════════════════════════════════════
+
+	it("workspace B cannot update availability for workspace A subscription", async () => {
+		// Get a purchase from workspace A
+		const listRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases`),
+		);
+		const purchases = (await listRes.json()).purchases;
+		if (purchases.length === 0) return;
+		const purchaseId = purchases[0].id;
+
+		const res = await app.handle(
+			authRequestB(
+				`http://localhost/api/apps/${appIdAS}/purchases/${purchaseId}/availability`,
+				{
+					body: JSON.stringify({ territories: ["US"] }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(res.status).toBe(404);
+	});
+
+	it("workspace B cannot update group availability for workspace A", async () => {
+		const groupsRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/subscription-groups`),
+		);
+		const groups = (await groupsRes.json()).groups;
+		if (groups.length === 0) return;
+		const groupId = groups[0].id;
+
+		const res = await app.handle(
+			authRequestB(
+				`http://localhost/api/apps/${appIdAS}/subscription-groups/${groupId}/availability`,
+				{
+					body: JSON.stringify({ territories: ["US"] }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				},
+			),
+		);
+		expect(res.status).toBe(404);
+	});
+
 	it("workspace B cannot access workspace A family sharing", async () => {
 		// Get a purchase from workspace A
 		const listRes = await app.handle(
@@ -1962,5 +2114,138 @@ describe("Purchases module", () => {
 			),
 		);
 		expect(isolationRes.status).toBe(404);
+	});
+
+	// ── Subscription prices synced ─────────────────────────────────
+
+	it("syncs subscription prices from store during sync", async () => {
+		// Re-sync to pull fresh data including subscription prices
+		const syncRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/sync`, {
+				method: "POST",
+			}),
+		);
+		expect(syncRes.status).toBe(200);
+		const syncData = await syncRes.json();
+		expect(syncData.syncedSubscriptions).toBeGreaterThanOrEqual(1);
+
+		// List all purchases and find auto_renewable subs with prices
+		const listRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases`),
+		);
+		expect(listRes.status).toBe(200);
+
+		const { purchases } = await listRes.json();
+		const subscriptions = purchases.filter(
+			(p: { productType: string }) => p.productType === "auto_renewable",
+		);
+		expect(subscriptions.length).toBeGreaterThanOrEqual(1);
+
+		// At least one subscription should have prices after sync
+		const subWithPrices = subscriptions.find(
+			(s: { prices: unknown[] }) => s.prices.length > 0,
+		);
+		expect(subWithPrices).toBeDefined();
+		expect(subWithPrices.prices[0].territory).toBeDefined();
+		expect(subWithPrices.prices[0].price).toBeDefined();
+		expect(subWithPrices.prices[0].currency).toBeDefined();
+	});
+
+	// ── Update creates new localizations ───────────────────────────
+
+	it("creates new localization via update when it does not exist on store", async () => {
+		// Create a fresh IAP
+		const createRes = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases`, {
+				body: JSON.stringify({
+					localizations: [
+						{
+							description: "Test desc",
+							language: "en-US",
+							name: "Test Loc IAP",
+						},
+					],
+					name: "Loc Test IAP",
+					productId: `loc.test.iap.${Date.now()}`,
+					productType: "consumable",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(createRes.status).toBe(200);
+		const created = (await createRes.json()).purchase;
+
+		// Update with a new localization language that doesn't exist yet
+		const updateRes = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${created.id}`,
+				{
+					body: JSON.stringify({
+						localizations: [
+							{
+								description: "Opis testowy",
+								language: "pl-PL",
+								name: "Testowy IAP",
+							},
+						],
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+		expect(updateRes.status).toBe(200);
+
+		const updated = (await updateRes.json()).purchase;
+		// Should now have both en-US and pl-PL
+		const plLoc = updated.localizations.find(
+			(l: { language: string }) => l.language === "pl-PL",
+		);
+		expect(plLoc).toBeDefined();
+		expect(plLoc.name).toBe("Testowy IAP");
+		expect(plLoc.description).toBe("Opis testowy");
+
+		// Clean up
+		await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appIdAS}/purchases/${created.id}`,
+				{ method: "DELETE" },
+			),
+		);
+	});
+
+	// ── Publish all purchases ──────────────────────────────────────
+
+	it("publishes all purchase data to store", async () => {
+		// First sync to have data
+		await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/sync`, {
+				method: "POST",
+			}),
+		);
+
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/publish`, {
+				method: "POST",
+			}),
+		);
+		expect(res.status).toBe(200);
+
+		const data = await res.json();
+		expect(typeof data.publishedLocalizations).toBe("number");
+		expect(typeof data.publishedPrices).toBe("number");
+		expect(typeof data.publishedGroupLocalizations).toBe("number");
+		expect(typeof data.publishedAvailability).toBe("number");
+		expect(Array.isArray(data.errors)).toBe(true);
+	});
+
+	it("blocks workspace B from publishing workspace A purchases", async () => {
+		const res = await app.handle(
+			authRequestB(`http://localhost/api/apps/${appIdAS}/purchases/publish`, {
+				method: "POST",
+			}),
+		);
+		expect(res.status).toBe(404);
 	});
 });

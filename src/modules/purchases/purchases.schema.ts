@@ -102,6 +102,12 @@ export const upsertPurchaseReviewInfoBody = t.Object({
 	useGroupDefault: t.Optional(t.Boolean()),
 });
 
+// ── Localization inheritance ─────────────────────────────────────
+
+export const updateUseGroupLocalizationsBody = t.Object({
+	useGroupLocalizations: t.Boolean(),
+});
+
 // ── Family sharing ───────────────────────────────────────────────
 
 export const updateFamilySharingBody = t.Object({

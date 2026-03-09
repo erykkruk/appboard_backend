@@ -83,8 +83,8 @@ export class AgeRatingService {
 	static async publish(appId: string) {
 		const rating = await AgeRatingService.get(appId);
 		if (!rating) {
-			buildError("notFound", { info: "Age rating not found — save first" });
-			throw new Error("unreachable");
+			log.info({ appId }, "No age rating configured — skipping publish");
+			return { skipped: true, success: true };
 		}
 
 		await AgeRatingService.pushToStore(appId, rating.appleQuestionnaire);

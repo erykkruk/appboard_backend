@@ -61,6 +61,21 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.get(
+		"/:appId/publishing/push-preview",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PublishingService.getPushPreview(params.appId);
+		},
+		{
+			detail: {
+				description:
+					"Get preview of all changes that will be pushed to the store",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.get(
 		"/:appId/publishing/settings",
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
