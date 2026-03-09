@@ -149,6 +149,29 @@ export class PurchasesService {
 				);
 				await PurchasesService.syncPrices(dbPurchase.id, sub.prices ?? []);
 			}
+
+			// Sync group availability from first subscription
+			if (
+				provider.fetchSubscriptionAvailability &&
+				group.subscriptions.length > 0
+			) {
+				try {
+					const territories = await provider.fetchSubscriptionAvailability(
+						group.subscriptions[0].externalId,
+					);
+					if (territories.length > 0) {
+						await db
+							.update(subscriptionGroups)
+							.set({ availableTerritories: territories })
+							.where(eq(subscriptionGroups.id, dbGroup.id));
+					}
+				} catch (err) {
+					log.debug(
+						{ err, groupId: dbGroup.id },
+						"Could not sync subscription availability",
+					);
+				}
+			}
 		}
 
 		// Sync standalone in-app purchases (consumables, non-consumables)
@@ -1561,6 +1584,7 @@ export class PurchasesService {
 					const priceData = prices.map((p) => ({
 						currency: p.currency,
 						price: p.price,
+						pricePointId: p.pricePointId ?? undefined,
 						territory: p.territory,
 					}));
 
@@ -1619,6 +1643,21 @@ export class PurchasesService {
 			)
 				continue;
 
+			// Parse territories — handle double-escaped JSON strings
+			let groupTerritories: string[];
+			const raw = group.availableTerritories;
+			if (typeof raw === "string") {
+				try {
+					groupTerritories = JSON.parse(raw);
+				} catch {
+					groupTerritories = [];
+				}
+			} else {
+				groupTerritories = raw as string[];
+			}
+
+			if (groupTerritories.length === 0) continue;
+
 			const subsUsingGroupDefault = await db
 				.select({
 					externalId: inAppPurchases.externalId,
@@ -1641,7 +1680,7 @@ export class PurchasesService {
 					try {
 						await provider.updateSubscriptionAvailability(
 							sub.externalId,
-							group.availableTerritories as string[],
+							groupTerritories,
 						);
 						results.publishedAvailability++;
 					} catch (err) {
@@ -1760,6 +1799,7 @@ export class PurchasesService {
 			currency: string;
 			externalId?: string;
 			price: string;
+			pricePointId?: string;
 			territory: string;
 		}>,
 	) {
@@ -1770,6 +1810,7 @@ export class PurchasesService {
 					currency: price.currency,
 					externalId: price.externalId,
 					price: price.price,
+					pricePointId: price.pricePointId,
 					purchaseId,
 					syncedAt: new Date(),
 					territory: price.territory,
@@ -1779,6 +1820,7 @@ export class PurchasesService {
 						currency: price.currency,
 						externalId: price.externalId,
 						price: price.price,
+						pricePointId: price.pricePointId,
 						syncedAt: new Date(),
 					},
 					target: [purchasePrices.purchaseId, purchasePrices.territory],

@@ -251,6 +251,7 @@ export interface PurchasePriceData {
 	currency: string;
 	externalId?: string;
 	price: string;
+	pricePointId?: string;
 	territory: string;
 }
 

@@ -1,0 +1,1 @@
+ALTER TABLE "purchase_prices" ADD COLUMN "price_point_id" varchar(255);

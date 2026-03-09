@@ -529,6 +529,7 @@ export const purchasePrices = pgTable(
 		currency: varchar({ length: 10 }).notNull(),
 		externalId: varchar({ length: 255 }),
 		price: varchar({ length: 50 }).notNull(),
+		pricePointId: varchar({ length: 255 }),
 		purchaseId: uuid()
 			.notNull()
 			.references(() => inAppPurchases.id, { onDelete: "cascade" }),

@@ -97,6 +97,204 @@ const INTERNAL_TO_ASC_VALUE: Record<string, string> = {
 	NONE: "NONE",
 };
 
+/**
+ * ISO 3166-1 alpha-2 → alpha-3 territory code mapping.
+ * ASC API uses alpha-3 codes for subscription price points and prices.
+ */
+const ALPHA2_TO_ALPHA3: Record<string, string> = {
+	AE: "ARE",
+	AF: "AFG",
+	AG: "ATG",
+	AI: "AIA",
+	AL: "ALB",
+	AM: "ARM",
+	AO: "AGO",
+	AR: "ARG",
+	AT: "AUT",
+	AU: "AUS",
+	AZ: "AZE",
+	BB: "BRB",
+	BE: "BEL",
+	BF: "BFA",
+	BG: "BGR",
+	BH: "BHR",
+	BJ: "BEN",
+	BM: "BMU",
+	BN: "BRN",
+	BO: "BOL",
+	BR: "BRA",
+	BS: "BHS",
+	BT: "BTN",
+	BW: "BWA",
+	BY: "BLR",
+	BZ: "BLZ",
+	CA: "CAN",
+	CD: "COD",
+	CF: "CAF",
+	CG: "COG",
+	CH: "CHE",
+	CI: "CIV",
+	CL: "CHL",
+	CM: "CMR",
+	CN: "CHN",
+	CO: "COL",
+	CR: "CRI",
+	CV: "CPV",
+	CY: "CYP",
+	CZ: "CZE",
+	DE: "DEU",
+	DK: "DNK",
+	DM: "DMA",
+	DO: "DOM",
+	DZ: "DZA",
+	EC: "ECU",
+	EE: "EST",
+	EG: "EGY",
+	ER: "ERI",
+	ES: "ESP",
+	ET: "ETH",
+	FI: "FIN",
+	FJ: "FJI",
+	FR: "FRA",
+	GA: "GAB",
+	GB: "GBR",
+	GD: "GRD",
+	GE: "GEO",
+	GH: "GHA",
+	GM: "GMB",
+	GR: "GRC",
+	GT: "GTM",
+	GW: "GNB",
+	GY: "GUY",
+	HK: "HKG",
+	HN: "HND",
+	HR: "HRV",
+	HU: "HUN",
+	ID: "IDN",
+	IE: "IRL",
+	IL: "ISR",
+	IN: "IND",
+	IQ: "IRQ",
+	IS: "ISL",
+	IT: "ITA",
+	JM: "JAM",
+	JO: "JOR",
+	JP: "JPN",
+	KE: "KEN",
+	KG: "KGZ",
+	KH: "KHM",
+	KN: "KNA",
+	KR: "KOR",
+	KW: "KWT",
+	KY: "CYM",
+	KZ: "KAZ",
+	LA: "LAO",
+	LB: "LBN",
+	LC: "LCA",
+	LK: "LKA",
+	LR: "LBR",
+	LT: "LTU",
+	LU: "LUX",
+	LV: "LVA",
+	LY: "LBY",
+	MA: "MAR",
+	MD: "MDA",
+	ME: "MNE",
+	MG: "MDG",
+	MK: "MKD",
+	ML: "MLI",
+	MM: "MMR",
+	MN: "MNG",
+	MO: "MAC",
+	MR: "MRT",
+	MS: "MSR",
+	MT: "MLT",
+	MU: "MUS",
+	MV: "MDV",
+	MW: "MWI",
+	MX: "MEX",
+	MY: "MYS",
+	MZ: "MOZ",
+	NA: "NAM",
+	NE: "NER",
+	NG: "NGA",
+	NI: "NIC",
+	NL: "NLD",
+	NO: "NOR",
+	NP: "NPL",
+	NR: "NRU",
+	NZ: "NZL",
+	OM: "OMN",
+	PA: "PAN",
+	PE: "PER",
+	PG: "PNG",
+	PH: "PHL",
+	PK: "PAK",
+	PL: "POL",
+	PT: "PRT",
+	PW: "PLW",
+	PY: "PRY",
+	QA: "QAT",
+	RO: "ROU",
+	RS: "SRB",
+	RU: "RUS",
+	RW: "RWA",
+	SA: "SAU",
+	SB: "SLB",
+	SC: "SYC",
+	SE: "SWE",
+	SG: "SGP",
+	SI: "SVN",
+	SK: "SVK",
+	SL: "SLE",
+	SN: "SEN",
+	SR: "SUR",
+	ST: "STP",
+	SV: "SLV",
+	SZ: "SWZ",
+	TC: "TCA",
+	TD: "TCD",
+	TH: "THA",
+	TJ: "TJK",
+	TM: "TKM",
+	TN: "TUN",
+	TO: "TON",
+	TR: "TUR",
+	TT: "TTO",
+	TW: "TWN",
+	TZ: "TZA",
+	UA: "UKR",
+	UG: "UGA",
+	US: "USA",
+	UY: "URY",
+	UZ: "UZB",
+	VC: "VCT",
+	VE: "VEN",
+	VG: "VGB",
+	VN: "VNM",
+	VU: "VUT",
+	YE: "YEM",
+	ZA: "ZAF",
+	ZM: "ZMB",
+	ZW: "ZWE",
+};
+
+const ALPHA3_TO_ALPHA2: Record<string, string> = Object.fromEntries(
+	Object.entries(ALPHA2_TO_ALPHA3).map(([a2, a3]) => [a3, a2]),
+);
+
+/** Convert territory code to alpha-3 (pass-through if already alpha-3) */
+function toAlpha3(territory: string): string {
+	if (territory.length === 3) return territory;
+	return ALPHA2_TO_ALPHA3[territory] ?? territory;
+}
+
+/** Convert territory code to alpha-2 (pass-through if already alpha-2) */
+function toAlpha2(territory: string): string {
+	if (territory.length === 2) return territory;
+	return ALPHA3_TO_ALPHA2[territory] ?? territory;
+}
+
 const ISO_TO_ASC_DURATION: Record<string, string> = {
 	P1M: "ONE_MONTH",
 	P1W: "ONE_WEEK",
@@ -1127,7 +1325,7 @@ export class AppStoreProvider implements StoreProvider {
 					let prices: PurchasePriceData[] = [];
 					try {
 						const { data: subPricesData } = await readAll(
-							`subscriptions/${sub.id}/subscriptionPrices`,
+							`subscriptions/${sub.id}/prices`,
 						);
 
 						// Parse raw price entries (territory + pricePointId)
@@ -1144,7 +1342,7 @@ export class AppStoreProvider implements StoreProvider {
 								return {
 									externalId: p.id,
 									pricePointId: ppId,
-									territory: territory ?? "US",
+									territory: territory ? toAlpha2(territory) : "US",
 								};
 							},
 						);
@@ -1157,6 +1355,7 @@ export class AppStoreProvider implements StoreProvider {
 										currency: "USD",
 										externalId: rp.externalId,
 										price: "0",
+										pricePointId: undefined,
 										territory: rp.territory,
 									};
 								}
@@ -1172,6 +1371,7 @@ export class AppStoreProvider implements StoreProvider {
 										currency: "USD",
 										externalId: rp.externalId,
 										price: cp ?? rp.pricePointId,
+										pricePointId: rp.pricePointId,
 										territory: rp.territory,
 									};
 								} catch {
@@ -1179,6 +1379,7 @@ export class AppStoreProvider implements StoreProvider {
 										currency: "USD",
 										externalId: rp.externalId,
 										price: rp.pricePointId,
+										pricePointId: rp.pricePointId,
 										territory: rp.territory,
 									};
 								}
@@ -1187,6 +1388,16 @@ export class AppStoreProvider implements StoreProvider {
 					} catch {
 						log.debug({ subId: sub.id }, "Could not fetch subscription prices");
 					}
+
+					const withPointId = prices.filter((p) => p.pricePointId);
+					log.info(
+						{
+							subId: sub.id,
+							totalPrices: prices.length,
+							withPricePointId: withPointId.length,
+						},
+						"Subscription prices resolved",
+					);
 
 					const rawDuration = (attrs.subscriptionPeriod as string) ?? undefined;
 					subscriptions.push({
@@ -1872,84 +2083,196 @@ export class AppStoreProvider implements StoreProvider {
 			return;
 		}
 
-		const { create, read } = await createAppStoreClient(this.credentials);
+		const { readAll, update } = await createAppStoreClient(this.credentials);
 
-		let created = 0;
-		for (const price of prices) {
-			const isCustomerPrice = /^\d+(\.\d+)?$/.test(price.price);
+		// Build a map of territory (alpha-3) → pricePointId for all prices
+		const pricesByTerritory = new Map<string, PurchasePriceData>();
+		for (const p of prices) {
+			pricesByTerritory.set(toAlpha3(p.territory), p);
+		}
 
-			let pricePointId: string | undefined;
-			if (isCustomerPrice) {
-				// Look up price point by territory + customerPrice (single page, fast)
+		// Collect prices that already have pricePointId
+		const resolved = new Map<string, string>(); // alpha-3 → pricePointId
+		for (const [alpha3, p] of pricesByTerritory) {
+			if (p.pricePointId) {
+				resolved.set(alpha3, p.pricePointId);
+			}
+		}
+
+		// For unresolved prices, find matching price tier via USA base price + equalizations
+		const unresolvedCount = pricesByTerritory.size - resolved.size;
+		if (unresolvedCount > 0) {
+			const usPrice =
+				pricesByTerritory.get("USA") ??
+				prices.find((p) => p.territory === "US");
+			if (usPrice && /^\d+(\.\d+)?$/.test(usPrice.price)) {
 				try {
-					const { data: points } = await read(
-						`subscriptions/${subExternalId}/pricePoints`,
-						{
-							filter: {
-								customerPrice: price.price,
-								territory: price.territory,
-							},
-							params: { limit: 1 },
-						},
+					// Fetch all USA price tiers
+					const { data: ppData } = await readAll(
+						`subscriptions/${subExternalId}/pricePoints?filter[territory]=USA`,
 					);
-					const pt = (points as ApiResource[] | undefined)?.[0];
-					pricePointId = pt?.id;
-				} catch {
+					const usTiers = ((ppData ?? []) as ApiResource[]).filter(
+						(pp) => pp.attributes?.customerPrice != null,
+					);
+
+					const targetPrice = Number.parseFloat(usPrice.price);
+					const matchedTier = usTiers.find(
+						(pp) =>
+							Math.abs(
+								Number.parseFloat(pp.attributes.customerPrice as string) -
+									targetPrice,
+							) < 0.01,
+					);
+
+					if (matchedTier) {
+						log.info(
+							{ pricePointId: matchedTier.id, subExternalId, targetPrice },
+							"Found matching US price tier",
+						);
+						resolved.set("USA", matchedTier.id);
+
+						// Use equalizations to get pricePointIds for all territories
+						const { data: eqData } = await readAll(
+							`subscriptionPricePoints/${matchedTier.id}/equalizations`,
+						);
+						for (const eqItem of (eqData ?? []) as ApiResource[]) {
+							// Territory is encoded in the base64 pricePointId
+							try {
+								const decoded = JSON.parse(
+									Buffer.from(eqItem.id, "base64").toString("utf8"),
+								);
+								if (
+									decoded.t &&
+									pricesByTerritory.has(decoded.t) &&
+									!resolved.has(decoded.t)
+								) {
+									resolved.set(decoded.t, eqItem.id);
+								}
+							} catch {
+								// Non-base64 ID — try relationship territory
+								const eqTerritory = (
+									eqItem.relationships?.territory?.data as
+										| { id: string }
+										| undefined
+								)?.id;
+								if (
+									eqTerritory &&
+									pricesByTerritory.has(eqTerritory) &&
+									!resolved.has(eqTerritory)
+								) {
+									resolved.set(eqTerritory, eqItem.id);
+								}
+							}
+						}
+					} else {
+						log.warn(
+							{ availableTiers: usTiers.length, subExternalId, targetPrice },
+							"No matching US price tier found",
+						);
+					}
+				} catch (err) {
 					log.warn(
-						{
-							customerPrice: price.price,
-							subExternalId,
-							territory: price.territory,
-						},
-						"Failed to look up price point — skipping",
+						{ err, subExternalId },
+						"Failed to resolve price points via equalizations",
 					);
-					continue;
 				}
 			} else {
-				// Already a price point ID
-				pricePointId = price.price;
-			}
-
-			if (!pricePointId) {
 				log.warn(
-					{
-						customerPrice: price.price,
-						subExternalId,
-						territory: price.territory,
-					},
-					"No matching price point found — skipping territory",
+					{ subExternalId },
+					"No US price available — cannot resolve price points",
 				);
-				continue;
 			}
+		}
 
-			await create({
-				attributes: {
-					preserveCurrentPrice: false,
-					startDate: null,
-				},
+		if (resolved.size === 0) {
+			log.warn({ subExternalId }, "No price points resolved — skipping");
+			return;
+		}
+
+		// Use PATCH subscription with sideposting pattern (included array)
+		// POST /v1/subscriptionPrices returns 409, but PATCH subscription works
+		const pricesRelData: Array<{ id: string; type: string }> = [];
+		const included: Array<{
+			attributes: { preserveCurrentPrice: boolean };
+			id: string;
+			relationships: Record<string, { data: { id: string; type: string } }>;
+			type: string;
+		}> = [];
+
+		for (const [alpha3, pricePointId] of resolved) {
+			const localId = `\${price-${alpha3}}`;
+			pricesRelData.push({ id: localId, type: "subscriptionPrices" });
+			included.push({
+				attributes: { preserveCurrentPrice: false },
+				id: localId,
 				relationships: {
 					subscription: {
 						data: { id: subExternalId, type: "subscriptions" },
 					},
 					subscriptionPricePoint: {
-						data: {
-							id: pricePointId,
-							type: "subscriptionPricePoints",
-						},
+						data: { id: pricePointId, type: "subscriptionPricePoints" },
 					},
 					territory: {
-						data: { id: price.territory, type: "territories" },
+						data: { id: alpha3, type: "territories" },
 					},
 				},
 				type: "subscriptionPrices",
 			});
-			created++;
 		}
 
-		log.info(
-			{ count: created, subExternalId, total: prices.length },
-			"Subscription prices updated on ASC",
+		try {
+			await update(
+				{ id: subExternalId, type: "subscriptions" },
+				{
+					included,
+					relationships: {
+						prices: { data: pricesRelData },
+					},
+				},
+			);
+			log.info(
+				{ count: resolved.size, subExternalId, total: prices.length },
+				"Subscription prices updated on ASC",
+			);
+		} catch (err) {
+			log.error(
+				{ err, resolvedCount: resolved.size, subExternalId },
+				"Failed to update subscription prices via PATCH",
+			);
+		}
+	}
+
+	async fetchSubscriptionAvailability(
+		subscriptionExternalId: string,
+	): Promise<string[]> {
+		if (this.isMock) {
+			return ["US", "GB", "DE"];
+		}
+
+		const { read, readAll } = await createAppStoreClient(this.credentials);
+
+		const { data: availData } = await read(
+			`subscriptions/${subscriptionExternalId}/subscriptionAvailability`,
 		);
+		const availability = (
+			Array.isArray(availData) ? availData[0] : availData
+		) as ApiResource | undefined;
+
+		if (!availability) return [];
+
+		const { data: territoriesData } = await readAll(
+			`subscriptionAvailabilities/${availability.id}/availableTerritories`,
+		);
+
+		const territories = ((territoriesData ?? []) as ApiResource[]).map(
+			(t) => t.id,
+		);
+
+		log.info(
+			{ count: territories.length, subscriptionExternalId },
+			"Fetched subscription availability from ASC",
+		);
+		return territories;
 	}
 
 	async updateSubscriptionAvailability(
