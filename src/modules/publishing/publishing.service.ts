@@ -1854,9 +1854,33 @@ export class PublishingService {
 	static async deleteScreenshot(appId: string, screenshotId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		if (app.store.type !== "app_store") {
+			// Google Play: screenshotId is externalId ?? id from getVersionScreenshots
+			const [asset] = await db
+				.select()
+				.from(assets)
+				.where(and(eq(assets.appId, appId), eq(assets.assetType, "screenshot")))
+				.then((rows) =>
+					rows.filter(
+						(a) => a.id === screenshotId || a.externalId === screenshotId,
+					),
+				);
+
+			if (!asset) {
+				buildError("notFound", { info: "Screenshot not found" });
+				throw new Error("unreachable");
+			}
+
+			await AssetsService.deleteAsset(appId, asset.id);
+
+			log.info({ appId, screenshotId }, "Deleted screenshot from Google Play");
+
+			return { deleted: true };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
-				info: "Screenshots are only available for App Store apps",
+				info: "Missing App Store credentials",
 			});
 			throw new Error("unreachable");
 		}
@@ -1884,9 +1908,50 @@ export class PublishingService {
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		if (app.store.type !== "app_store") {
+			// Google Play: process image and upload via AssetsService
+			const rawBuffer = Buffer.from(await file.arrayBuffer());
+
+			let processed: { buffer: Buffer; height: number; width: number };
+			try {
+				processed = await processScreenshot(rawBuffer, displayType, cropParams);
+			} catch (err) {
+				log.error(
+					{ appId, displayType, err, fileName: file.name },
+					"Failed to process screenshot image",
+				);
+				buildError("badRequest", {
+					info: `Image processing failed: ${err instanceof Error ? err.message : String(err)}`,
+				});
+				throw new Error("unreachable");
+			}
+
+			const pngName = file.name.replace(/\.\w+$/, ".png");
+			const asset = await AssetsService.upload(
+				appId,
+				language,
+				"screenshot",
+				displayType,
+				processed.buffer,
+				pngName,
+			);
+
+			log.info(
+				{
+					appId,
+					fileName: pngName,
+					screenshotId: asset.id,
+					size: `${processed.width}x${processed.height}`,
+				},
+				"Uploaded screenshot to Google Play",
+			);
+
+			return { screenshotId: asset.externalId ?? asset.id, uploaded: true };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
-				info: "Screenshots are only available for App Store apps",
+				info: "Missing App Store credentials",
 			});
 			throw new Error("unreachable");
 		}
@@ -2200,9 +2265,105 @@ export class PublishingService {
 
 		// Check existing screenshot count
 		const app = await PublishingService.getAppWithStore(appId);
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+
+		if (app.store.type !== "app_store") {
+			// Google Play: check existing count from DB, split and upload via AssetsService
+			const existingAssets = await db
+				.select()
+				.from(assets)
+				.where(
+					and(
+						eq(assets.appId, appId),
+						eq(assets.assetType, "screenshot"),
+						eq(assets.deviceType, displayType),
+						eq(assets.language, language),
+					),
+				);
+			const existingCount = existingAssets.length;
+
+			if (existingCount + parts > MAX_SCREENSHOTS_PER_SET) {
+				buildError("badRequest", {
+					info: `Cannot add ${parts} screenshots: ${existingCount} already exist, maximum is ${MAX_SCREENSHOTS_PER_SET}`,
+				});
+				throw new Error("unreachable");
+			}
+
+			if (
+				insertAt !== undefined &&
+				(insertAt < 0 || insertAt > existingCount)
+			) {
+				buildError("badRequest", {
+					info: `insertAt must be between 0 and ${existingCount}`,
+				});
+				throw new Error("unreachable");
+			}
+
+			const partWidth = Math.floor(imgWidth / parts);
+			const screenshotIds: string[] = [];
+
+			for (let i = 0; i < parts; i++) {
+				const left = i * partWidth;
+				const width = i === parts - 1 ? imgWidth - left : partWidth;
+
+				const partBuffer = await sharp(rawBuffer)
+					.extract({ height: imgHeight, left, top: 0, width })
+					.toBuffer();
+
+				const targetOverride =
+					targetWidth && targetHeight
+						? ([targetWidth, targetHeight] as [number, number])
+						: undefined;
+				const processed = await processScreenshot(
+					partBuffer,
+					displayType,
+					undefined,
+					targetOverride,
+				);
+
+				const pngName = file.name.replace(/\.\w+$/, `_part${i + 1}.png`);
+				const asset = await AssetsService.upload(
+					appId,
+					language,
+					"screenshot",
+					displayType,
+					processed.buffer,
+					pngName,
+				);
+
+				screenshotIds.push(asset.externalId ?? asset.id);
+			}
+
+			// Reorder if insertAt specified
+			if (insertAt !== undefined && existingCount > 0) {
+				const existingIds = existingAssets
+					.sort((a, b) => a.sortOrder - b.sortOrder)
+					.map((a) => a.externalId ?? a.id);
+				const finalOrder = [
+					...existingIds.slice(0, insertAt),
+					...screenshotIds,
+					...existingIds.slice(insertAt),
+				];
+
+				const reorderItems = finalOrder.map((extId, idx) => {
+					const asset = existingAssets.find(
+						(a) => (a.externalId ?? a.id) === extId,
+					);
+					return { id: asset?.id ?? extId, sortOrder: idx };
+				});
+				await AssetsService.reorder(reorderItems);
+			}
+
+			log.info(
+				{ appId, displayType, language, parts, screenshotIds },
+				"Split-uploaded panorama screenshots to Google Play",
+			);
+
+			return { screenshotIds, uploaded: parts };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
-				info: "Screenshots are only available for App Store apps",
+				info: "Missing App Store credentials",
 			});
 			throw new Error("unreachable");
 		}
@@ -2351,9 +2512,128 @@ export class PublishingService {
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		if (app.store.type !== "app_store") {
+			// Google Play: download source screenshots from URLs, re-upload to target language
+			const conditions = [
+				eq(assets.appId, appId),
+				eq(assets.assetType, "screenshot"),
+				eq(assets.language, sourceLanguage),
+			];
+			if (displayType) {
+				conditions.push(eq(assets.deviceType, displayType));
+			}
+
+			const sourceAssets = await db
+				.select()
+				.from(assets)
+				.where(and(...conditions))
+				.orderBy(assets.sortOrder);
+
+			if (sourceAssets.length === 0) {
+				buildError("badRequest", {
+					info: `No screenshots found for source language "${sourceLanguage}"`,
+				});
+				throw new Error("unreachable");
+			}
+
+			// Check target doesn't already have screenshots for the same device types
+			const deviceTypes = [...new Set(sourceAssets.map((a) => a.deviceType))];
+			for (const dt of deviceTypes) {
+				const existingTarget = await db
+					.select()
+					.from(assets)
+					.where(
+						and(
+							eq(assets.appId, appId),
+							eq(assets.assetType, "screenshot"),
+							eq(assets.language, targetLanguage),
+							eq(assets.deviceType, dt),
+						),
+					)
+					.limit(1);
+
+				if (existingTarget.length > 0) {
+					log.warn(
+						{ appId, deviceType: dt, targetLanguage },
+						"Target already has screenshots for this device type, skipping",
+					);
+				}
+			}
+
+			let copied = 0;
+
+			for (const sourceAsset of sourceAssets) {
+				if (!sourceAsset.url) continue;
+
+				// Validate URL scheme
+				let parsedUrl: URL;
+				try {
+					parsedUrl = new URL(sourceAsset.url);
+				} catch {
+					log.warn(
+						{ assetId: sourceAsset.id, url: sourceAsset.url },
+						"Invalid screenshot URL, skipping",
+					);
+					continue;
+				}
+				if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
+					continue;
+				}
+
+				let response: Response;
+				try {
+					response = await fetch(sourceAsset.url, {
+						signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+					});
+				} catch (err) {
+					log.warn(
+						{
+							assetId: sourceAsset.id,
+							error: err instanceof Error ? err.message : String(err),
+						},
+						"Failed to fetch source screenshot, skipping",
+					);
+					continue;
+				}
+
+				if (!response.ok) {
+					log.warn(
+						{ assetId: sourceAsset.id, status: response.status },
+						"Failed to download source screenshot, skipping",
+					);
+					continue;
+				}
+
+				const imageBuffer = Buffer.from(await response.arrayBuffer());
+				if (imageBuffer.length > MAX_DOWNLOAD_SIZE) {
+					continue;
+				}
+
+				const fileName = sourceAsset.fileName ?? "screenshot.png";
+
+				await AssetsService.upload(
+					appId,
+					targetLanguage,
+					"screenshot",
+					sourceAsset.deviceType,
+					imageBuffer,
+					fileName,
+				);
+
+				copied++;
+			}
+
+			log.info(
+				{ appId, copied, sourceLanguage, targetLanguage },
+				"Copied screenshots between languages on Google Play",
+			);
+
+			return { copied };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
-				info: "Screenshots are only available for App Store apps",
+				info: "Missing App Store credentials",
 			});
 			throw new Error("unreachable");
 		}
@@ -2587,9 +2867,40 @@ export class PublishingService {
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		if (app.store.type !== "app_store") {
+			// Google Play: screenshotIds are externalId ?? id from getVersionScreenshots
+			// Map them to actual asset DB IDs for AssetsService.reorder()
+			const gpAssets = await db
+				.select()
+				.from(assets)
+				.where(
+					and(eq(assets.appId, appId), eq(assets.assetType, "screenshot")),
+				);
+
+			const reorderItems = screenshotIds
+				.map((extId, idx) => {
+					const asset = gpAssets.find(
+						(a) => a.externalId === extId || a.id === extId,
+					);
+					return asset ? { id: asset.id, sortOrder: idx } : null;
+				})
+				.filter(
+					(item): item is { id: string; sortOrder: number } => item !== null,
+				);
+
+			await AssetsService.reorder(reorderItems);
+
+			log.info(
+				{ appId, count: screenshotIds.length, screenshotSetId },
+				"Reordered screenshots on Google Play",
+			);
+
+			return { reordered: true };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
-				info: "Screenshots are only available for App Store apps",
+				info: "Missing App Store credentials",
 			});
 			throw new Error("unreachable");
 		}
@@ -2619,9 +2930,42 @@ export class PublishingService {
 	static async deleteAllScreenshots(appId: string, screenshotSetId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		if (app.store.type !== "app_store" || !app.store.credentials) {
+		if (app.store.type !== "app_store") {
+			// Google Play: screenshotSetId format is "gp-{deviceType}-{language}"
+			const parts = screenshotSetId.split("-");
+			// Format: gp-phone-en-US or gp-sevenInch-en-US
+			const deviceType = parts[1];
+			const language = parts.slice(2).join("-"); // language may contain hyphens
+
+			const gpAssets = await db
+				.select()
+				.from(assets)
+				.where(
+					and(
+						eq(assets.appId, appId),
+						eq(assets.assetType, "screenshot"),
+						eq(assets.deviceType, deviceType),
+						eq(assets.language, language),
+					),
+				);
+
+			let deleted = 0;
+			for (const asset of gpAssets) {
+				await AssetsService.deleteAsset(appId, asset.id);
+				deleted++;
+			}
+
+			log.info(
+				{ appId, deleted, screenshotSetId },
+				"Deleted all screenshots from Google Play set",
+			);
+
+			return { deleted };
+		}
+
+		if (!app.store.credentials) {
 			buildError("badRequest", {
-				info: "Screenshots are only available for App Store apps",
+				info: "Missing App Store credentials",
 			});
 			throw new Error("unreachable");
 		}
@@ -2675,6 +3019,43 @@ export class PublishingService {
 			throw err;
 		}
 
+		// Publish version localizations for App Store apps with editable versions
+		const versionLocResult: { published: number; errors?: string[] } = {
+			published: 0,
+		};
+		if (app.store.type === "app_store") {
+			const editableVersions = await db
+				.select()
+				.from(appVersions)
+				.where(
+					and(
+						eq(appVersions.appId, appId),
+						inArray(appVersions.state, EDITABLE_STATES),
+					),
+				);
+
+			for (const version of editableVersions) {
+				try {
+					const result = await PublishingService.publishVersionLocalizations(
+						appId,
+						version.externalId,
+					);
+					versionLocResult.published += result.published;
+					if (result.errors?.length) {
+						versionLocResult.errors = [
+							...(versionLocResult.errors ?? []),
+							...result.errors,
+						];
+					}
+				} catch (err) {
+					log.error(
+						{ appId, err: (err as Error).message ?? err },
+						"Failed to publish version localizations",
+					);
+				}
+			}
+		}
+
 		// Submit for review if requested (App Store only)
 		if (options?.submitForReview && app.store.type === "app_store") {
 			await PublishingService.submitForReview(appId);
@@ -2685,6 +3066,7 @@ export class PublishingService {
 				appId,
 				assetsPublished: assetResult.published,
 				listingsPublished: listingResult.published,
+				versionLocalizationsPublished: versionLocResult.published,
 			},
 			"All changes published",
 		);
@@ -2692,6 +3074,7 @@ export class PublishingService {
 		return {
 			assets: assetResult,
 			listings: listingResult,
+			versionLocalizations: versionLocResult,
 		};
 	}
 

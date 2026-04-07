@@ -12,7 +12,6 @@ import { db } from "@/utils/db";
 import {
 	apps,
 	inAppPurchases,
-	listings,
 	purchaseLocalizations,
 	purchasePrices,
 	purchaseReviewInfo,
@@ -851,6 +850,14 @@ export class PurchasesService {
 			{ count: localizations.length, groupId },
 			"Group localizations upserted",
 		);
+
+		// Propagate to subscriptions that inherit group localizations
+		await PurchasesService.propagateGroupLocalizationsToSubscriptions(
+			groupId,
+			appId,
+			workspaceId,
+		);
+
 		return PurchasesService.listGroupLocalizations(groupId);
 	}
 
@@ -903,6 +910,13 @@ export class PurchasesService {
 			);
 
 		log.info({ groupId, language }, "Group localization deleted");
+
+		// Propagate updated localizations to subscriptions that inherit
+		await PurchasesService.propagateGroupLocalizationsToSubscriptions(
+			groupId,
+			appId,
+			workspaceId,
+		);
 	}
 
 	// ── Group Availability ──────────────────────────────────────────
@@ -1334,6 +1348,81 @@ export class PurchasesService {
 		return PurchasesService.getEffectiveLocalizations(purchaseId);
 	}
 
+	// ── Propagate Group Localizations to Subscriptions ──────────────
+
+	private static async propagateGroupLocalizationsToSubscriptions(
+		groupId: string,
+		appId: string,
+		workspaceId: string,
+	) {
+		// Find subscriptions that inherit group localizations
+		const subs = await db
+			.select({
+				externalId: inAppPurchases.externalId,
+				id: inAppPurchases.id,
+			})
+			.from(inAppPurchases)
+			.where(
+				and(
+					eq(inAppPurchases.groupId, groupId),
+					eq(inAppPurchases.useGroupLocalizations, true),
+				),
+			);
+
+		if (subs.length === 0) return;
+
+		// Get group localizations from DB
+		const groupLocs = await db
+			.select()
+			.from(subscriptionGroupLocalizations)
+			.where(eq(subscriptionGroupLocalizations.groupId, groupId));
+
+		if (groupLocs.length === 0) return;
+
+		const locData = groupLocs
+			.filter((l) => l.name)
+			.map((l) => ({
+				description: l.description ?? undefined,
+				language: l.language,
+				name: l.name ?? undefined,
+			}));
+
+		if (locData.length === 0) return;
+
+		const { provider, externalAppId } = await PurchasesService.getAppProvider(
+			appId,
+			workspaceId,
+		);
+
+		const results = await Promise.allSettled(
+			subs.map((sub) =>
+				provider.updateSubscription(externalAppId, sub.externalId, {
+					localizations: locData,
+				}),
+			),
+		);
+
+		let propagated = 0;
+		for (let i = 0; i < results.length; i++) {
+			if (results[i].status === "fulfilled") {
+				propagated++;
+			} else {
+				log.warn(
+					{
+						err: (results[i] as PromiseRejectedResult).reason,
+						subId: subs[i].id,
+					},
+					"Failed to propagate group localizations to subscription",
+				);
+			}
+		}
+
+		log.info(
+			{ groupId, propagated, total: subs.length },
+			"Propagated group localizations to subscriptions",
+		);
+	}
+
 	// ── Verify Group Ownership ──────────────────────────────────────
 
 	static async verifyGroupOwnership(groupId: string, appId: string) {
@@ -1352,355 +1441,6 @@ export class PurchasesService {
 			buildError("notFound", { info: "Subscription group not found" });
 
 		return group;
-	}
-
-	// ── Publish All to Store ────────────────────────────────────────
-
-	static async publishPurchases(appId: string, workspaceId: string) {
-		const { provider, externalAppId } = await PurchasesService.getAppProvider(
-			appId,
-			workspaceId,
-		);
-
-		const results = {
-			errors: [] as Array<{ error: string; item: string }>,
-			publishedAvailability: 0,
-			publishedGroupLocalizations: 0,
-			publishedLocalizations: 0,
-			publishedPrices: 0,
-		};
-
-		// Fetch app's supported languages (from synced listings)
-		const appListings = await db
-			.select({ language: listings.language })
-			.from(listings)
-			.where(eq(listings.appId, appId));
-		const supportedLocales = new Set(appListings.map((l) => l.language));
-
-		// 1. Publish group localizations
-		const groups = await db
-			.select()
-			.from(subscriptionGroups)
-			.where(eq(subscriptionGroups.appId, appId));
-
-		for (const group of groups) {
-			const groupLocs = await db
-				.select()
-				.from(subscriptionGroupLocalizations)
-				.where(eq(subscriptionGroupLocalizations.groupId, group.id));
-
-			// Fetch existing ASC localizations to resolve externalIds for duplicates
-			const ascGroupLocs: Map<string, string> = new Map();
-			if (provider.fetchGroupLocalizations) {
-				try {
-					const existing = await provider.fetchGroupLocalizations(
-						group.externalId,
-					);
-					for (const el of existing) {
-						ascGroupLocs.set(el.language, el.externalId ?? "");
-					}
-				} catch {
-					log.debug(
-						{ groupId: group.id },
-						"Could not fetch existing ASC group localizations",
-					);
-				}
-			}
-
-			// Filter to supported locales only
-			const filteredGroupLocs = groupLocs.filter(
-				(loc) =>
-					loc.name &&
-					(supportedLocales.size === 0 || supportedLocales.has(loc.language)),
-			);
-
-			// Push group localizations in parallel
-			const groupLocResults = await Promise.allSettled(
-				filteredGroupLocs.map(async (loc) => {
-					const resolvedExternalId =
-						loc.externalId || ascGroupLocs.get(loc.language) || null;
-
-					if (resolvedExternalId && provider.updateGroupLocalization) {
-						await provider.updateGroupLocalization(resolvedExternalId, {
-							name: loc.name!,
-						});
-						if (!loc.externalId) {
-							await db
-								.update(subscriptionGroupLocalizations)
-								.set({ externalId: resolvedExternalId })
-								.where(
-									and(
-										eq(subscriptionGroupLocalizations.groupId, group.id),
-										eq(subscriptionGroupLocalizations.language, loc.language),
-									),
-								);
-						}
-					} else if (provider.createGroupLocalization) {
-						const result = await provider.createGroupLocalization(
-							group.externalId,
-							loc.language,
-							{ name: loc.name! },
-						);
-						await db
-							.update(subscriptionGroupLocalizations)
-							.set({ externalId: result.externalId })
-							.where(
-								and(
-									eq(subscriptionGroupLocalizations.groupId, group.id),
-									eq(subscriptionGroupLocalizations.language, loc.language),
-								),
-							);
-					}
-					return loc.language;
-				}),
-			);
-
-			for (const r of groupLocResults) {
-				if (r.status === "fulfilled") {
-					results.publishedGroupLocalizations++;
-				} else {
-					const errMsg =
-						r.reason instanceof Error ? r.reason.message : String(r.reason);
-					log.warn(
-						{ err: r.reason, groupId: group.id },
-						"Failed to publish group localization",
-					);
-					results.errors.push({
-						error: errMsg,
-						item: `group-loc:${group.name}`,
-					});
-				}
-			}
-		}
-
-		// 2. Publish purchase localizations, prices, availability
-		const purchases = await db
-			.select()
-			.from(inAppPurchases)
-			.where(eq(inAppPurchases.appId, appId));
-
-		// Pre-load group localizations for fallback
-		const groupLocMap = new Map<
-			string,
-			Array<{ description?: string; language: string; name?: string }>
-		>();
-		for (const group of groups) {
-			const gLocs = await db
-				.select()
-				.from(subscriptionGroupLocalizations)
-				.where(eq(subscriptionGroupLocalizations.groupId, group.id));
-			if (gLocs.length > 0) {
-				groupLocMap.set(
-					group.id,
-					gLocs
-						.filter((l) => l.name)
-						.map((l) => ({
-							description: l.description ?? undefined,
-							language: l.language,
-							name: l.name ?? undefined,
-						})),
-				);
-			}
-		}
-
-		for (const purchase of purchases) {
-			if (!purchase.externalId) continue;
-
-			// Localizations — own first, fallback to group localizations
-			const locs = await db
-				.select()
-				.from(purchaseLocalizations)
-				.where(eq(purchaseLocalizations.purchaseId, purchase.id));
-
-			let locData: Array<{
-				description?: string;
-				language: string;
-				name?: string;
-			}>;
-
-			if (locs.length > 0) {
-				locData = locs.map((l) => ({
-					description: l.description ?? undefined,
-					language: l.language,
-					name: l.name ?? undefined,
-				}));
-			} else if (purchase.groupId && groupLocMap.has(purchase.groupId)) {
-				// Fallback: use group localizations as subscription localizations
-				locData = groupLocMap.get(purchase.groupId)!;
-				log.info(
-					{
-						count: locData.length,
-						groupId: purchase.groupId,
-						purchaseId: purchase.id,
-					},
-					"Using group localizations as fallback for subscription",
-				);
-			} else {
-				locData = [];
-			}
-
-			// Filter to app's supported locales
-			if (supportedLocales.size > 0) {
-				locData = locData.filter((l) => supportedLocales.has(l.language));
-			}
-
-			if (locData.length > 0) {
-				try {
-					if (purchase.groupId) {
-						await provider.updateSubscription(
-							externalAppId,
-							purchase.externalId,
-							{ localizations: locData },
-						);
-					} else {
-						await provider.updateInAppPurchase(
-							externalAppId,
-							purchase.externalId,
-							{ localizations: locData },
-						);
-					}
-					results.publishedLocalizations += locData.length;
-				} catch (err) {
-					const errMsg = err instanceof Error ? err.message : String(err);
-					log.warn(
-						{ err, purchaseId: purchase.id },
-						"Failed to publish purchase localizations",
-					);
-					results.errors.push({
-						error: errMsg,
-						item: `localizations:${purchase.name}`,
-					});
-				}
-			}
-
-			// Prices
-			const prices = await db
-				.select()
-				.from(purchasePrices)
-				.where(eq(purchasePrices.purchaseId, purchase.id));
-
-			if (prices.length > 0) {
-				try {
-					const priceData = prices.map((p) => ({
-						currency: p.currency,
-						price: p.price,
-						pricePointId: p.pricePointId ?? undefined,
-						territory: p.territory,
-					}));
-
-					if (purchase.groupId && provider.updateSubscriptionPrices) {
-						await provider.updateSubscriptionPrices(
-							purchase.externalId,
-							priceData,
-						);
-					} else if (!purchase.groupId && provider.updateIapPrices) {
-						await provider.updateIapPrices(purchase.externalId, priceData);
-					}
-					results.publishedPrices += prices.length;
-				} catch (err) {
-					const errMsg = err instanceof Error ? err.message : String(err);
-					log.warn(
-						{ err, purchaseId: purchase.id },
-						"Failed to publish purchase prices",
-					);
-					results.errors.push({
-						error: errMsg,
-						item: `prices:${purchase.name}`,
-					});
-				}
-			}
-
-			// Availability
-			if (
-				purchase.availableTerritories &&
-				provider.updateSubscriptionAvailability
-			) {
-				try {
-					await provider.updateSubscriptionAvailability(
-						purchase.externalId,
-						purchase.availableTerritories as string[],
-					);
-					results.publishedAvailability++;
-				} catch (err) {
-					const errMsg = err instanceof Error ? err.message : String(err);
-					log.warn(
-						{ err, purchaseId: purchase.id },
-						"Failed to publish purchase availability",
-					);
-					results.errors.push({
-						error: errMsg,
-						item: `availability:${purchase.name}`,
-					});
-				}
-			}
-		}
-
-		// Also push group-level availability to subscriptions using group default
-		for (const group of groups) {
-			if (
-				!group.availableTerritories ||
-				!provider.updateSubscriptionAvailability
-			)
-				continue;
-
-			// Parse territories — handle double-escaped JSON strings
-			let groupTerritories: string[];
-			const raw = group.availableTerritories;
-			if (typeof raw === "string") {
-				try {
-					groupTerritories = JSON.parse(raw);
-				} catch {
-					groupTerritories = [];
-				}
-			} else {
-				groupTerritories = raw as string[];
-			}
-
-			if (groupTerritories.length === 0) continue;
-
-			const subsUsingGroupDefault = await db
-				.select({
-					externalId: inAppPurchases.externalId,
-					id: inAppPurchases.id,
-					name: inAppPurchases.name,
-				})
-				.from(inAppPurchases)
-				.where(
-					and(
-						eq(inAppPurchases.groupId, group.id),
-						// null = using group default
-					),
-				);
-
-			for (const sub of subsUsingGroupDefault) {
-				if (
-					sub.externalId &&
-					!purchases.find((p) => p.id === sub.id)?.availableTerritories
-				) {
-					try {
-						await provider.updateSubscriptionAvailability(
-							sub.externalId,
-							groupTerritories,
-						);
-						results.publishedAvailability++;
-					} catch (err) {
-						const errMsg = err instanceof Error ? err.message : String(err);
-						log.warn(
-							{ err, subId: sub.id },
-							"Failed to publish group availability to subscription",
-						);
-						results.errors.push({
-							error: errMsg,
-							item: `availability:${sub.name} (group default)`,
-						});
-					}
-				}
-			}
-		}
-
-		log.info({ appId, results }, "Purchases published to store");
-
-		return results;
 	}
 
 	private static async getAppProvider(

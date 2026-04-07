@@ -2214,38 +2214,4 @@ describe("Purchases module", () => {
 			),
 		);
 	});
-
-	// ── Publish all purchases ──────────────────────────────────────
-
-	it("publishes all purchase data to store", async () => {
-		// First sync to have data
-		await app.handle(
-			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/sync`, {
-				method: "POST",
-			}),
-		);
-
-		const res = await app.handle(
-			authRequest(`http://localhost/api/apps/${appIdAS}/purchases/publish`, {
-				method: "POST",
-			}),
-		);
-		expect(res.status).toBe(200);
-
-		const data = await res.json();
-		expect(typeof data.publishedLocalizations).toBe("number");
-		expect(typeof data.publishedPrices).toBe("number");
-		expect(typeof data.publishedGroupLocalizations).toBe("number");
-		expect(typeof data.publishedAvailability).toBe("number");
-		expect(Array.isArray(data.errors)).toBe(true);
-	});
-
-	it("blocks workspace B from publishing workspace A purchases", async () => {
-		const res = await app.handle(
-			authRequestB(`http://localhost/api/apps/${appIdAS}/purchases/publish`, {
-				method: "POST",
-			}),
-		);
-		expect(res.status).toBe(404);
-	});
 });

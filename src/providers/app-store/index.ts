@@ -1986,6 +1986,15 @@ export class AppStoreProvider implements StoreProvider {
 			return;
 		}
 
+		// Free IAPs (price=0) have no price points in ASC
+		const usPrice = prices.find(
+			(p) => p.territory === "US" || p.territory === "USA",
+		);
+		if (usPrice && Number.parseFloat(usPrice.price) === 0) {
+			log.info({ iapExternalId }, "Skipping price push for free IAP");
+			return;
+		}
+
 		const { create, readAll, remove } = await createAppStoreClient(
 			this.credentials,
 		);
@@ -2080,6 +2089,15 @@ export class AppStoreProvider implements StoreProvider {
 				{ count: prices.length, subExternalId },
 				"Mock: subscription prices updated",
 			);
+			return;
+		}
+
+		// Free subscriptions (price=0) have no price points in ASC
+		const usPrice = prices.find(
+			(p) => p.territory === "US" || p.territory === "USA",
+		);
+		if (usPrice && Number.parseFloat(usPrice.price) === 0) {
+			log.info({ subExternalId }, "Skipping price push for free subscription");
 			return;
 		}
 
@@ -2264,8 +2282,8 @@ export class AppStoreProvider implements StoreProvider {
 			`subscriptionAvailabilities/${availability.id}/availableTerritories`,
 		);
 
-		const territories = ((territoriesData ?? []) as ApiResource[]).map(
-			(t) => t.id,
+		const territories = ((territoriesData ?? []) as ApiResource[]).map((t) =>
+			toAlpha2(t.id),
 		);
 
 		log.info(
@@ -2287,72 +2305,84 @@ export class AppStoreProvider implements StoreProvider {
 			return;
 		}
 
-		const { create, readAll, remove } = await createAppStoreClient(
+		const { create, read, update } = await createAppStoreClient(
 			this.credentials,
 		);
 
-		// Get existing availability
+		// Normalize territories to alpha-3 for ASC API
+		const alpha3Territories = territories.map((t) => toAlpha3(t));
+
+		const territoryData = alpha3Territories.map((t) => ({
+			id: t,
+			type: "territories",
+		}));
+
+		// Check if availability already exists
 		try {
-			const { data: availabilityData } = await readAll(
+			const { data: availData } = await read(
 				`subscriptions/${subscriptionExternalId}/subscriptionAvailability`,
 			);
 			const availability = (
-				Array.isArray(availabilityData) ? availabilityData[0] : availabilityData
+				Array.isArray(availData) ? availData[0] : availData
 			) as ApiResource | undefined;
 
 			if (availability) {
-				// Delete existing territory entries and recreate
-				const { data: existingTerritories } = await readAll(
-					`subscriptionAvailabilities/${availability.id}/availableTerritories`,
+				// PATCH existing availability
+				await update(
+					{
+						attributes: {
+							availableInNewTerritories: false,
+						},
+						id: availability.id,
+						relationships: {
+							availableTerritories: {
+								data: territoryData,
+							},
+						},
+						type: "subscriptionAvailabilities",
+					},
+					{ id: availability.id },
 				);
 
-				for (const t of (existingTerritories ?? []) as ApiResource[]) {
-					try {
-						await remove({ id: t.id, type: "territories" });
-					} catch {
-						// Territory removal may not be supported individually
-					}
-				}
+				log.info(
+					{
+						availabilityId: availability.id,
+						count: alpha3Territories.length,
+						subscriptionExternalId,
+					},
+					"Subscription availability updated (PATCH) on ASC",
+				);
+				return;
 			}
 		} catch {
 			log.debug(
 				{ subscriptionExternalId },
-				"No existing subscription availability found",
+				"No existing subscription availability found — creating new",
 			);
 		}
 
-		// Create/update availability with territory relationships
-		try {
-			await create({
-				attributes: {
-					availableInNewTerritories: false,
+		// Create new availability
+		await create({
+			attributes: {
+				availableInNewTerritories: false,
+			},
+			relationships: {
+				availableTerritories: {
+					data: territoryData,
 				},
-				relationships: {
-					availableTerritories: {
-						data: territories.map((t) => ({
-							id: t,
-							type: "territories",
-						})),
-					},
-					subscription: {
-						data: {
-							id: subscriptionExternalId,
-							type: "subscriptions",
-						},
+				subscription: {
+					data: {
+						id: subscriptionExternalId,
+						type: "subscriptions",
 					},
 				},
-				type: "subscriptionAvailabilities",
-			});
-		} catch (err) {
-			log.warn(
-				{ err, subscriptionExternalId },
-				"Failed to create subscription availability — may need PATCH instead",
-			);
-		}
+			},
+			type: "subscriptionAvailabilities",
+		});
 
 		log.info(
-			{ count: territories.length, subscriptionExternalId },
-			"Subscription availability updated on ASC",
+			{ count: alpha3Territories.length, subscriptionExternalId },
+			"Subscription availability created on ASC",
 		);
 	}
 

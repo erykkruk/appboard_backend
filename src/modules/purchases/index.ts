@@ -54,21 +54,6 @@ export const purchasesController = new Elysia({ prefix: "/apps" })
 			params: appIdParams,
 		},
 	)
-	.post(
-		"/:appId/purchases/publish",
-		async ({ params, workspaceId }) => {
-			await verifyAppOwnership(params.appId, workspaceId!);
-			return PurchasesService.publishPurchases(params.appId, workspaceId!);
-		},
-		{
-			detail: {
-				description:
-					"Publish all purchase data (prices, localizations, availability) to store",
-				tags: ["Purchases"],
-			},
-			params: appIdParams,
-		},
-	)
 	.get(
 		"/:appId/purchases",
 		async ({ params, workspaceId }) => {
