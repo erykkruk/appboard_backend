@@ -162,10 +162,7 @@ export class AssetsService {
 			.where(and(eq(assets.id, assetId), eq(assets.appId, appId)))
 			.limit(1);
 
-		if (!asset) {
-			buildError("notFound", { info: "Asset not found" });
-			throw new Error("unreachable");
-		}
+		if (!asset) buildError("notFound", { info: "Asset not found" });
 
 		// Draft assets without externalId can be deleted directly
 		if (asset.source === "draft" && !asset.externalId) {
@@ -237,10 +234,7 @@ export class AssetsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		return { ...result[0].app, store: result[0].store };
 	}

@@ -78,6 +78,22 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.get(
+		"/:appId/listings/diffs",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const diffs = await ListingsService.getDraftDiffs(params.appId);
+			return { diffs };
+		},
+		{
+			detail: {
+				description:
+					"Get per-language per-field diff between draft and remote listings",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+		},
+	)
+	.get(
 		"/:appId/listings",
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);

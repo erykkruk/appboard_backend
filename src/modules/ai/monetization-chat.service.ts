@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import config from "@/config";
 import { ASC_TERRITORIES } from "@/config/const";
 import {
 	getDefaultMonetizationPrompt,
@@ -17,8 +18,10 @@ const log = createLogger("monetization-chat");
 const UUID_REGEX =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "google/gemini-3-flash-preview";
+const OPENROUTER_URL =
+	config.OPENROUTER_URL ?? "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL =
+	config.OPENROUTER_MODEL ?? "google/gemini-3-flash-preview";
 
 interface ChatMessage {
 	content: string;

@@ -16,7 +16,10 @@ import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
 import { authGuard } from "@/modules/auth";
+import { featuresController } from "@/modules/features";
+import { featureGuard } from "@/modules/features/features.guard";
 import { groupAsoProfileController } from "@/modules/group-aso-profile";
+import { historyController } from "@/modules/history";
 import { listingsController } from "@/modules/listings";
 import {
 	privacyDeclarationController,
@@ -47,6 +50,8 @@ const app = new Elysia()
 	.use(authGuard)
 	.group("/api", (app) =>
 		app
+			.use(featuresController)
+			.use(featureGuard)
 			.use(systemController)
 			.use(storesController)
 			.use(reviewsController)
@@ -66,7 +71,8 @@ const app = new Elysia()
 			.use(appGroupsController)
 			.use(groupAsoProfileController)
 			.use(purchasesController)
-			.use(monetizationChatController),
+			.use(monetizationChatController)
+			.use(historyController),
 	)
 	.listen(port);
 

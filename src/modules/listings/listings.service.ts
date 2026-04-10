@@ -136,7 +136,7 @@ function parseCsv(content: string): {
 		if (!inQuotes) {
 			buffer = rawLine;
 		} else {
-			buffer += "\n" + rawLine;
+			buffer += `\n${rawLine}`;
 		}
 		const quoteCount = (buffer.match(/"/g) || []).length;
 		inQuotes = quoteCount % 2 !== 0;
@@ -384,6 +384,60 @@ export class ListingsService {
 		return draft;
 	}
 
+	static async getDraftDiffs(appId: string) {
+		const all = await db
+			.select()
+			.from(listings)
+			.where(eq(listings.appId, appId));
+
+		// Group by language
+		const byLang = new Map<
+			string,
+			{ draft?: (typeof all)[0]; remote?: (typeof all)[0] }
+		>();
+		for (const row of all) {
+			const entry = byLang.get(row.language) ?? {};
+			if (row.source === "draft") entry.draft = row;
+			else if (row.source === "remote") entry.remote = row;
+			byLang.set(row.language, entry);
+		}
+
+		const diffs: Array<{
+			language: string;
+			fields: Array<{
+				field: string;
+				oldValue: string | null;
+				newValue: string | null;
+			}>;
+		}> = [];
+
+		for (const [language, { draft, remote }] of byLang) {
+			if (!draft) continue;
+
+			const fields: Array<{
+				field: string;
+				oldValue: string | null;
+				newValue: string | null;
+			}> = [];
+
+			for (const field of LISTING_FIELDS) {
+				const draftVal = (draft[field] ?? null) as string | null;
+				const remoteVal = (remote?.[field] ?? null) as string | null;
+				if (draftVal !== remoteVal) {
+					fields.push({ field, newValue: draftVal, oldValue: remoteVal });
+				}
+			}
+
+			if (fields.length > 0) {
+				diffs.push({ fields, language });
+			}
+		}
+
+		// Stable ordering: sort by language for deterministic output
+		diffs.sort((a, b) => a.language.localeCompare(b.language));
+		return diffs;
+	}
+
 	static async publish(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
 		const credentials = JSON.parse(decrypt(app.store.credentials!));
@@ -488,7 +542,7 @@ export class ListingsService {
 		}
 
 		// Record history + update remote + mark clean
-		for (const { changedFields, draft, remote } of batchUpdates) {
+		for (const { draft, remote } of batchUpdates) {
 			for (const field of LISTING_FIELDS) {
 				const oldVal = remote?.[field] ?? null;
 				const newVal = draft[field] ?? null;
@@ -642,10 +696,7 @@ export class ListingsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (!app) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (!app) buildError("notFound", { info: "App not found" });
 
 		return {
 			availableCategories: APP_STORE_CATEGORIES,
@@ -858,7 +909,6 @@ export class ListingsService {
 			buildError("notFound", {
 				info: `No listing found for language "${language}"`,
 			});
-			throw new Error("unreachable");
 		}
 
 		return sourceListing;
@@ -902,10 +952,7 @@ export class ListingsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		return { ...result[0].app, store: result[0].store };
 	}

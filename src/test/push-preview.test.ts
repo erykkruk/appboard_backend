@@ -1,12 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { publishingController } from "@/modules/publishing";
-import {
-	authGuard,
-	authRequest,
-	authRequestB,
-	getTestWorkspaceId,
-} from "@/test/setup";
+import { authGuard, authRequest, authRequestB } from "@/test/setup";
 import { seedTestApp, seedTestStore } from "@/test/test-helpers";
 import { errorHandler } from "@/utils/errors/errorHandler";
 

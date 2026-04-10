@@ -140,7 +140,7 @@ export class GooglePlayProvider implements StoreProvider {
 				const editId = await createEdit(client.api, packageName);
 
 				try {
-					const { data: details } = await client.api.edits.details.get({
+					await client.api.edits.details.get({
 						editId,
 						packageName,
 					});

@@ -205,7 +205,6 @@ describe("Workspace isolation", () => {
 			.handle(authRequestB("http://localhost/api/settings"))
 			.then((r) => r.json());
 
-		const keys = resB.settings.map((s: { key: string }) => s.key);
 		// B should have ISOLATION_TEST but not A's other settings
 		const bSetting = resB.settings.find(
 			(s: { key: string; value: string }) => s.key === "ISOLATION_TEST",

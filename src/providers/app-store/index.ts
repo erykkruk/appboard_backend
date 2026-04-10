@@ -97,6 +97,69 @@ const INTERNAL_TO_ASC_VALUE: Record<string, string> = {
 	NONE: "NONE",
 };
 
+// Maps internal privacy category keys to ASC API category values
+const PRIVACY_CATEGORY_TO_ASC: Record<string, string> = {
+	browsing_history: "BROWSING_HISTORY",
+	contact_info: "CONTACT_INFO",
+	contacts: "CONTACTS",
+	diagnostics: "DIAGNOSTICS",
+	financial: "FINANCIAL_INFO",
+	health_fitness: "HEALTH_AND_FITNESS",
+	identifiers: "IDENTIFIERS",
+	location: "LOCATION",
+	other: "OTHER_DATA",
+	purchases: "PURCHASES",
+	search_history: "SEARCH_HISTORY",
+	sensitive_info: "SENSITIVE_INFO",
+	usage_data: "USAGE_DATA",
+	user_content: "USER_CONTENT",
+};
+
+// Maps internal data type display names to ASC API data type values
+const PRIVACY_DATA_TYPE_TO_ASC: Record<string, string> = {
+	"Audio Data": "AUDIO_DATA",
+	"Browsing History": "BROWSING_HISTORY",
+	"Coarse Location": "COARSE_LOCATION",
+	Contacts: "CONTACTS",
+	"Crash Data": "CRASH_DATA",
+	"Credit Info": "CREDIT_INFO",
+	"Customer Support": "CUSTOMER_SUPPORT",
+	"Device ID": "DEVICE_ID",
+	"Email Address": "EMAIL_ADDRESS",
+	"Emails or Text Messages": "EMAILS_OR_TEXT_MESSAGES",
+	Fitness: "FITNESS",
+	"Gameplay Content": "GAMEPLAY_CONTENT",
+	Health: "HEALTH",
+	Name: "NAME",
+	"Other Data": "OTHER_DATA",
+	"Other Diagnostic Data": "OTHER_DIAGNOSTIC_DATA",
+	"Other Financial Info": "OTHER_FINANCIAL_INFO",
+	"Other Usage Data": "OTHER_USAGE_DATA",
+	"Other User Content": "OTHER_USER_CONTENT",
+	"Payment Info": "PAYMENT_INFO",
+	"Performance Data": "PERFORMANCE_DATA",
+	"Phone Number": "PHONE_NUMBER",
+	"Photos or Videos": "PHOTOS_OR_VIDEOS",
+	"Physical Address": "PHYSICAL_ADDRESS",
+	"Precise Location": "PRECISE_LOCATION",
+	"Product Interaction": "PRODUCT_INTERACTION",
+	"Purchase History": "PURCHASE_HISTORY",
+	"Search History": "SEARCH_HISTORY",
+	"Sensitive Info": "SENSITIVE_INFO",
+	"SMS or Calllog": "SMS_OR_CALLLOG",
+	"User ID": "USER_ID",
+};
+
+// Maps internal purpose keys to ASC API purpose IDs
+const PURPOSE_TO_ASC: Record<string, string> = {
+	analytics: "ANALYTICS",
+	app_functionality: "APP_FUNCTIONALITY",
+	developers_advertising: "DEVELOPERS_ADVERTISING",
+	other_purposes: "OTHER_PURPOSES",
+	product_personalization: "PRODUCT_PERSONALIZATION",
+	third_party_advertising: "THIRD_PARTY_ADVERTISING",
+};
+
 /**
  * ISO 3166-1 alpha-2 → alpha-3 territory code mapping.
  * ASC API uses alpha-3 codes for subscription price points and prices.
@@ -1168,20 +1231,113 @@ export class AppStoreProvider implements StoreProvider {
 	}
 
 	async updatePrivacyDeclaration(
-		_appId: string,
-		_data: import("../store-provider").PrivacyDeclarationData,
+		appId: string,
+		data: import("../store-provider").PrivacyDeclarationData,
 	): Promise<void> {
 		if (this.isMock) {
-			log.info({ appId: _appId }, "Mock: privacy declaration updated");
+			log.info({ appId }, "Mock: privacy declaration updated");
 			return;
 		}
 
-		// TODO: Implement App Store Connect privacy declaration push
-		// App Privacy uses the App Store Connect API appPrivacyDetails endpoints
-		log.warn(
-			{ appId: _appId },
-			"App Store privacy declaration push not yet implemented",
-		);
+		try {
+			const { create, readAll, remove } = await createAppStoreClient(
+				this.credentials,
+			);
+
+			// Step 1: Delete all existing privacy declarations (clean slate approach)
+			const { data: existingUsages } = await readAll(
+				`apps/${appId}/appDataUsages`,
+			);
+
+			for (const usage of (existingUsages ?? []) as ApiResource[]) {
+				try {
+					await remove({ id: usage.id, type: "appDataUsages" });
+				} catch (err) {
+					log.warn(
+						{ err, usageId: usage.id },
+						"Failed to delete existing app data usage — continuing",
+					);
+				}
+			}
+
+			// Step 2: If no data collections, we're done (app collects no data)
+			if (!data.dataCollections?.length) {
+				log.info(
+					{ appId },
+					"Privacy declaration cleared — no data collections to push",
+				);
+				return;
+			}
+
+			// Step 3: Create new privacy declarations for each data collection entry
+			for (const collection of data.dataCollections) {
+				const ascCategory =
+					PRIVACY_CATEGORY_TO_ASC[collection.category] ?? collection.category;
+				const ascDataType =
+					PRIVACY_DATA_TYPE_TO_ASC[collection.dataType] ??
+					collection.dataType.toUpperCase().replace(/\s+/g, "_");
+
+				// Determine data protection level
+				let dataProtectionId: string;
+				if (collection.tracking) {
+					dataProtectionId = "DATA_USED_TO_TRACK_YOU";
+				} else if (collection.linked) {
+					dataProtectionId = "DATA_LINKED_TO_YOU";
+				} else {
+					dataProtectionId = "DATA_NOT_LINKED_TO_YOU";
+				}
+
+				// Map purposes to ASC purpose IDs
+				const ascPurposes = collection.purposes.map(
+					(p) => PURPOSE_TO_ASC[p] ?? p.toUpperCase(),
+				);
+
+				try {
+					await create({
+						attributes: {
+							category: ascCategory,
+							dataType: ascDataType,
+						},
+						relationships: {
+							app: { data: { id: appId, type: "apps" } },
+							dataProtection: {
+								data: {
+									id: dataProtectionId,
+									type: "appDataUsageDataProtections",
+								},
+							},
+							purposes: {
+								data: ascPurposes.map((purposeId) => ({
+									id: purposeId,
+									type: "appDataUsagePurposes",
+								})),
+							},
+						},
+						type: "appDataUsages",
+					});
+				} catch (err) {
+					log.warn(
+						{
+							category: ascCategory,
+							dataType: ascDataType,
+							err,
+						},
+						"Failed to create app data usage entry — continuing with remaining entries",
+					);
+				}
+			}
+
+			log.info(
+				{ appId, count: data.dataCollections.length },
+				"Privacy declaration pushed to App Store Connect",
+			);
+		} catch (err) {
+			log.error(
+				{ appId, err },
+				"Failed to update privacy declaration on App Store Connect",
+			);
+			throw err;
+		}
 	}
 
 	async fetchInAppPurchases(appId: string): Promise<InAppPurchaseData[]> {

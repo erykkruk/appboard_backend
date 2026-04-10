@@ -9,6 +9,8 @@ const configSchema = type({
 	ENCRYPTION_KEY: "string",
 	NODE_ENV: "string?",
 	OPENROUTER_API_KEY: "string?",
+	OPENROUTER_MODEL: "string?",
+	OPENROUTER_URL: "string?",
 	PORT: "string?",
 	SMTP_FROM: "string?",
 	SMTP_HOST: "string?",

@@ -2,7 +2,8 @@
 
 ## Overview
 Backend API for AppBoard — an ASO (App Store Optimization) management tool. Manages store connections, app metadata, and listing optimization.
-panel - /Users/erykkruk/Development/Github/Side-projects/appboard_web
+Admin Panel - /Users/erykkruk/Development/Github/AppBoard/appboard_web
+Website - /Users/erykkruk/Development/Github/AppBoard/appboard_website
 
 
 ## Tech Stack
@@ -112,6 +113,29 @@ All data is workspace-scoped. Every endpoint MUST operate within the authenticat
 - `seedTestStore()` accepts optional `workspaceId` (defaults to workspace A)
 - When writing new tests: always verify that workspace B cannot access workspace A resources
 - Integration tests should cover the full flow: connect → sync → save → publish
+
+## Feature Flags System
+
+Workspace-scoped toggles for 12 modules. Reuses the `settings` table with `FEATURE_` prefix — no new migrations.
+
+- **Definitions**: `src/modules/features/features.const.ts` — `FEATURE_DEFINITIONS`, `ROUTE_FEATURE_MAP`, `matchesPathPattern()`
+- **Service**: `src/modules/features/features.service.ts` — `getAll()`, `isEnabled()`, `setAll()` (transactional)
+- **Controller**: `src/modules/features/index.ts` — `GET /api/features`, `PATCH /api/features`
+- **Guard**: `src/modules/features/features.guard.ts` — scoped `onBeforeHandle` hook returning 403 for disabled features
+
+**Dependency cascade**: `dependsOn` in a definition forces a feature `false` when any dep is `false` (e.g., `MONETIZATION_CHAT` depends on `AI` + `PURCHASES`). Handled in `applyDependencyCascade()`.
+
+**Path matching**: `matchesPathPattern()` uses segment-based subsequence matching — prevents `/api/ai` from matching `/api/ai-chat-history`.
+
+**Registration order** (`src/index.ts`): `featuresController` → `featureGuard` → all other controllers. Guard must run BEFORE protected controllers inside the `/api` group.
+
+## History + Diff System
+
+GitHub-style version control for listing fields.
+
+- **History**: `src/modules/history/` — `GET /apps/:id/history` (filters: `language`, `field`), `POST /apps/:id/history/:historyId/rollback`. Rollback updates the draft listing and marks `isDirty`.
+- **Draft diffs**: `ListingsService.getDraftDiffs(appId)` in `listings.service.ts` + endpoint `GET /apps/:id/listings/diffs` — compares draft vs remote listings per language, returns only changed fields.
+- **Underlying data**: `listingHistory` table tracks `oldValue`/`newValue` per field per language on publish.
 
 ## Anti-patterns
 

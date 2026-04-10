@@ -116,10 +116,7 @@ export class ReviewsService {
 			.where(and(eq(reviews.id, reviewId), eq(reviews.appId, appId)))
 			.limit(1);
 
-		if (!review) {
-			buildError("notFound", { info: "Review not found" });
-			throw new Error("unreachable");
-		}
+		if (!review) buildError("notFound", { info: "Review not found" });
 
 		const app = await ReviewsService.getAppWithStore(appId);
 		const credentials = JSON.parse(decrypt(app.store.credentials!));
@@ -185,10 +182,7 @@ export class ReviewsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		return { ...result[0].app, store: result[0].store };
 	}

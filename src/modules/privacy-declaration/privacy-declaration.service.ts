@@ -104,17 +104,12 @@ export class PrivacyDeclarationService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		const { app, store } = result[0];
 
-		if (!store.credentials) {
+		if (!store.credentials)
 			buildError("badRequest", { info: "No store credentials configured" });
-			throw new Error("unreachable");
-		}
 
 		const credentials = JSON.parse(decrypt(store.credentials));
 		const provider = createProvider(store.type as StoreType, credentials);

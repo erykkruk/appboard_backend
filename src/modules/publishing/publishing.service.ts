@@ -683,7 +683,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Version localizations are only available for App Store apps",
 			});
-			throw new Error("unreachable");
 		}
 
 		// Find the cached version by externalId
@@ -714,10 +713,7 @@ export class PublishingService {
 			dbVersion = result[0];
 		}
 
-		if (!dbVersion) {
-			buildError("notFound", { info: "Version not found" });
-			throw new Error("unreachable");
-		}
+		if (!dbVersion) buildError("notFound", { info: "Version not found" });
 
 		// Get remote localizations
 		const remoteLocs = await db
@@ -840,7 +836,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Review detail is only available for App Store apps",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -922,7 +917,6 @@ export class PublishingService {
 			buildError("storeApiError", {
 				info: `Failed to fetch review detail: ${detail}`,
 			});
-			throw new Error("unreachable");
 		}
 	}
 
@@ -1022,7 +1016,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Review attachments are only available for App Store apps",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -1038,7 +1031,6 @@ export class PublishingService {
 				buildError("notFound", {
 					info: "Review detail not found. Save review information first.",
 				});
-				throw new Error("unreachable");
 			}
 			reviewDetailId = (existing as ApiResource).id;
 		} catch (err) {
@@ -1047,7 +1039,6 @@ export class PublishingService {
 			buildError("storeApiError", {
 				info: `Failed to get review detail: ${detail}`,
 			});
-			throw new Error("unreachable");
 		}
 
 		const buffer = Buffer.from(await file.arrayBuffer());
@@ -1099,7 +1090,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Review attachments are only available for App Store apps",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -1139,10 +1129,7 @@ export class PublishingService {
 				.where(eq(listings.id, localizationId))
 				.limit(1);
 
-			if (!listing) {
-				buildError("notFound", { info: "Listing not found" });
-				throw new Error("unreachable");
-			}
+			if (!listing) buildError("notFound", { info: "Listing not found" });
 
 			const updateData: Record<string, string | undefined> = {};
 			if (data.title !== undefined) updateData.title = data.title;
@@ -1187,10 +1174,8 @@ export class PublishingService {
 			)
 			.limit(1);
 
-		if (!dbVersion) {
+		if (!dbVersion)
 			buildError("notFound", { info: "Version not found in local cache" });
-			throw new Error("unreachable");
-		}
 
 		// Find the remote localization to get language
 		const [remoteLoc] = await db
@@ -1205,10 +1190,7 @@ export class PublishingService {
 			)
 			.limit(1);
 
-		if (!remoteLoc) {
-			buildError("notFound", { info: "Localization not found" });
-			throw new Error("unreachable");
-		}
+		if (!remoteLoc) buildError("notFound", { info: "Localization not found" });
 
 		// Build the draft data: start with remote values, overlay provided fields
 		const draftValues = {
@@ -1266,7 +1248,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Version localizations are only available for App Store apps",
 			});
-			throw new Error("unreachable");
 		}
 
 		// Find the cached version
@@ -1281,10 +1262,8 @@ export class PublishingService {
 			)
 			.limit(1);
 
-		if (!dbVersion) {
+		if (!dbVersion)
 			buildError("notFound", { info: "Version not found in local cache" });
-			throw new Error("unreachable");
-		}
 
 		// Get dirty drafts
 		const dirtyDrafts = await db
@@ -1307,7 +1286,6 @@ export class PublishingService {
 			credentials = JSON.parse(decrypt(app.store.credentials));
 		} catch {
 			buildError("badRequest", { info: "Invalid App Store credentials" });
-			throw new Error("unreachable");
 		}
 
 		let client: Awaited<ReturnType<typeof createAppStoreClient>>;
@@ -1554,10 +1532,8 @@ export class PublishingService {
 			)
 			.limit(1);
 
-		if (!dbVersion) {
+		if (!dbVersion)
 			buildError("notFound", { info: "Version not found after sync" });
-			throw new Error("unreachable");
-		}
 
 		// 4. Get source localization data
 		const [sourceLoc] = await db
@@ -1742,14 +1718,11 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Screenshots are only available for App Store apps",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
-		if (!credentials.keyId) {
+		if (!credentials.keyId)
 			buildError("badRequest", { info: "Missing App Store credentials" });
-			throw new Error("unreachable");
-		}
 
 		const { readAll } = await createAppStoreClient(credentials);
 
@@ -1866,10 +1839,7 @@ export class PublishingService {
 					),
 				);
 
-			if (!asset) {
-				buildError("notFound", { info: "Screenshot not found" });
-				throw new Error("unreachable");
-			}
+			if (!asset) buildError("notFound", { info: "Screenshot not found" });
 
 			await AssetsService.deleteAsset(appId, asset.id);
 
@@ -1882,7 +1852,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Missing App Store credentials",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -1923,7 +1892,6 @@ export class PublishingService {
 				buildError("badRequest", {
 					info: `Image processing failed: ${err instanceof Error ? err.message : String(err)}`,
 				});
-				throw new Error("unreachable");
 			}
 
 			const pngName = file.name.replace(/\.\w+$/, ".png");
@@ -1953,7 +1921,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Missing App Store credentials",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -1970,7 +1937,6 @@ export class PublishingService {
 			buildError("notFound", {
 				info: `No localization found for language "${language}"`,
 			});
-			throw new Error("unreachable");
 		}
 
 		// Find or create screenshot set for this display type
@@ -2017,7 +1983,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Image processing failed: ${err instanceof Error ? err.message : String(err)}`,
 			});
-			throw new Error("unreachable");
 		}
 
 		const pngName = file.name.replace(/\.\w+$/, ".png");
@@ -2096,7 +2061,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Image processing failed: ${err instanceof Error ? err.message : String(err)}`,
 			});
-			throw new Error("unreachable");
 		}
 	}
 
@@ -2111,26 +2075,21 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Parts must be between ${MIN_SPLIT_PARTS} and ${MAX_SPLIT_PARTS}`,
 			});
-			throw new Error("unreachable");
 		}
 
-		if (imgWidth === 0 || imgHeight === 0) {
+		if (imgWidth === 0 || imgHeight === 0)
 			buildError("badRequest", { info: "Could not read image dimensions" });
-			throw new Error("unreachable");
-		}
 
 		if (!skipPanoramaCheck && imgWidth < imgHeight * MIN_PANORAMA_RATIO) {
 			buildError("badRequest", {
 				info: `Image must be a panorama (width must be at least ${MIN_PANORAMA_RATIO}x height)`,
 			});
-			throw new Error("unreachable");
 		}
 
 		if (imgWidth * imgHeight > MAX_PIXEL_COUNT) {
 			buildError("badRequest", {
 				info: `Image too large: ${imgWidth}x${imgHeight} exceeds maximum of ${MAX_PIXEL_COUNT} pixels`,
 			});
-			throw new Error("unreachable");
 		}
 
 		const sizes = REQUIRED_SIZES[displayType];
@@ -2138,7 +2097,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Unknown display type: ${displayType}`,
 			});
-			throw new Error("unreachable");
 		}
 
 		return sizes;
@@ -2285,7 +2243,6 @@ export class PublishingService {
 				buildError("badRequest", {
 					info: `Cannot add ${parts} screenshots: ${existingCount} already exist, maximum is ${MAX_SCREENSHOTS_PER_SET}`,
 				});
-				throw new Error("unreachable");
 			}
 
 			if (
@@ -2295,7 +2252,6 @@ export class PublishingService {
 				buildError("badRequest", {
 					info: `insertAt must be between 0 and ${existingCount}`,
 				});
-				throw new Error("unreachable");
 			}
 
 			const partWidth = Math.floor(imgWidth / parts);
@@ -2365,7 +2321,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Missing App Store credentials",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -2382,7 +2337,6 @@ export class PublishingService {
 			buildError("notFound", {
 				info: `No localization found for language "${language}"`,
 			});
-			throw new Error("unreachable");
 		}
 
 		// Find or create screenshot set
@@ -2413,7 +2367,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Cannot add ${parts} screenshots: ${existingCount} already exist, maximum is ${MAX_SCREENSHOTS_PER_SET}`,
 			});
-			throw new Error("unreachable");
 		}
 
 		// Validate insertAt bounds
@@ -2421,7 +2374,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `insertAt must be between 0 and ${existingCount}`,
 			});
-			throw new Error("unreachable");
 		}
 
 		// Split and upload each part
@@ -2533,7 +2485,6 @@ export class PublishingService {
 				buildError("badRequest", {
 					info: `No screenshots found for source language "${sourceLanguage}"`,
 				});
-				throw new Error("unreachable");
 			}
 
 			// Check target doesn't already have screenshots for the same device types
@@ -2635,7 +2586,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Missing App Store credentials",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -2658,13 +2608,11 @@ export class PublishingService {
 			buildError("notFound", {
 				info: `Source language "${sourceLanguage}" not found`,
 			});
-			throw new Error("unreachable");
 		}
 		if (!targetLoc) {
 			buildError("notFound", {
 				info: `Target language "${targetLanguage}" not found`,
 			});
-			throw new Error("unreachable");
 		}
 
 		// Get source screenshot sets
@@ -2684,7 +2632,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `No screenshots found for source language "${sourceLanguage}"`,
 			});
-			throw new Error("unreachable");
 		}
 
 		// Check target doesn't already have screenshots for the same display types
@@ -2902,7 +2849,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Missing App Store credentials",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -2967,7 +2913,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: "Missing App Store credentials",
 			});
-			throw new Error("unreachable");
 		}
 
 		const credentials = JSON.parse(decrypt(app.store.credentials));
@@ -3234,10 +3179,8 @@ export class PublishingService {
 			`apps/${app.externalId}/appStoreVersions`,
 		);
 
-		if (!versions?.length) {
+		if (!versions?.length)
 			buildError("notFound", { info: "No app store version found" });
-			throw new Error("unreachable");
-		}
 
 		const latestVersion = versions[0] as ApiResource;
 		const state = latestVersion.attributes.appStoreState as string;
@@ -3246,7 +3189,6 @@ export class PublishingService {
 			buildError("badRequest", {
 				info: `Cannot submit for review: version is in state "${state}". Must be in PREPARE_FOR_SUBMISSION, DEVELOPER_REJECTED, or REJECTED.`,
 			});
-			throw new Error("unreachable");
 		}
 
 		await create({
@@ -3272,10 +3214,7 @@ export class PublishingService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		return { ...result[0].app, store: result[0].store };
 	}

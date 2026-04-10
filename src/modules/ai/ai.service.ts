@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import config from "@/config";
 import { APP_STORE_CATEGORIES } from "@/config/const";
 import {
 	buildTranslationFieldRules,
@@ -22,8 +23,10 @@ import { createLogger } from "@/utils/logger";
 
 const log = createLogger("ai-service");
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "google/gemini-3-flash-preview";
+const OPENROUTER_URL =
+	config.OPENROUTER_URL ?? "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL =
+	config.OPENROUTER_MODEL ?? "google/gemini-3-flash-preview";
 
 function truncateToLimit(value: string, limit: number, field: string): string {
 	if (value.length <= limit) return value;
@@ -1148,7 +1151,6 @@ Return ONLY a JSON object with the same keys and translated values.`;
 			buildError("somethingWentWrong", {
 				info: "AI returned invalid translation format",
 			});
-			throw new Error("unreachable");
 		}
 	}
 
@@ -1235,7 +1237,6 @@ Suggest the best primary and secondary category. Return ONLY the JSON.`;
 			buildError("somethingWentWrong", {
 				info: "AI returned invalid category suggestion format",
 			});
-			throw new Error("unreachable");
 		}
 	}
 
@@ -1257,10 +1258,7 @@ Suggest the best primary and secondary category. Return ONLY the JSON.`;
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (!app) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (!app) buildError("notFound", { info: "App not found" });
 
 		// Fetch listing (prefer English, fallback to first available)
 		const appListings = await db
@@ -1392,7 +1390,6 @@ Return ONLY valid JSON with this exact structure:
 			buildError("somethingWentWrong", {
 				info: "AI returned invalid age rating format",
 			});
-			throw new Error("unreachable");
 		}
 	}
 }

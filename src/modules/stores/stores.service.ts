@@ -169,7 +169,6 @@ export class StoresService {
 			buildError("storeConnectionFailed", {
 				info: "Store has no credentials",
 			});
-			throw new Error("unreachable");
 		}
 		const credentials = JSON.parse(decrypt(store.credentials));
 		return createProvider(store.type as StoreType, credentials);

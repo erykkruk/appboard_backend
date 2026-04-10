@@ -4,7 +4,6 @@ import { createProvider } from "@/providers";
 import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { appAgeRatings, apps, stores } from "@/utils/db/schema";
-import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import { computeAppleRating, getAgeRatingPreset } from "./age-rating.templates";
 
