@@ -542,10 +542,12 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				body.sourceLanguage,
 				body.targetLanguage,
 				body.displayType,
+				body.copyLocalizations,
 			);
 		},
 		{
 			body: t.Object({
+				copyLocalizations: t.Optional(t.Boolean()),
 				displayType: t.Optional(t.String({ maxLength: 100, minLength: 1 })),
 				sourceLanguage: t.String({ maxLength: 20, minLength: 1 }),
 				targetLanguage: t.String({ maxLength: 20, minLength: 1 }),
@@ -553,7 +555,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			}),
 			detail: {
 				description:
-					"Copy screenshots from one language to another within a version",
+					"Copy screenshots from one language to another within a version; optionally copy text localizations too",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,
