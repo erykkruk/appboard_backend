@@ -113,6 +113,7 @@ export const ROUTE_FEATURE_MAP: Array<{
 }> = [
 	{ feature: "LISTINGS", pattern: "/listings/categories" },
 	{ feature: "LISTINGS", pattern: "/listings" },
+	{ feature: "SCREENSHOTS", pattern: "/screenshot-scenes" },
 	{ feature: "SCREENSHOTS", pattern: "/assets" },
 	{ feature: "PUBLISHING", pattern: "/publishing" },
 	{ feature: "REVIEWS", pattern: "/reviews" },

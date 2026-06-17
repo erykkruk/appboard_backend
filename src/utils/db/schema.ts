@@ -10,6 +10,7 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
 
 const timeColumns = {
 	createdAt: timestamp().notNull().defaultNow(),
@@ -272,6 +273,28 @@ export const assets = pgTable(
 		syncedAt: timestamp(),
 		url: varchar({ length: 2048 }),
 		width: integer(),
+	},
+	(t) => [index().on(t.appId)],
+);
+
+// Persisted scenes for the browser-based screenshot editor. The visual
+// canvas and final image export live entirely on the frontend; the backend
+// stores each scene's editor state (`scene` jsonb) so it can be reopened,
+// localized per language, and optionally linked to an exported asset.
+export const screenshotScenes = pgTable(
+	"screenshot_scenes",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		assetId: uuid().references(() => assets.id, { onDelete: "set null" }),
+		displayType: varchar({ length: 50 }).notNull(),
+		language: varchar({ length: 20 }).notNull(),
+		name: varchar({ length: 255 }).notNull(),
+		scene: jsonb().$type<SceneData>().notNull(),
+		sortOrder: integer().notNull().default(0),
 	},
 	(t) => [index().on(t.appId)],
 );
@@ -706,6 +729,7 @@ export const schema = {
 	purchasePrices,
 	purchaseReviewInfo,
 	reviews,
+	screenshotScenes,
 	session,
 	settings,
 	stores,

@@ -29,6 +29,7 @@ import {
 import { publishingController } from "@/modules/publishing";
 import { purchasesController } from "@/modules/purchases";
 import { reviewsController } from "@/modules/reviews";
+import { screenshotScenesController } from "@/modules/screenshot-scenes";
 import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
 import { bootstrap, systemController } from "@/modules/system";
@@ -77,6 +78,7 @@ const app = new Elysia()
 			.use(aiChatHistoryController)
 			.use(appAiPromptsController)
 			.use(assetsController)
+			.use(screenshotScenesController)
 			.use(listingsController)
 			.use(appGroupsController)
 			.use(groupAsoProfileController)

@@ -20,6 +20,7 @@ import {
 	purchasePrices,
 	purchaseReviewInfo,
 	reviews,
+	screenshotScenes,
 	session,
 	settings,
 	stores,
@@ -124,6 +125,7 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 		references: [appPrivacyDeclarations.appId],
 	}),
 	reviews: many(reviews),
+	screenshotScenes: many(screenshotScenes),
 	store: one(stores, {
 		fields: [apps.storeId],
 		references: [stores.id],
@@ -178,6 +180,20 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
 		references: [apps.id],
 	}),
 }));
+
+export const screenshotScenesRelations = relations(
+	screenshotScenes,
+	({ one }) => ({
+		app: one(apps, {
+			fields: [screenshotScenes.appId],
+			references: [apps.id],
+		}),
+		asset: one(assets, {
+			fields: [screenshotScenes.assetId],
+			references: [assets.id],
+		}),
+	}),
+);
 
 export const appVersionsRelations = relations(appVersions, ({ many, one }) => ({
 	app: one(apps, {
