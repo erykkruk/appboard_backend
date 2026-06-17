@@ -46,6 +46,7 @@ describe("Error utilities", () => {
 			"badRequest",
 			"encryptionFailed",
 			"forbidden",
+			"invalidScreenshotDimensions",
 			"notFound",
 			"rateLimitExceeded",
 			"somethingWentWrong",
@@ -54,6 +55,7 @@ describe("Error utilities", () => {
 			"storeUnavailable",
 			"unauthorized",
 			"validationFailed",
+			"vaultLocked",
 		];
 		expect(Object.keys(errors).sort()).toEqual(expectedKeys);
 	});

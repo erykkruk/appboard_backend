@@ -350,6 +350,28 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.post(
+		"/:appId/publishing/screenshots/validate",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PublishingService.validateScreenshotFile(
+				body.displayType,
+				body.file,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.String({ maxLength: 100, minLength: 1 }),
+				file: screenshotFile,
+			}),
+			detail: {
+				description:
+					"Validate a screenshot's dimensions against the accepted preset(s) for a display type without uploading",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.post(
 		"/:appId/publishing/screenshots/preview",
 		async ({ body, params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);

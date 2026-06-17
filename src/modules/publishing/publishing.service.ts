@@ -6,9 +6,9 @@ import { AgeRatingService } from "@/modules/age-rating/age-rating.service";
 import { AssetsService } from "@/modules/assets/assets.service";
 import { ListingsService } from "@/modules/listings/listings.service";
 import { PrivacyDeclarationService } from "@/modules/privacy-declaration/privacy-declaration.service";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
 import { createAppStoreClient } from "@/providers/app-store/client";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import {
 	apps,
@@ -108,6 +108,71 @@ const REQUIRED_SIZES: Record<string, [number, number][]> = {
 		[2752, 2064],
 	],
 };
+
+// Human-friendly labels for display types, used in dimension error suggestions
+const DISPLAY_TYPE_NAMES: Record<string, string> = {
+	APP_IPAD_PRO_129: 'iPad Pro 12.9"',
+	APP_IPHONE_35: 'iPhone 3.5"',
+	APP_IPHONE_40: 'iPhone 4.0"',
+	APP_IPHONE_47: 'iPhone 4.7"',
+	APP_IPHONE_55: 'iPhone 5.5"',
+	APP_IPHONE_58: 'iPhone 5.8"',
+	APP_IPHONE_61: 'iPhone 6.1"',
+	APP_IPHONE_65: 'iPhone 6.5"',
+	APP_IPHONE_67: 'iPhone 6.7"',
+	phone: "Android phone",
+	sevenInch: 'Android 7" tablet',
+	tenInch: 'Android 10" tablet',
+};
+
+interface DimensionValidation {
+	displayType: string;
+	displayTypeName: string;
+	matchedSize: [number, number] | null;
+	providedDimensions: [number, number];
+	supportedDimensions: [number, number][];
+	suggestion: string;
+	valid: boolean;
+}
+
+/**
+ * Validate provided width×height against the accepted preset(s) for a display
+ * type. Both portrait and landscape orientations are accepted because
+ * REQUIRED_SIZES lists both. Returns the matched preset when the dimensions are
+ * an exact match, otherwise the full list of supported sizes plus an actionable
+ * suggestion string. Pure — performs no I/O. Throws for unknown display types.
+ */
+function validateScreenshotDimensions(
+	displayType: string,
+	width: number,
+	height: number,
+): DimensionValidation {
+	const supportedDimensions = REQUIRED_SIZES[displayType];
+	if (!supportedDimensions?.length) {
+		throw new Error(`Unknown display type: ${displayType}`);
+	}
+
+	const displayTypeName = DISPLAY_TYPE_NAMES[displayType] ?? displayType;
+	const matchedSize =
+		supportedDimensions.find(([w, h]) => w === width && h === height) ?? null;
+
+	const supportedList = supportedDimensions
+		.map(([w, h]) => `${w}x${h}`)
+		.join(" or ");
+	const suggestion = matchedSize
+		? `${displayTypeName} accepts ${width}x${height}.`
+		: `${displayTypeName} expects ${supportedList}; you provided ${width}x${height}.`;
+
+	return {
+		displayType,
+		displayTypeName,
+		matchedSize,
+		providedDimensions: [width, height],
+		suggestion,
+		supportedDimensions,
+		valid: matchedSize !== null,
+	};
+}
 
 interface CropParams {
 	x: number;
@@ -431,7 +496,10 @@ export class PublishingService {
 			return { source: "cache" as const, synced: 0 };
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		if (!credentials.keyId) {
 			return { source: "cache" as const, synced: 0 };
 		}
@@ -800,7 +868,10 @@ export class PublishingService {
 		// Try to push to ASC
 		let savedLocally = false;
 		try {
-			const credentials = JSON.parse(decrypt(app.store.credentials!));
+			const credentials = decryptCredentials(
+				app.store.credentials!,
+				app.store.workspaceId,
+			);
 			const client = await createAppStoreClient(credentials);
 			await client.update(
 				{ id: versionId, type: "appStoreVersions" },
@@ -838,7 +909,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		try {
@@ -942,7 +1016,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		const attributes: Record<string, string | boolean> = {};
@@ -1018,7 +1095,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		// Get review detail ID
@@ -1092,7 +1172,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const { remove } = await createAppStoreClient(credentials);
 
 		await remove({ id: attachmentId, type: "appStoreReviewAttachments" });
@@ -1283,7 +1366,10 @@ export class PublishingService {
 
 		let credentials: Record<string, string>;
 		try {
-			credentials = JSON.parse(decrypt(app.store.credentials));
+			credentials = decryptCredentials(
+				app.store.credentials,
+				app.store.workspaceId,
+			);
 		} catch {
 			buildError("badRequest", { info: "Invalid App Store credentials" });
 		}
@@ -1481,7 +1567,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		try {
@@ -1664,7 +1753,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const { remove } = await createAppStoreClient(credentials);
 
 		try {
@@ -1720,7 +1812,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		if (!credentials.keyId)
 			buildError("badRequest", { info: "Missing App Store credentials" });
 
@@ -1854,7 +1949,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const { remove } = await createAppStoreClient(credentials);
 
 		await remove({ id: screenshotId, type: "appScreenshots" });
@@ -1881,10 +1979,19 @@ export class PublishingService {
 			// Google Play: process image and upload via AssetsService
 			const rawBuffer = Buffer.from(await file.arrayBuffer());
 
+			const gpMeta = await sharp(rawBuffer).metadata();
+			PublishingService.assertValidDimensions(
+				displayType,
+				gpMeta.width ?? 0,
+				gpMeta.height ?? 0,
+				cropParams,
+			);
+
 			let processed: { buffer: Buffer; height: number; width: number };
 			try {
 				processed = await processScreenshot(rawBuffer, displayType, cropParams);
 			} catch (err) {
+				if (err && typeof err === "object" && "response" in err) throw err;
 				log.error(
 					{ appId, displayType, err, fileName: file.name },
 					"Failed to process screenshot image",
@@ -1923,7 +2030,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		// Find the localization for this language
@@ -1971,11 +2081,20 @@ export class PublishingService {
 
 		const rawBuffer = Buffer.from(await file.arrayBuffer());
 
+		const ascMeta = await sharp(rawBuffer).metadata();
+		PublishingService.assertValidDimensions(
+			displayType,
+			ascMeta.width ?? 0,
+			ascMeta.height ?? 0,
+			cropParams,
+		);
+
 		// Process image: crop to correct aspect ratio, resize, flatten alpha
 		let processed: { buffer: Buffer; height: number; width: number };
 		try {
 			processed = await processScreenshot(rawBuffer, displayType, cropParams);
 		} catch (err) {
+			if (err && typeof err === "object" && "response" in err) throw err;
 			log.error(
 				{ appId, displayType, err, fileName: file.name },
 				"Failed to process screenshot image",
@@ -2031,6 +2150,70 @@ export class PublishingService {
 				info: detail,
 			});
 		}
+	}
+
+	/**
+	 * Validate an uploaded screenshot's dimensions against the accepted preset(s)
+	 * for a display type WITHOUT uploading. Returns a plain result (never throws
+	 * on wrong dimensions) so callers can surface friendly UI feedback. Unknown
+	 * display types still raise a typed badRequest.
+	 */
+	static async validateScreenshotFile(displayType: string, file: File) {
+		if (!REQUIRED_SIZES[displayType]?.length) {
+			buildError("badRequest", {
+				info: `Unknown display type: ${displayType}`,
+			});
+		}
+
+		const rawBuffer = Buffer.from(await file.arrayBuffer());
+		const meta = await sharp(rawBuffer).metadata();
+		const width = meta.width ?? 0;
+		const height = meta.height ?? 0;
+
+		if (width === 0 || height === 0) {
+			buildError("badRequest", { info: "Could not read image dimensions" });
+		}
+
+		const result = validateScreenshotDimensions(displayType, width, height);
+
+		return {
+			displayType: result.displayType,
+			displayTypeName: result.displayTypeName,
+			providedDimensions: result.providedDimensions,
+			suggestion: result.suggestion,
+			supportedDimensions: result.supportedDimensions,
+			valid: result.valid,
+		};
+	}
+
+	/**
+	 * Throwing guard used in the upload paths. When the user did NOT supply an
+	 * explicit crop region, a screenshot whose dimensions match none of the
+	 * accepted presets is genuinely wrong (auto center-cropping would silently
+	 * distort the listing), so we raise the typed dimension error with actionable
+	 * data instead of letting a raw sharp/store error bubble. When cropParams are
+	 * present the user is intentionally adjusting, so we defer to the existing
+	 * crop/resize pipeline.
+	 */
+	private static assertValidDimensions(
+		displayType: string,
+		width: number,
+		height: number,
+		cropParams?: CropParams,
+	) {
+		if (cropParams) return;
+
+		const result = validateScreenshotDimensions(displayType, width, height);
+		if (result.valid) return;
+
+		buildError("invalidScreenshotDimensions", {
+			displayType: result.displayType,
+			displayTypeName: result.displayTypeName,
+			info: result.suggestion,
+			providedDimensions: result.providedDimensions,
+			suggestion: result.suggestion,
+			supportedDimensions: result.supportedDimensions,
+		});
 	}
 
 	static async previewScreenshot(
@@ -2323,7 +2506,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		// Find localization
@@ -2588,7 +2774,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		// Get localizations
@@ -2851,7 +3040,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const client = await createAppStoreClient(credentials);
 
 		// PATCH relationships endpoint to reorder
@@ -2915,7 +3107,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const { readAll, remove } = await createAppStoreClient(credentials);
 
 		const { data: items } = await readAll(
@@ -3072,7 +3267,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 		const result = await provider.createVersion(app.externalId, versionString);
 
@@ -3155,7 +3353,10 @@ export class PublishingService {
 		const app = await PublishingService.getAppWithStore(appId);
 
 		if (app.store.type === "google_play") {
-			const credentials = JSON.parse(decrypt(app.store.credentials!));
+			const credentials = decryptCredentials(
+				app.store.credentials!,
+				app.store.workspaceId,
+			);
 			const provider = createProvider(app.store.type as StoreType, credentials);
 			if ("sendChangesForReview" in provider) {
 				await (
@@ -3172,7 +3373,10 @@ export class PublishingService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const { create, readAll } = await createAppStoreClient(credentials);
 
 		const { data: versions } = await readAll(
