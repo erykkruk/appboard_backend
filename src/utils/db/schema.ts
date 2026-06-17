@@ -1,5 +1,6 @@
 import {
 	boolean,
+	index,
 	integer,
 	jsonb,
 	pgTable,
@@ -29,34 +30,42 @@ export const user = pgTable("user", {
 	name: varchar({ length: 255 }).notNull(),
 });
 
-export const session = pgTable("session", {
-	id: text().primaryKey(),
-	...timeColumns,
-	expiresAt: timestamp().notNull(),
-	ipAddress: varchar({ length: 255 }),
-	token: text().notNull().unique(),
-	userAgent: text(),
-	userId: text()
-		.notNull()
-		.references(() => user.id, { onDelete: "cascade" }),
-});
+export const session = pgTable(
+	"session",
+	{
+		id: text().primaryKey(),
+		...timeColumns,
+		expiresAt: timestamp().notNull(),
+		ipAddress: varchar({ length: 255 }),
+		token: text().notNull().unique(),
+		userAgent: text(),
+		userId: text()
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.userId)],
+);
 
-export const account = pgTable("account", {
-	id: text().primaryKey(),
-	...timeColumns,
-	accessToken: text(),
-	accessTokenExpiresAt: timestamp(),
-	accountId: text().notNull(),
-	idToken: text(),
-	password: text(),
-	providerId: text().notNull(),
-	refreshToken: text(),
-	refreshTokenExpiresAt: timestamp(),
-	scope: text(),
-	userId: text()
-		.notNull()
-		.references(() => user.id, { onDelete: "cascade" }),
-});
+export const account = pgTable(
+	"account",
+	{
+		id: text().primaryKey(),
+		...timeColumns,
+		accessToken: text(),
+		accessTokenExpiresAt: timestamp(),
+		accountId: text().notNull(),
+		idToken: text(),
+		password: text(),
+		providerId: text().notNull(),
+		refreshToken: text(),
+		refreshTokenExpiresAt: timestamp(),
+		scope: text(),
+		userId: text()
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.userId)],
+);
 
 export const verification = pgTable("verification", {
 	id: text().primaryKey(),
@@ -87,41 +96,79 @@ export const workspaceMembers = pgTable(
 			.notNull()
 			.references(() => workspaces.id, { onDelete: "cascade" }),
 	},
-	(t) => [unique().on(t.workspaceId, t.userId)],
+	(t) => [unique().on(t.workspaceId, t.userId), index().on(t.userId)],
 );
+
+// Per-workspace encryption vault. Holds the password-wrapped Data Encryption
+// Key (DEK). The DEK itself is NEVER stored — only the ciphertext wrapped by a
+// key derived (client-side) from the user's vault passphrase. Store credentials
+// are encrypted with the DEK; without the passphrase the wrapped DEK is useless,
+// so a stolen database cannot decrypt credentials.
+export const workspaceVault = pgTable("workspace_vault", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	kdfParams: jsonb()
+		.$type<{
+			algo: string;
+			memoryKiB: number;
+			iterations: number;
+			parallelism: number;
+		}>()
+		.notNull(),
+	// base64 salt + KDF parameters (Argon2id) used by the client to derive the KEK
+	kdfSalt: text().notNull(),
+	// DEK-encrypted known constant — lets the server verify a correct unlock
+	// without ever seeing the passphrase
+	verifier: text().notNull(),
+	workspaceId: uuid()
+		.notNull()
+		.references(() => workspaces.id, { onDelete: "cascade" })
+		.unique(),
+	wrapNonce: text().notNull(),
+	// base64 — DEK encrypted (AES-GCM) under the passphrase-derived KEK
+	wrappedDek: text().notNull(),
+});
 
 // ── Domain tables ───────────────────────────────────────────────────
 
-export const stores = pgTable("stores", {
-	id: uuid().defaultRandom().primaryKey(),
-	...timeColumns,
-	credentials: text(),
-	lastSyncedAt: timestamp(),
-	name: varchar({ length: 255 }).notNull(),
-	status: varchar({ length: 50 }).notNull().default("disconnected"),
-	type: varchar({ length: 50 }).notNull(),
-	workspaceId: uuid()
-		.notNull()
-		.references(() => workspaces.id, { onDelete: "cascade" }),
-});
+export const stores = pgTable(
+	"stores",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		credentials: text(),
+		lastSyncedAt: timestamp(),
+		name: varchar({ length: 255 }).notNull(),
+		status: varchar({ length: 50 }).notNull().default("disconnected"),
+		type: varchar({ length: 50 }).notNull(),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.workspaceId)],
+);
 
-export const apps = pgTable("apps", {
-	id: uuid().defaultRandom().primaryKey(),
-	...timeColumns,
-	bundleId: varchar({ length: 255 }).notNull(),
-	externalId: varchar({ length: 255 }).notNull(),
-	iconUrl: varchar({ length: 1024 }),
-	lastSyncedAt: timestamp(),
-	name: varchar({ length: 255 }).notNull(),
-	platform: varchar({ length: 50 }).notNull(),
-	primaryCategory: varchar({ length: 100 }),
-	rawData: jsonb(),
-	secondaryCategory: varchar({ length: 100 }),
-	status: varchar({ length: 50 }).notNull().default("active"),
-	storeId: uuid()
-		.notNull()
-		.references(() => stores.id, { onDelete: "cascade" }),
-});
+export const apps = pgTable(
+	"apps",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		bundleId: varchar({ length: 255 }).notNull(),
+		externalId: varchar({ length: 255 }).notNull(),
+		iconUrl: varchar({ length: 1024 }),
+		lastSyncedAt: timestamp(),
+		name: varchar({ length: 255 }).notNull(),
+		platform: varchar({ length: 50 }).notNull(),
+		primaryCategory: varchar({ length: 100 }),
+		rawData: jsonb(),
+		secondaryCategory: varchar({ length: 100 }),
+		status: varchar({ length: 50 }).notNull().default("active"),
+		storeId: uuid()
+			.notNull()
+			.references(() => stores.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.storeId)],
+);
 
 export const settings = pgTable(
 	"settings",
@@ -146,6 +193,7 @@ export const listings = pgTable(
 		appId: uuid()
 			.notNull()
 			.references(() => apps.id, { onDelete: "cascade" }),
+		doNotTranslateFields: jsonb().$type<string[]>(),
 		fullDesc: text(),
 		isDirty: boolean().notNull().default(false),
 		keywords: varchar({ length: 255 }),
@@ -158,69 +206,82 @@ export const listings = pgTable(
 		supportUrl: varchar({ length: 1024 }),
 		syncedAt: timestamp(),
 		title: varchar({ length: 255 }),
+		translationInstructions: text(),
 		videoUrl: varchar({ length: 1024 }),
 		whatsNew: text(),
 	},
 	(t) => [unique().on(t.appId, t.language, t.source)],
 );
 
-export const listingHistory = pgTable("listing_history", {
-	id: uuid().defaultRandom().primaryKey(),
-	...timeColumns,
-	appId: uuid()
-		.notNull()
-		.references(() => apps.id, { onDelete: "cascade" }),
-	field: varchar({ length: 100 }).notNull(),
-	language: varchar({ length: 20 }).notNull(),
-	listingId: uuid().references(() => listings.id, { onDelete: "set null" }),
-	newValue: text(),
-	oldValue: text(),
-	publishedAt: timestamp(),
-});
+export const listingHistory = pgTable(
+	"listing_history",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		field: varchar({ length: 100 }).notNull(),
+		language: varchar({ length: 20 }).notNull(),
+		listingId: uuid().references(() => listings.id, { onDelete: "set null" }),
+		newValue: text(),
+		oldValue: text(),
+		publishedAt: timestamp(),
+	},
+	(t) => [index().on(t.appId)],
+);
 
-export const assets = pgTable("assets", {
-	id: uuid().defaultRandom().primaryKey(),
-	...timeColumns,
-	appId: uuid()
-		.notNull()
-		.references(() => apps.id, { onDelete: "cascade" }),
-	assetType: varchar({ length: 50 }).notNull(),
-	deviceType: varchar({ length: 50 }).notNull(),
-	externalId: varchar({ length: 255 }),
-	fileName: varchar({ length: 255 }),
-	fileSize: integer(),
-	height: integer(),
-	isDirty: boolean().notNull().default(false),
-	language: varchar({ length: 20 }).notNull(),
-	sortOrder: integer().notNull().default(0),
-	source: varchar({ length: 20 }).notNull().default("remote"),
-	syncedAt: timestamp(),
-	url: varchar({ length: 2048 }),
-	width: integer(),
-});
+export const assets = pgTable(
+	"assets",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		assetType: varchar({ length: 50 }).notNull(),
+		deviceType: varchar({ length: 50 }).notNull(),
+		externalId: varchar({ length: 255 }),
+		fileName: varchar({ length: 255 }),
+		fileSize: integer(),
+		height: integer(),
+		isDirty: boolean().notNull().default(false),
+		language: varchar({ length: 20 }).notNull(),
+		sortOrder: integer().notNull().default(0),
+		source: varchar({ length: 20 }).notNull().default("remote"),
+		syncedAt: timestamp(),
+		url: varchar({ length: 2048 }),
+		width: integer(),
+	},
+	(t) => [index().on(t.appId)],
+);
 
-export const reviews = pgTable("reviews", {
-	id: uuid().defaultRandom().primaryKey(),
-	...timeColumns,
-	appId: uuid()
-		.notNull()
-		.references(() => apps.id, { onDelete: "cascade" }),
-	appVersion: varchar({ length: 50 }),
-	authorName: varchar({ length: 255 }),
-	body: text(),
-	device: varchar({ length: 255 }),
-	externalId: varchar({ length: 255 }).notNull(),
-	language: varchar({ length: 20 }),
-	osVersion: varchar({ length: 50 }),
-	rating: integer().notNull(),
-	repliedAt: timestamp(),
-	replyText: text(),
-	reviewDate: timestamp(),
-	storeType: varchar({ length: 50 }).notNull(),
-	syncedAt: timestamp(),
-	territory: varchar({ length: 10 }),
-	title: varchar({ length: 500 }),
-});
+export const reviews = pgTable(
+	"reviews",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		appVersion: varchar({ length: 50 }),
+		authorName: varchar({ length: 255 }),
+		body: text(),
+		device: varchar({ length: 255 }),
+		externalId: varchar({ length: 255 }).notNull(),
+		language: varchar({ length: 20 }),
+		osVersion: varchar({ length: 50 }),
+		rating: integer().notNull(),
+		repliedAt: timestamp(),
+		replyText: text(),
+		reviewDate: timestamp(),
+		storeType: varchar({ length: 50 }).notNull(),
+		syncedAt: timestamp(),
+		territory: varchar({ length: 10 }),
+		title: varchar({ length: 500 }),
+	},
+	(t) => [index().on(t.appId)],
+);
 
 export const appAsoProfiles = pgTable("app_aso_profiles", {
 	id: uuid().defaultRandom().primaryKey(),
@@ -300,6 +361,7 @@ export const versionLocalizations = pgTable(
 			.notNull()
 			.references(() => apps.id, { onDelete: "cascade" }),
 		description: text(),
+		doNotTranslateFields: jsonb().$type<string[]>(),
 		externalId: varchar({ length: 255 }),
 		isDirty: boolean().notNull().default(false),
 		keywords: varchar({ length: 255 }),
@@ -311,12 +373,13 @@ export const versionLocalizations = pgTable(
 		supportUrl: varchar({ length: 1024 }),
 		syncedAt: timestamp(),
 		title: varchar({ length: 255 }),
+		translationInstructions: text(),
 		versionId: uuid()
 			.notNull()
 			.references(() => appVersions.id, { onDelete: "cascade" }),
 		whatsNew: text(),
 	},
-	(t) => [unique().on(t.versionId, t.language, t.source)],
+	(t) => [unique().on(t.versionId, t.language, t.source), index().on(t.appId)],
 );
 
 export const appAiPrompts = pgTable(
@@ -408,7 +471,7 @@ export const appGroupMembers = pgTable(
 			.references(() => appGroups.id, { onDelete: "cascade" }),
 		sortOrder: integer().notNull().default(0),
 	},
-	(t) => [unique().on(t.groupId, t.appId)],
+	(t) => [unique().on(t.groupId, t.appId), index().on(t.appId)],
 );
 
 export const groupAsoProfiles = pgTable("group_aso_profiles", {
@@ -501,7 +564,7 @@ export const inAppPurchases = pgTable(
 		syncedAt: timestamp(),
 		useGroupLocalizations: boolean().notNull().default(true),
 	},
-	(t) => [unique().on(t.appId, t.externalId)],
+	(t) => [unique().on(t.appId, t.externalId), index().on(t.groupId)],
 );
 
 export const purchaseLocalizations = pgTable(
@@ -571,20 +634,24 @@ export const subscriptionGroupReviewInfo = pgTable(
 
 // ── AI Chat ─────────────────────────────────────────────────────────
 
-export const aiChatMessages = pgTable("ai_chat_messages", {
-	id: uuid().defaultRandom().primaryKey(),
-	...timeColumns,
-	appId: uuid()
-		.notNull()
-		.references(() => apps.id, { onDelete: "cascade" }),
-	chatType: varchar({ length: 50 }).notNull(),
-	content: text().notNull(),
-	role: varchar({ length: 20 }).notNull(),
-	sortOrder: integer().notNull().default(0),
-	workspaceId: uuid()
-		.notNull()
-		.references(() => workspaces.id, { onDelete: "cascade" }),
-});
+export const aiChatMessages = pgTable(
+	"ai_chat_messages",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		chatType: varchar({ length: 50 }).notNull(),
+		content: text().notNull(),
+		role: varchar({ length: 20 }).notNull(),
+		sortOrder: integer().notNull().default(0),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.appId), index().on(t.workspaceId)],
+);
 
 export const purchaseReviewInfo = pgTable("purchase_review_info", {
 	id: uuid().defaultRandom().primaryKey(),
@@ -629,4 +696,5 @@ export const schema = {
 	versionLocalizations,
 	workspaceMembers,
 	workspaces,
+	workspaceVault,
 };
