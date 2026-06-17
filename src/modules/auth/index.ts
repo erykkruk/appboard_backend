@@ -5,11 +5,26 @@ import { auth } from "@/config/auth";
 import { db } from "@/utils/db";
 import { workspaceMembers } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
+import { ApiKeysService } from "./api-keys.service";
 
 const PUBLIC_PREFIXES = ["/api/auth", "/api/system/health"];
-const isDev = config.NODE_ENV !== "production";
+
+// API key management lives under /api/auth/* but is NOT public — it must run
+// through the guard so it can require a real session and reject bearer auth.
+const NON_PUBLIC_AUTH_PATHS = ["/api/auth/api-keys"];
+
+const BEARER_PREFIX = "Bearer ";
+
+// X-Test-User-Id auth bypass. Active under `bun test` (NODE_ENV=test, set by the
+// Bun runner) or when ENABLE_TEST_AUTH=true is explicitly set in a non-production
+// env (e.g. to drive local e2e scripts). NEVER honored in production.
+const TEST_AUTH_ENABLED =
+	config.NODE_ENV !== "production" &&
+	(config.NODE_ENV === "test" || config.ENABLE_TEST_AUTH === "true");
 
 function isPublicPath(path: string): boolean {
+	if (NON_PUBLIC_AUTH_PATHS.some((p) => path === p || path.startsWith(`${p}/`)))
+		return false;
 	return PUBLIC_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
@@ -23,9 +38,8 @@ export const authGuard = new Elysia({ name: "auth-guard" }).derive(
 			return { userId: null, workspaceId: null };
 		}
 
-		// Test bypass: allow X-Test-User-Id header in dev/test mode
 		const testUserId = request.headers.get("x-test-user-id");
-		if (isDev && testUserId) {
+		if (TEST_AUTH_ENABLED && testUserId) {
 			const [membership] = await db
 				.select()
 				.from(workspaceMembers)
@@ -42,6 +56,19 @@ export const authGuard = new Elysia({ name: "auth-guard" }).derive(
 				userId: testUserId,
 				workspaceId: membership.workspaceId,
 			};
+		}
+
+		// Machine clients (MCP server, CLI) authenticate with a bearer API key.
+		// A valid, non-revoked key resolves to its workspace; userId stays null
+		// so downstream endpoints scope by workspaceId alone.
+		const authHeader = request.headers.get("authorization");
+		if (authHeader?.startsWith(BEARER_PREFIX)) {
+			const token = authHeader.slice(BEARER_PREFIX.length).trim();
+			const apiKey = token ? await ApiKeysService.resolveToken(token) : null;
+			if (!apiKey) {
+				buildError("unauthorized", { info: "Invalid API key" });
+			}
+			return { userId: null, workspaceId: apiKey.workspaceId };
 		}
 
 		const session = await auth.api.getSession({

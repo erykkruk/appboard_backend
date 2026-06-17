@@ -99,6 +99,26 @@ export const workspaceMembers = pgTable(
 	(t) => [unique().on(t.workspaceId, t.userId), index().on(t.userId)],
 );
 
+// Workspace-scoped API keys for machine clients (MCP server, CLI). Only the
+// sha-256 hash of the token is stored — never the plaintext. `prefix` is a
+// short, non-secret display label (e.g. `ab_1a2b3c`) shown in the UI.
+export const apiKeys = pgTable(
+	"api_keys",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		keyHash: varchar({ length: 255 }).notNull().unique(),
+		lastUsedAt: timestamp(),
+		name: varchar({ length: 255 }).notNull(),
+		prefix: varchar({ length: 20 }).notNull(),
+		revokedAt: timestamp(),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.workspaceId)],
+);
+
 // Per-workspace encryption vault. Holds the password-wrapped Data Encryption
 // Key (DEK). The DEK itself is NEVER stored — only the ciphertext wrapped by a
 // key derived (client-side) from the user's vault passphrase. Store credentials
@@ -668,6 +688,7 @@ export const purchaseReviewInfo = pgTable("purchase_review_info", {
 export const schema = {
 	account,
 	aiChatMessages,
+	apiKeys,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,

@@ -2,6 +2,7 @@ import { relations } from "drizzle-orm";
 import {
 	account,
 	aiChatMessages,
+	apiKeys,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
@@ -57,10 +58,18 @@ export const accountRelations = relations(account, ({ one }) => ({
 
 export const workspacesRelations = relations(workspaces, ({ many }) => ({
 	aiChatMessages: many(aiChatMessages),
+	apiKeys: many(apiKeys),
 	appGroups: many(appGroups),
 	members: many(workspaceMembers),
 	settings: many(settings),
 	stores: many(stores),
+}));
+
+export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
+	workspace: one(workspaces, {
+		fields: [apiKeys.workspaceId],
+		references: [workspaces.id],
+	}),
 }));
 
 export const workspaceMembersRelations = relations(

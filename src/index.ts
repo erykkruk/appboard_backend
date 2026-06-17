@@ -16,6 +16,7 @@ import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
 import { authGuard } from "@/modules/auth";
+import { apiKeysController } from "@/modules/auth/api-keys.controller";
 import { featuresController } from "@/modules/features";
 import { featureGuard } from "@/modules/features/features.guard";
 import { groupAsoProfileController } from "@/modules/group-aso-profile";
@@ -31,6 +32,7 @@ import { reviewsController } from "@/modules/reviews";
 import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
 import { bootstrap, systemController } from "@/modules/system";
+import { vaultController } from "@/modules/vault";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import { createLogger } from "@/utils/logger";
 
@@ -44,7 +46,13 @@ const app = new Elysia()
 			origin: config.ALLOWED_ORIGINS?.split(",") ?? [],
 		}),
 	)
-	.use(openapi())
+	// Expose the OpenAPI schema/docs in dev only — keep the API surface
+	// private in production.
+	.use(
+		config.NODE_ENV === "production"
+			? new Elysia({ name: "openapi-disabled" })
+			: openapi(),
+	)
 	.use(errorHandler)
 	.all("/api/auth/*", ({ request }) => auth.handler(request))
 	.use(authGuard)
@@ -52,6 +60,8 @@ const app = new Elysia()
 		app
 			.use(featuresController)
 			.use(featureGuard)
+			.use(apiKeysController)
+			.use(vaultController)
 			.use(systemController)
 			.use(storesController)
 			.use(reviewsController)
