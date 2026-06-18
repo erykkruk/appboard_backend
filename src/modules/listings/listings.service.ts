@@ -10,6 +10,14 @@ import { createLogger } from "@/utils/logger";
 
 const log = createLogger("listings-service");
 
+// Draft listing update payload: translatable/string columns plus the two
+// localization-control fields (DNT keys array + free-text instructions).
+type UpdateDraftData = {
+	doNotTranslateFields?: string[];
+	translationInstructions?: string;
+	[column: string]: string | string[] | undefined;
+};
+
 const LISTING_FIELDS = [
 	"fullDesc",
 	"keywords",
@@ -314,7 +322,7 @@ export class ListingsService {
 	static async updateDraft(
 		appId: string,
 		language: string,
-		data: Record<string, string | undefined>,
+		data: UpdateDraftData,
 	) {
 		const existing = await db
 			.select()
@@ -356,6 +364,7 @@ export class ListingsService {
 		const baseData =
 			remote.length > 0
 				? {
+						doNotTranslateFields: remote[0].doNotTranslateFields,
 						fullDesc: remote[0].fullDesc,
 						keywords: remote[0].keywords,
 						marketingUrl: remote[0].marketingUrl,
@@ -364,6 +373,7 @@ export class ListingsService {
 						shortDesc: remote[0].shortDesc,
 						supportUrl: remote[0].supportUrl,
 						title: remote[0].title,
+						translationInstructions: remote[0].translationInstructions,
 						videoUrl: remote[0].videoUrl,
 						whatsNew: remote[0].whatsNew,
 					}
@@ -782,30 +792,64 @@ export class ListingsService {
 		const results: Record<string, { model: string; fields: string[] }> = {};
 
 		for (const targetLang of targetLanguages) {
-			const { model, translations } = await AIService.translateLocalization(
-				workspaceId,
-				appId,
-				app.name,
-				app.platform,
-				aiFields,
-				sourceLanguage,
-				targetLang,
-			);
+			// Per-target localization settings: which fields must not be translated
+			// and any free-text instructions to steer the AI translation.
+			const { doNotTranslateFields, translationInstructions } =
+				await ListingsService.getTargetLocalizationSettings(appId, targetLang);
 
-			// Convert AI field names back to DB columns and save
+			// Exclude "do not translate" fields from the AI request — they are
+			// copied verbatim from the source instead.
+			const aiFieldsToTranslate: Record<string, string> = {};
+			for (const [aiField, value] of Object.entries(aiFields)) {
+				if (!doNotTranslateFields.has(aiField)) {
+					aiFieldsToTranslate[aiField] = value;
+				}
+			}
+
 			const dbData: Record<string, string> = {};
-			for (const [aiField, value] of Object.entries(translations)) {
+
+			if (Object.keys(aiFieldsToTranslate).length > 0) {
+				const { model, translations } = await AIService.translateLocalization(
+					workspaceId,
+					appId,
+					app.name,
+					app.platform,
+					aiFieldsToTranslate,
+					sourceLanguage,
+					targetLang,
+					translationInstructions ?? undefined,
+				);
+
+				// Convert AI field names back to DB columns and save
+				for (const [aiField, value] of Object.entries(translations)) {
+					const dbField = AI_TO_DB_FIELD[aiField];
+					if (dbField && value) {
+						dbData[dbField] = value;
+					}
+				}
+
+				if (Object.keys(dbData).length > 0) {
+					results[targetLang] = {
+						fields: Object.keys(translations),
+						model,
+					};
+				}
+			}
+
+			// Copy "do not translate" fields through verbatim from the source.
+			for (const aiField of doNotTranslateFields) {
+				const sourceValue = aiFields[aiField];
 				const dbField = AI_TO_DB_FIELD[aiField];
-				if (dbField && value) {
-					dbData[dbField] = value;
+				if (dbField && sourceValue) {
+					dbData[dbField] = sourceValue;
 				}
 			}
 
 			if (Object.keys(dbData).length > 0) {
 				await ListingsService.updateDraft(appId, targetLang, dbData);
-				results[targetLang] = {
-					fields: Object.keys(translations),
-					model,
+				results[targetLang] ??= {
+					fields: Object.keys(dbData).map((f) => DB_TO_AI_FIELD[f] ?? f),
+					model: "",
 				};
 			}
 		}
@@ -893,6 +937,44 @@ export class ListingsService {
 		);
 
 		return { results, translated: Object.keys(results).length };
+	}
+
+	/**
+	 * Loads the target language's "do not translate" field keys and free-text
+	 * translation instructions. DNT keys are normalized to AI field names so they
+	 * match the keys used by AIService.translateLocalization. Prefers the draft
+	 * listing, falls back to remote. Returns empty defaults when no row exists.
+	 */
+	private static async getTargetLocalizationSettings(
+		appId: string,
+		language: string,
+	): Promise<{
+		doNotTranslateFields: Set<string>;
+		translationInstructions: string | null;
+	}> {
+		const rows = await db
+			.select({
+				doNotTranslateFields: listings.doNotTranslateFields,
+				source: listings.source,
+				translationInstructions: listings.translationInstructions,
+			})
+			.from(listings)
+			.where(and(eq(listings.appId, appId), eq(listings.language, language)));
+
+		const draft = rows.find((r) => r.source === "draft");
+		const remote = rows.find((r) => r.source === "remote");
+		const target = draft ?? remote;
+
+		const normalized = new Set<string>();
+		for (const key of target?.doNotTranslateFields ?? []) {
+			// Accept either DB column names or AI field names; store AI field names.
+			normalized.add(DB_TO_AI_FIELD[key] ?? key);
+		}
+
+		return {
+			doNotTranslateFields: normalized,
+			translationInstructions: target?.translationInstructions ?? null,
+		};
 	}
 
 	private static async getSourceListing(appId: string, language: string) {

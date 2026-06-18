@@ -1,5 +1,6 @@
 import {
 	boolean,
+	index,
 	integer,
 	jsonb,
 	pgTable,
@@ -9,6 +10,7 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
 
 const timeColumns = {
 	createdAt: timestamp().notNull().defaultNow(),
@@ -90,6 +92,26 @@ export const workspaceMembers = pgTable(
 	(t) => [unique().on(t.workspaceId, t.userId)],
 );
 
+// Workspace-scoped API keys for machine clients (MCP server, CLI). Only the
+// sha-256 hash of the token is stored — never the plaintext. `prefix` is a
+// short, non-secret display label (e.g. `ab_1a2b3c`) shown in the UI.
+export const apiKeys = pgTable(
+	"api_keys",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		keyHash: varchar({ length: 255 }).notNull().unique(),
+		lastUsedAt: timestamp(),
+		name: varchar({ length: 255 }).notNull(),
+		prefix: varchar({ length: 20 }).notNull(),
+		revokedAt: timestamp(),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.workspaceId)],
+);
+
 // ── Domain tables ───────────────────────────────────────────────────
 
 export const stores = pgTable("stores", {
@@ -146,6 +168,7 @@ export const listings = pgTable(
 		appId: uuid()
 			.notNull()
 			.references(() => apps.id, { onDelete: "cascade" }),
+		doNotTranslateFields: jsonb().$type<string[]>(),
 		fullDesc: text(),
 		isDirty: boolean().notNull().default(false),
 		keywords: varchar({ length: 255 }),
@@ -158,6 +181,7 @@ export const listings = pgTable(
 		supportUrl: varchar({ length: 1024 }),
 		syncedAt: timestamp(),
 		title: varchar({ length: 255 }),
+		translationInstructions: text(),
 		videoUrl: varchar({ length: 1024 }),
 		whatsNew: text(),
 	},
@@ -198,6 +222,24 @@ export const assets = pgTable("assets", {
 	url: varchar({ length: 2048 }),
 	width: integer(),
 });
+
+export const screenshotScenes = pgTable(
+	"screenshot_scenes",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		assetId: uuid().references(() => assets.id, { onDelete: "set null" }),
+		displayType: varchar({ length: 50 }).notNull(),
+		language: varchar({ length: 20 }).notNull(),
+		name: varchar({ length: 255 }).notNull(),
+		scene: jsonb().$type<SceneData>().notNull(),
+		sortOrder: integer().notNull().default(0),
+	},
+	(t) => [index().on(t.appId)],
+);
 
 export const reviews = pgTable("reviews", {
 	id: uuid().defaultRandom().primaryKey(),
@@ -300,6 +342,7 @@ export const versionLocalizations = pgTable(
 			.notNull()
 			.references(() => apps.id, { onDelete: "cascade" }),
 		description: text(),
+		doNotTranslateFields: jsonb().$type<string[]>(),
 		externalId: varchar({ length: 255 }),
 		isDirty: boolean().notNull().default(false),
 		keywords: varchar({ length: 255 }),
@@ -311,6 +354,7 @@ export const versionLocalizations = pgTable(
 		supportUrl: varchar({ length: 1024 }),
 		syncedAt: timestamp(),
 		title: varchar({ length: 255 }),
+		translationInstructions: text(),
 		versionId: uuid()
 			.notNull()
 			.references(() => appVersions.id, { onDelete: "cascade" }),
@@ -601,6 +645,7 @@ export const purchaseReviewInfo = pgTable("purchase_review_info", {
 export const schema = {
 	account,
 	aiChatMessages,
+	apiKeys,
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
@@ -618,6 +663,7 @@ export const schema = {
 	purchasePrices,
 	purchaseReviewInfo,
 	reviews,
+	screenshotScenes,
 	session,
 	settings,
 	stores,

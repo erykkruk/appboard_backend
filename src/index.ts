@@ -16,6 +16,7 @@ import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
 import { authGuard } from "@/modules/auth";
+import { apiKeysController } from "@/modules/auth/api-keys.controller";
 import { featuresController } from "@/modules/features";
 import { featureGuard } from "@/modules/features/features.guard";
 import { groupAsoProfileController } from "@/modules/group-aso-profile";
@@ -28,6 +29,7 @@ import {
 import { publishingController } from "@/modules/publishing";
 import { purchasesController } from "@/modules/purchases";
 import { reviewsController } from "@/modules/reviews";
+import { screenshotScenesController } from "@/modules/screenshot-scenes";
 import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
 import { bootstrap, systemController } from "@/modules/system";
@@ -52,6 +54,7 @@ const app = new Elysia()
 		app
 			.use(featuresController)
 			.use(featureGuard)
+			.use(apiKeysController)
 			.use(systemController)
 			.use(storesController)
 			.use(reviewsController)
@@ -67,6 +70,7 @@ const app = new Elysia()
 			.use(aiChatHistoryController)
 			.use(appAiPromptsController)
 			.use(assetsController)
+			.use(screenshotScenesController)
 			.use(listingsController)
 			.use(appGroupsController)
 			.use(groupAsoProfileController)

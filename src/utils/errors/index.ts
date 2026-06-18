@@ -6,6 +6,10 @@ export const errors = {
 	badRequest: { code: "BAD_REQUEST", status: 400 },
 	encryptionFailed: { code: "ENCRYPTION_FAILED", status: 500 },
 	forbidden: { code: "FORBIDDEN", status: 403 },
+	invalidScreenshotDimensions: {
+		code: "INVALID_SCREENSHOT_DIMENSIONS",
+		status: 422,
+	},
 	notFound: { code: "NOT_FOUND", status: 404 },
 	rateLimitExceeded: { code: "RATE_LIMIT_EXCEEDED", status: 429 },
 	somethingWentWrong: { code: "SOMETHING_WENT_WRONG", status: 500 },

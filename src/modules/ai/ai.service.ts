@@ -1014,6 +1014,7 @@ Generate the ${isAndroid ? "data safety" : "privacy declaration"} JSON array.`;
 		fields: Record<string, string>,
 		sourceLanguage: string,
 		targetLanguage: string,
+		instructions?: string,
 	): Promise<{ model: string; translations: Record<string, string> }> {
 		const fieldEntries = Object.entries(fields).filter(
 			([, v]) => v.trim().length > 0,
@@ -1100,6 +1101,10 @@ ${asoContext}`;
 		}
 		if (asoProfile?.wordsToAvoid?.length) {
 			systemPrompt += `\nWords/phrases to AVOID: ${asoProfile.wordsToAvoid.join(", ")}`;
+		}
+
+		if (instructions?.trim()) {
+			systemPrompt += `\n\nAdditional translation instructions from the user (follow these STRICTLY, they override defaults where they conflict):\n${instructions.trim()}`;
 		}
 
 		systemPrompt +=

@@ -129,7 +129,7 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 			const draft = await ListingsService.updateDraft(
 				params.appId,
 				params.language,
-				body as Record<string, string | undefined>,
+				body,
 			);
 			return { listing: draft };
 		},

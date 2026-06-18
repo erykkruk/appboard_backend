@@ -109,6 +109,71 @@ const REQUIRED_SIZES: Record<string, [number, number][]> = {
 	],
 };
 
+// Human-friendly labels for display types, used in dimension error suggestions
+const DISPLAY_TYPE_NAMES: Record<string, string> = {
+	APP_IPAD_PRO_129: 'iPad Pro 12.9"',
+	APP_IPHONE_35: 'iPhone 3.5"',
+	APP_IPHONE_40: 'iPhone 4.0"',
+	APP_IPHONE_47: 'iPhone 4.7"',
+	APP_IPHONE_55: 'iPhone 5.5"',
+	APP_IPHONE_58: 'iPhone 5.8"',
+	APP_IPHONE_61: 'iPhone 6.1"',
+	APP_IPHONE_65: 'iPhone 6.5"',
+	APP_IPHONE_67: 'iPhone 6.7"',
+	phone: "Android phone",
+	sevenInch: 'Android 7" tablet',
+	tenInch: 'Android 10" tablet',
+};
+
+interface DimensionValidation {
+	displayType: string;
+	displayTypeName: string;
+	matchedSize: [number, number] | null;
+	providedDimensions: [number, number];
+	supportedDimensions: [number, number][];
+	suggestion: string;
+	valid: boolean;
+}
+
+/**
+ * Validate provided width×height against the accepted preset(s) for a display
+ * type. Both portrait and landscape orientations are accepted because
+ * REQUIRED_SIZES lists both. Returns the matched preset when the dimensions are
+ * an exact match, otherwise the full list of supported sizes plus an actionable
+ * suggestion string. Pure — performs no I/O. Throws for unknown display types.
+ */
+function validateScreenshotDimensions(
+	displayType: string,
+	width: number,
+	height: number,
+): DimensionValidation {
+	const supportedDimensions = REQUIRED_SIZES[displayType];
+	if (!supportedDimensions?.length) {
+		throw new Error(`Unknown display type: ${displayType}`);
+	}
+
+	const displayTypeName = DISPLAY_TYPE_NAMES[displayType] ?? displayType;
+	const matchedSize =
+		supportedDimensions.find(([w, h]) => w === width && h === height) ?? null;
+
+	const supportedList = supportedDimensions
+		.map(([w, h]) => `${w}x${h}`)
+		.join(" or ");
+	const suggestion = matchedSize
+		? `${displayTypeName} accepts ${width}x${height}.`
+		: `${displayTypeName} expects ${supportedList}; you provided ${width}x${height}.`;
+
+	return {
+		displayType,
+		displayTypeName,
+		matchedSize,
+		providedDimensions: [width, height],
+		suggestion,
+		supportedDimensions,
+		valid: matchedSize !== null,
+	};
+}
+
 interface CropParams {
 	x: number;
 	y: number;
@@ -249,6 +314,22 @@ const LISTING_FIELDS = [
 	"title",
 	"whatsNew",
 ] as const;
+
+// Per-item outcome of publishAll. `ref` is the language (listings /
+// localizations) or the asset filename/id; `error` is set only when failed.
+export interface PublishReportItem {
+	error?: string;
+	kind: "asset" | "listing" | "localization";
+	ref: string;
+	status: "failed" | "published";
+}
+
+export interface PublishAllResult {
+	assets: { published: number };
+	listings: { published: number };
+	report: PublishReportItem[];
+	versionLocalizations: { errors?: string[]; published: number };
+}
 
 export class PublishingService {
 	static async getOverview(appId: string) {
@@ -1881,10 +1962,19 @@ export class PublishingService {
 			// Google Play: process image and upload via AssetsService
 			const rawBuffer = Buffer.from(await file.arrayBuffer());
 
+			const gpMeta = await sharp(rawBuffer).metadata();
+			PublishingService.assertValidDimensions(
+				displayType,
+				gpMeta.width ?? 0,
+				gpMeta.height ?? 0,
+				cropParams,
+			);
+
 			let processed: { buffer: Buffer; height: number; width: number };
 			try {
 				processed = await processScreenshot(rawBuffer, displayType, cropParams);
 			} catch (err) {
+				if (err && typeof err === "object" && "response" in err) throw err;
 				log.error(
 					{ appId, displayType, err, fileName: file.name },
 					"Failed to process screenshot image",
@@ -1971,11 +2061,20 @@ export class PublishingService {
 
 		const rawBuffer = Buffer.from(await file.arrayBuffer());
 
+		const ascMeta = await sharp(rawBuffer).metadata();
+		PublishingService.assertValidDimensions(
+			displayType,
+			ascMeta.width ?? 0,
+			ascMeta.height ?? 0,
+			cropParams,
+		);
+
 		// Process image: crop to correct aspect ratio, resize, flatten alpha
 		let processed: { buffer: Buffer; height: number; width: number };
 		try {
 			processed = await processScreenshot(rawBuffer, displayType, cropParams);
 		} catch (err) {
+			if (err && typeof err === "object" && "response" in err) throw err;
 			log.error(
 				{ appId, displayType, err, fileName: file.name },
 				"Failed to process screenshot image",
@@ -2031,6 +2130,70 @@ export class PublishingService {
 				info: detail,
 			});
 		}
+	}
+
+	/**
+	 * Validate an uploaded screenshot's dimensions against the accepted preset(s)
+	 * for a display type WITHOUT uploading. Returns a plain result (never throws
+	 * on wrong dimensions) so callers can surface friendly UI feedback. Unknown
+	 * display types still raise a typed badRequest.
+	 */
+	static async validateScreenshotFile(displayType: string, file: File) {
+		if (!REQUIRED_SIZES[displayType]?.length) {
+			buildError("badRequest", {
+				info: `Unknown display type: ${displayType}`,
+			});
+		}
+
+		const rawBuffer = Buffer.from(await file.arrayBuffer());
+		const meta = await sharp(rawBuffer).metadata();
+		const width = meta.width ?? 0;
+		const height = meta.height ?? 0;
+
+		if (width === 0 || height === 0) {
+			buildError("badRequest", { info: "Could not read image dimensions" });
+		}
+
+		const result = validateScreenshotDimensions(displayType, width, height);
+
+		return {
+			displayType: result.displayType,
+			displayTypeName: result.displayTypeName,
+			providedDimensions: result.providedDimensions,
+			suggestion: result.suggestion,
+			supportedDimensions: result.supportedDimensions,
+			valid: result.valid,
+		};
+	}
+
+	/**
+	 * Throwing guard used in the upload paths. When the user did NOT supply an
+	 * explicit crop region, a screenshot whose dimensions match none of the
+	 * accepted presets is genuinely wrong (auto center-cropping would silently
+	 * distort the listing), so we raise the typed dimension error with actionable
+	 * data instead of letting a raw sharp/store error bubble. When cropParams are
+	 * present the user is intentionally adjusting, so we defer to the existing
+	 * crop/resize pipeline.
+	 */
+	private static assertValidDimensions(
+		displayType: string,
+		width: number,
+		height: number,
+		cropParams?: CropParams,
+	) {
+		if (cropParams) return;
+
+		const result = validateScreenshotDimensions(displayType, width, height);
+		if (result.valid) return;
+
+		buildError("invalidScreenshotDimensions", {
+			displayType: result.displayType,
+			displayTypeName: result.displayTypeName,
+			info: result.suggestion,
+			providedDimensions: result.providedDimensions,
+			suggestion: result.suggestion,
+			supportedDimensions: result.supportedDimensions,
+		});
 	}
 
 	static async previewScreenshot(
@@ -2455,14 +2618,114 @@ export class PublishingService {
 		return { screenshotIds, uploaded: parts };
 	}
 
+	/**
+	 * Copy the source language's TEXT metadata into the target language draft.
+	 * Straight value copy (no translation): listings title/shortDesc/fullDesc/
+	 * keywords/promoText/whatsNew, plus versionLocalization fields for App Store.
+	 * Uses the draft-update paths so isDirty is set and history is respected.
+	 * Best-effort — failures are logged, never thrown.
+	 */
+	private static async copyLocalizationText(
+		appId: string,
+		isAppStore: boolean,
+		versionId: string,
+		sourceLanguage: string,
+		targetLanguage: string,
+	): Promise<void> {
+		// Listings text metadata (both stores keep listing text here).
+		try {
+			const { remote: sourceRemote, draft: sourceDraft } =
+				await ListingsService.getByLanguage(appId, sourceLanguage);
+			const source = sourceDraft ?? sourceRemote;
+			if (source) {
+				await ListingsService.updateDraft(appId, targetLanguage, {
+					fullDesc: source.fullDesc ?? undefined,
+					keywords: source.keywords ?? undefined,
+					promoText: source.promoText ?? undefined,
+					shortDesc: source.shortDesc ?? undefined,
+					title: source.title ?? undefined,
+					whatsNew: source.whatsNew ?? undefined,
+				});
+			}
+		} catch (err) {
+			log.warn(
+				{ appId, err, sourceLanguage, targetLanguage },
+				"Failed to copy listing text between languages",
+			);
+		}
+
+		if (!isAppStore) return;
+
+		// App Store version localizations: subtitle/description/keywords/
+		// promotionalText/whatsNew live on versionLocalizations.
+		try {
+			const [dbVersion] = await db
+				.select()
+				.from(appVersions)
+				.where(
+					and(
+						eq(appVersions.appId, appId),
+						eq(appVersions.externalId, versionId),
+					),
+				)
+				.limit(1);
+
+			if (!dbVersion) return;
+
+			const versionLocs = await db
+				.select()
+				.from(versionLocalizations)
+				.where(eq(versionLocalizations.versionId, dbVersion.id));
+
+			const pick = (language: string, source: "draft" | "remote") =>
+				versionLocs.find((l) => l.language === language && l.source === source);
+
+			const sourceLoc =
+				pick(sourceLanguage, "draft") ?? pick(sourceLanguage, "remote");
+			const targetRemote = pick(targetLanguage, "remote");
+
+			if (sourceLoc && targetRemote?.externalId) {
+				await PublishingService.updateVersionLocalization(
+					appId,
+					versionId,
+					targetRemote.externalId,
+					{
+						description: sourceLoc.description ?? undefined,
+						keywords: sourceLoc.keywords ?? undefined,
+						promotionalText: sourceLoc.promotionalText ?? undefined,
+						subtitle: sourceLoc.subtitle ?? undefined,
+						title: sourceLoc.title ?? undefined,
+						whatsNew: sourceLoc.whatsNew ?? undefined,
+					},
+				);
+			}
+		} catch (err) {
+			log.warn(
+				{ appId, err, sourceLanguage, targetLanguage },
+				"Failed to copy version localization text between languages",
+			);
+		}
+	}
+
 	static async copyScreenshots(
 		appId: string,
 		versionId: string,
 		sourceLanguage: string,
 		targetLanguage: string,
 		displayType?: string,
+		copyLocalizations = false,
 	) {
 		const app = await PublishingService.getAppWithStore(appId);
+
+		if (copyLocalizations) {
+			await PublishingService.copyLocalizationText(
+				appId,
+				app.store.type === "app_store",
+				versionId,
+				sourceLanguage,
+				targetLanguage,
+			);
+		}
 
 		if (app.store.type !== "app_store") {
 			// Google Play: download source screenshots from URLs, re-upload to target language
@@ -2939,29 +3202,78 @@ export class PublishingService {
 	static async publishAll(
 		appId: string,
 		options?: { submitForReview?: boolean },
-	) {
+	): Promise<PublishAllResult> {
 		const app = await PublishingService.getAppWithStore(appId);
 
-		let listingResult: { published: number };
+		// Granular, per-item report. One failing item never aborts the rest:
+		// every publish unit is wrapped in its own try/catch and recorded here.
+		const report: PublishReportItem[] = [];
+
+		// --- Listings (per dirty draft language) ---
+		// Capture the languages we are about to publish so the report can record
+		// each one individually even though ListingsService.publish is batched.
+		const dirtyListingLangs = (
+			await db
+				.select({ language: listings.language })
+				.from(listings)
+				.where(
+					and(
+						eq(listings.appId, appId),
+						eq(listings.isDirty, true),
+						eq(listings.source, "draft"),
+					),
+				)
+		).map((row) => row.language);
+
+		let listingResult: { published: number } = { published: 0 };
 		try {
 			listingResult = await ListingsService.publish(appId);
+			for (const language of dirtyListingLangs) {
+				report.push({ kind: "listing", ref: language, status: "published" });
+			}
 		} catch (err) {
-			log.error(
-				{ appId, err: (err as Error).message ?? err },
-				"Failed to publish listings",
-			);
-			throw err;
+			const detail = (err as Error)?.message ?? String(err);
+			log.error({ appId, err: detail }, "Failed to publish listings");
+			for (const language of dirtyListingLangs) {
+				report.push({
+					error: detail,
+					kind: "listing",
+					ref: language,
+					status: "failed",
+				});
+			}
 		}
 
-		let assetResult: { published: number };
+		// --- Assets (per dirty asset) ---
+		const dirtyAssets = await db
+			.select({
+				fileName: assets.fileName,
+				id: assets.id,
+			})
+			.from(assets)
+			.where(and(eq(assets.appId, appId), eq(assets.isDirty, true)));
+
+		let assetResult: { published: number } = { published: 0 };
 		try {
 			assetResult = await AssetsService.publishAssets(appId);
+			for (const asset of dirtyAssets) {
+				report.push({
+					kind: "asset",
+					ref: asset.fileName ?? asset.id,
+					status: "published",
+				});
+			}
 		} catch (err) {
-			log.error(
-				{ appId, err: (err as Error).message ?? err },
-				"Failed to publish assets",
-			);
-			throw err;
+			const detail = (err as Error)?.message ?? String(err);
+			log.error({ appId, err: detail }, "Failed to publish assets");
+			for (const asset of dirtyAssets) {
+				report.push({
+					error: detail,
+					kind: "asset",
+					ref: asset.fileName ?? asset.id,
+					status: "failed",
+				});
+			}
 		}
 
 		// Publish version localizations for App Store apps with editable versions
@@ -2980,23 +3292,69 @@ export class PublishingService {
 				);
 
 			for (const version of editableVersions) {
+				// Languages this version is about to push, so each can be reported.
+				const dirtyLocLangs = (
+					await db
+						.select({ language: versionLocalizations.language })
+						.from(versionLocalizations)
+						.where(
+							and(
+								eq(versionLocalizations.versionId, version.id),
+								eq(versionLocalizations.source, "draft"),
+								eq(versionLocalizations.isDirty, true),
+							),
+						)
+				).map((row) => row.language);
+
 				try {
 					const result = await PublishingService.publishVersionLocalizations(
 						appId,
 						version.externalId,
 					);
 					versionLocResult.published += result.published;
-					if (result.errors?.length) {
+					const resultErrors: string[] =
+						"errors" in result && result.errors ? result.errors : [];
+					if (resultErrors.length) {
 						versionLocResult.errors = [
 							...(versionLocResult.errors ?? []),
-							...result.errors,
+							...resultErrors,
 						];
 					}
+
+					// Map per-language outcome: a language is failed when its error
+					// string is present, otherwise it published successfully.
+					const errorByLang = new Map<string, string>();
+					for (const e of resultErrors) {
+						const [lang] = e.split(":");
+						if (lang) errorByLang.set(lang.trim(), e);
+					}
+					for (const language of dirtyLocLangs) {
+						const failure = errorByLang.get(language);
+						report.push(
+							failure
+								? {
+										error: failure,
+										kind: "localization",
+										ref: language,
+										status: "failed",
+									}
+								: { kind: "localization", ref: language, status: "published" },
+						);
+					}
 				} catch (err) {
+					const detail = (err as Error)?.message ?? String(err);
 					log.error(
-						{ appId, err: (err as Error).message ?? err },
+						{ appId, err: detail },
 						"Failed to publish version localizations",
 					);
+					for (const language of dirtyLocLangs) {
+						report.push({
+							error: detail,
+							kind: "localization",
+							ref: language,
+							status: "failed",
+						});
+					}
 				}
 			}
 		}
@@ -3010,6 +3368,7 @@ export class PublishingService {
 			{
 				appId,
 				assetsPublished: assetResult.published,
+				failed: report.filter((r) => r.status === "failed").length,
 				listingsPublished: listingResult.published,
 				versionLocalizationsPublished: versionLocResult.published,
 			},
@@ -3019,6 +3378,7 @@ export class PublishingService {
 		return {
 			assets: assetResult,
 			listings: listingResult,
+			report,
 			versionLocalizations: versionLocResult,
 		};
 	}

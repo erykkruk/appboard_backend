@@ -1,4 +1,9 @@
-import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
+import {
+	createCipheriv,
+	createDecipheriv,
+	createHash,
+	randomBytes,
+} from "node:crypto";
 import config from "@/config";
 
 const ALGORITHM = "aes-256-gcm";
@@ -25,4 +30,12 @@ export function decrypt(ciphertext: string): string {
 	const decipher = createDecipheriv(ALGORITHM, key, iv);
 	decipher.setAuthTag(authTag);
 	return decipher.update(encrypted) + decipher.final("utf8");
+}
+
+/**
+ * One-way sha-256 hex digest. Used to fingerprint API key tokens so only the
+ * hash is persisted — the plaintext token is shown to the user exactly once.
+ */
+export function sha256Hex(value: string): string {
+	return createHash("sha256").update(value).digest("hex");
 }

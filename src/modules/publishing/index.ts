@@ -350,6 +350,28 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.post(
+		"/:appId/publishing/screenshots/validate",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PublishingService.validateScreenshotFile(
+				body.displayType,
+				body.file,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.String({ maxLength: 100, minLength: 1 }),
+				file: screenshotFile,
+			}),
+			detail: {
+				description:
+					"Validate a screenshot's dimensions against the accepted preset(s) for a display type without uploading",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.post(
 		"/:appId/publishing/screenshots/preview",
 		async ({ body, params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
@@ -520,10 +542,12 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				body.sourceLanguage,
 				body.targetLanguage,
 				body.displayType,
+				body.copyLocalizations,
 			);
 		},
 		{
 			body: t.Object({
+				copyLocalizations: t.Optional(t.Boolean()),
 				displayType: t.Optional(t.String({ maxLength: 100, minLength: 1 })),
 				sourceLanguage: t.String({ maxLength: 20, minLength: 1 }),
 				targetLanguage: t.String({ maxLength: 20, minLength: 1 }),
@@ -531,7 +555,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			}),
 			detail: {
 				description:
-					"Copy screenshots from one language to another within a version",
+					"Copy screenshots from one language to another within a version; optionally copy text localizations too",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,

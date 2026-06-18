@@ -86,6 +86,7 @@ export const aiController = new Elysia({ prefix: "/ai" })
 				body.fields,
 				body.sourceLanguage,
 				body.targetLanguage,
+				body.instructions,
 			);
 		},
 		{
