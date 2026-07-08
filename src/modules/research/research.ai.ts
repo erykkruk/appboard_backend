@@ -1,5 +1,6 @@
 import { type } from "arktype";
 import config from "@/config";
+import { extractOpenRouterMessage } from "@/modules/ai/ai.service";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
@@ -190,6 +191,11 @@ async function callModel(
 		if (response.status === 429) {
 			buildError("badRequest", {
 				info: "OpenRouter API: rate limit exceeded. Please wait a moment and try again.",
+			});
+		}
+		if (response.status === 400) {
+			buildError("badRequest", {
+				info: `OpenRouter API: ${extractOpenRouterMessage(errorBody)}. Check the model in Settings.`,
 			});
 		}
 		buildError("storeApiError", {

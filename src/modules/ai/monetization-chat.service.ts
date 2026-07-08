@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import config from "@/config";
 import { ASC_TERRITORIES } from "@/config/const";
+import { extractOpenRouterMessage } from "@/modules/ai/ai.service";
 import {
 	getDefaultMonetizationPrompt,
 	getMonetizationSettingKey,
@@ -456,6 +457,11 @@ export class MonetizationChatService {
 					info: "OpenRouter API: rate limit exceeded.",
 				});
 			}
+			if (response.status === 400) {
+				buildError("badRequest", {
+					info: `OpenRouter API: ${extractOpenRouterMessage(errorBody)}. Check the model in Settings.`,
+				});
+			}
 			buildError("storeApiError", {
 				info: `OpenRouter API error: ${response.status}`,
 			});
@@ -551,6 +557,11 @@ export class MonetizationChatService {
 			if (response.status === 429) {
 				buildError("badRequest", {
 					info: "OpenRouter API: rate limit exceeded.",
+				});
+			}
+			if (response.status === 400) {
+				buildError("badRequest", {
+					info: `OpenRouter API: ${extractOpenRouterMessage(errorBody)}. Check the model in Settings.`,
 				});
 			}
 			buildError("storeApiError", {

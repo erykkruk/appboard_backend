@@ -1,6 +1,6 @@
 {
 	"name": "appboard-backend",
-	"version": "0.6.0",
+	"version": "0.6.1",
 	"description": "Open-source ASO (App Store Optimization) management backend \u2014 connect App Store Connect & Google Play, sync metadata, manage listings, screenshots, reviews, and publish via one API.",
 	"license": "MIT",
 	"author": "Eryk Kruk",

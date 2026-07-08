@@ -28,6 +28,16 @@ const OPENROUTER_URL =
 const DEFAULT_MODEL =
 	config.OPENROUTER_MODEL ?? "google/gemini-3-flash-preview";
 
+/** Pull the human-readable message out of an OpenRouter JSON error body. */
+export function extractOpenRouterMessage(body: string): string {
+	try {
+		const parsed = JSON.parse(body) as { error?: { message?: string } };
+		return parsed.error?.message ?? body.slice(0, 200);
+	} catch {
+		return body.slice(0, 200);
+	}
+}
+
 function truncateToLimit(value: string, limit: number, field: string): string {
 	if (value.length <= limit) return value;
 
@@ -604,6 +614,12 @@ export class AIService {
 			if (response.status === 429) {
 				buildError("badRequest", {
 					info: "OpenRouter API: rate limit exceeded. Please wait a moment and try again.",
+				});
+			}
+
+			if (response.status === 400) {
+				buildError("badRequest", {
+					info: `OpenRouter API: ${extractOpenRouterMessage(errorBody)}. Check the model in Settings.`,
 				});
 			}
 
