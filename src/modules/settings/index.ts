@@ -6,6 +6,19 @@ import {
 	PROMPT_MODES,
 } from "@/modules/ai/ai.prompts";
 import {
+	getAllDefaultMonetizationPrompts,
+	getAllDefaultPurchasePrompts,
+	getMonetizationSettingKey,
+	getPurchaseSettingKey,
+	MONETIZATION_CHAT_FIELDS,
+	MONETIZATION_GUIDE_SECTIONS,
+	type MonetizationChatField,
+	PURCHASE_FIELDS,
+	PURCHASE_PROMPT_MODES,
+	type PurchasePromptField,
+	type PurchasePromptMode,
+} from "@/modules/ai/monetization.prompts";
+import {
 	setSettingBody,
 	settingKeyParams,
 	updateSettingsBody,
@@ -132,6 +145,183 @@ export const settingsController = new Elysia({ prefix: "/settings" })
 				tags: ["Settings"],
 			},
 			params: promptModeFieldParams,
+		},
+	)
+	// Monetization chat prompts
+	.get(
+		"/monetization-prompts",
+		async ({ workspaceId }) => {
+			const defaults = getAllDefaultMonetizationPrompts();
+			const prompts: Record<
+				string,
+				{
+					customPrompt: string | null;
+					defaultPrompt: string;
+					isDefault: boolean;
+				}
+			> = {};
+
+			for (const { key } of MONETIZATION_CHAT_FIELDS) {
+				const settingKey = getMonetizationSettingKey(key);
+				const customValue = await SettingsService.getRaw(
+					workspaceId!,
+					settingKey,
+				);
+				prompts[settingKey] = {
+					customPrompt: customValue,
+					defaultPrompt: defaults[settingKey],
+					isDefault: !customValue,
+				};
+			}
+
+			return { prompts };
+		},
+		{
+			detail: {
+				description: "Get all monetization chat prompts (custom + default)",
+				tags: ["Settings"],
+			},
+		},
+	)
+	.get(
+		"/monetization-prompts/defaults",
+		() => ({ defaults: getAllDefaultMonetizationPrompts() }),
+		{
+			detail: {
+				description: "Get default monetization chat prompts",
+				tags: ["Settings"],
+			},
+		},
+	)
+	.put(
+		"/monetization-prompts/:field",
+		async ({ body, params, workspaceId }) => {
+			const settingKey = getMonetizationSettingKey(
+				params.field as MonetizationChatField,
+			);
+			await SettingsService.set(workspaceId!, settingKey, body.prompt);
+			return { key: settingKey, success: true };
+		},
+		{
+			body: promptBody,
+			detail: {
+				description: "Set a custom monetization chat prompt",
+				tags: ["Settings"],
+			},
+			params: t.Object({ field: t.String({ minLength: 1 }) }),
+		},
+	)
+	.delete(
+		"/monetization-prompts/:field",
+		async ({ params, workspaceId }) => {
+			const settingKey = getMonetizationSettingKey(
+				params.field as MonetizationChatField,
+			);
+			await SettingsService.delete(workspaceId!, settingKey);
+			return { key: settingKey, success: true };
+		},
+		{
+			detail: {
+				description: "Reset a monetization chat prompt to default",
+				tags: ["Settings"],
+			},
+			params: t.Object({ field: t.String({ minLength: 1 }) }),
+		},
+	)
+	// Purchase field prompts
+	.get(
+		"/purchase-prompts",
+		async ({ workspaceId }) => {
+			const defaults = getAllDefaultPurchasePrompts();
+			const prompts: Record<
+				string,
+				{
+					customPrompt: string | null;
+					defaultPrompt: string;
+					isDefault: boolean;
+				}
+			> = {};
+
+			for (const { key } of PURCHASE_FIELDS) {
+				for (const mode of PURCHASE_PROMPT_MODES) {
+					const settingKey = getPurchaseSettingKey(key, mode);
+					const customValue = await SettingsService.getRaw(
+						workspaceId!,
+						settingKey,
+					);
+					prompts[settingKey] = {
+						customPrompt: customValue,
+						defaultPrompt: defaults[settingKey],
+						isDefault: !customValue,
+					};
+				}
+			}
+
+			return { prompts };
+		},
+		{
+			detail: {
+				description: "Get all purchase field prompts (custom + default)",
+				tags: ["Settings"],
+			},
+		},
+	)
+	.get(
+		"/purchase-prompts/defaults",
+		() => ({ defaults: getAllDefaultPurchasePrompts() }),
+		{
+			detail: {
+				description: "Get default purchase field prompts",
+				tags: ["Settings"],
+			},
+		},
+	)
+	.put(
+		"/purchase-prompts/:mode/:field",
+		async ({ body, params, workspaceId }) => {
+			const settingKey = getPurchaseSettingKey(
+				params.field as PurchasePromptField,
+				params.mode as PurchasePromptMode,
+			);
+			await SettingsService.set(workspaceId!, settingKey, body.prompt);
+			return { key: settingKey, success: true };
+		},
+		{
+			body: promptBody,
+			detail: {
+				description: "Set a custom purchase field prompt",
+				tags: ["Settings"],
+			},
+			params: promptModeFieldParams,
+		},
+	)
+	.delete(
+		"/purchase-prompts/:mode/:field",
+		async ({ params, workspaceId }) => {
+			const settingKey = getPurchaseSettingKey(
+				params.field as PurchasePromptField,
+				params.mode as PurchasePromptMode,
+			);
+			await SettingsService.delete(workspaceId!, settingKey);
+			return { key: settingKey, success: true };
+		},
+		{
+			detail: {
+				description: "Reset a purchase field prompt to default",
+				tags: ["Settings"],
+			},
+			params: promptModeFieldParams,
+		},
+	)
+	// Monetization guide
+	.get(
+		"/monetization-guide",
+		() => ({ sections: MONETIZATION_GUIDE_SECTIONS }),
+		{
+			detail: {
+				description: "Get monetization guide content",
+				tags: ["Settings"],
+			},
 		},
 	)
 	.get(

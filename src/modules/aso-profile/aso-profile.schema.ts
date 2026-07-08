@@ -9,6 +9,10 @@ const nullableStringArray = t.Optional(
 	t.Union([t.Array(t.String()), t.Null()]),
 );
 
+export const copyFromBody = t.Object({
+	sourceAppId: t.String({ format: "uuid" }),
+});
+
 export const upsertAsoProfileBody = t.Object({
 	// Social Proof
 	awards: nullableStringArray,

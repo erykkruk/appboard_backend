@@ -1,0 +1,2 @@
+ALTER TABLE "in_app_purchases" ADD COLUMN "use_group_localizations" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "subscription_group_localizations" ADD COLUMN "external_id" varchar(255);

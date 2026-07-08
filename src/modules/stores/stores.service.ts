@@ -1,8 +1,11 @@
 import { and, eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import {
+	decryptCredentials,
+	encryptCredentials,
+} from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
 import type { StoreProvider } from "@/providers/store-provider";
-import { decrypt, encrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { apps, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -18,14 +21,16 @@ export class StoresService {
 		credentials: Record<string, unknown>,
 	) {
 		const provider = createProvider(type, credentials);
-		const valid = await provider.validateCredentials();
-		if (!valid) {
+		const validation = await provider.validateCredentials();
+		if (!validation.valid) {
 			buildError("storeConnectionFailed", {
-				info: "Invalid store credentials",
+				info: validation.reason
+					? `Invalid store credentials: ${validation.reason}`
+					: "Invalid store credentials",
 			});
 		}
 
-		const encryptedCreds = encrypt(JSON.stringify(credentials));
+		const encryptedCreds = await encryptCredentials(credentials, workspaceId);
 		const [store] = await db
 			.insert(stores)
 			.values({
@@ -37,8 +42,8 @@ export class StoresService {
 			})
 			.returning();
 
-		await StoresService.syncApps(store.id);
-		return store;
+		const syncResult = await StoresService.syncApps(store.id);
+		return { store, syncedApps: syncResult.synced };
 	}
 
 	static async list(workspaceId: string) {
@@ -72,18 +77,44 @@ export class StoresService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(store.credentials));
+		const credentials = decryptCredentials(
+			store.credentials,
+			store.workspaceId,
+		);
 		const provider = createProvider(store.type as StoreType, credentials);
-		const fetchedApps = await provider.fetchApps();
+
+		let fetchedApps: Awaited<ReturnType<StoreProvider["fetchApps"]>>;
+		try {
+			fetchedApps = await provider.fetchApps();
+		} catch (err) {
+			// Surface broken connections instead of silently staying "connected":
+			// the panel renders this status and the user sees the real reason.
+			await db
+				.update(stores)
+				.set({ status: "error" })
+				.where(eq(stores.id, storeId));
+			log.error({ err, storeId }, "App sync failed — store marked as error");
+			buildError("storeApiError", {
+				info: `Store sync failed: ${err instanceof Error ? err.message : String(err)}`,
+			});
+		}
 
 		for (const appData of fetchedApps) {
-			// Look up by externalId globally (not scoped to storeId) to handle
+			// Look up by externalId within the same workspace to handle
 			// reconnects where the store row was recreated with a new UUID.
 			const existing = await db
-				.select()
+				.select({ id: apps.id })
 				.from(apps)
-				.where(eq(apps.externalId, appData.externalId))
+				.innerJoin(stores, eq(apps.storeId, stores.id))
+				.where(
+					and(
+						eq(apps.externalId, appData.externalId),
+						eq(stores.workspaceId, store.workspaceId),
+					),
+				)
 				.limit(1);
+
+			const appStatus = appData.isDraft ? "draft" : "active";
 
 			if (existing.length > 0) {
 				await db
@@ -94,6 +125,7 @@ export class StoresService {
 						lastSyncedAt: new Date(),
 						name: appData.name,
 						platform: appData.platform,
+						status: appStatus,
 						storeId,
 					})
 					.where(eq(apps.id, existing[0].id));
@@ -105,18 +137,52 @@ export class StoresService {
 					lastSyncedAt: new Date(),
 					name: appData.name,
 					platform: appData.platform,
+					status: appStatus,
 					storeId,
 				});
 			}
 		}
 
+		// Successful sync also recovers stores previously marked as "error".
 		await db
 			.update(stores)
-			.set({ lastSyncedAt: new Date() })
+			.set({ lastSyncedAt: new Date(), status: "connected" })
 			.where(eq(stores.id, storeId));
 
 		log.info({ appCount: fetchedApps.length, storeId }, "Apps synced");
 		return { synced: fetchedApps.length };
+	}
+
+	static async syncAll(workspaceId: string) {
+		const connectedStores = await db
+			.select()
+			.from(stores)
+			.where(
+				and(
+					eq(stores.workspaceId, workspaceId),
+					eq(stores.status, "connected"),
+				),
+			);
+
+		const results: { storeId: string; storeName: string; synced: number }[] =
+			[];
+
+		for (const store of connectedStores) {
+			const result = await StoresService.syncApps(store.id);
+			results.push({
+				storeId: store.id,
+				storeName: store.name,
+				synced: result.synced,
+			});
+		}
+
+		const totalSynced = results.reduce((sum, r) => sum + r.synced, 0);
+		log.info(
+			{ storeCount: connectedStores.length, totalSynced, workspaceId },
+			"All stores synced",
+		);
+
+		return { results, totalSynced };
 	}
 
 	static getProvider(store: {
@@ -127,9 +193,11 @@ export class StoresService {
 			buildError("storeConnectionFailed", {
 				info: "Store has no credentials",
 			});
-			throw new Error("unreachable");
 		}
-		const credentials = JSON.parse(decrypt(store.credentials));
+		const credentials = decryptCredentials(
+			store.credentials,
+			store.workspaceId,
+		);
 		return createProvider(store.type as StoreType, credentials);
 	}
 }

@@ -1,14 +1,22 @@
 import { and, eq } from "drizzle-orm";
 import { APP_STORE_CATEGORIES, type StoreType } from "@/config/const";
 import { AIService } from "@/modules/ai/ai.service";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { apps, listingHistory, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
 const log = createLogger("listings-service");
+
+// Draft listing update payload: translatable/string columns plus the two
+// localization-control fields (DNT keys array + free-text instructions).
+type UpdateDraftData = {
+	doNotTranslateFields?: string[];
+	translationInstructions?: string;
+	[column: string]: string | string[] | undefined;
+};
 
 const LISTING_FIELDS = [
 	"fullDesc",
@@ -19,6 +27,7 @@ const LISTING_FIELDS = [
 	"shortDesc",
 	"supportUrl",
 	"title",
+	"videoUrl",
 	"whatsNew",
 ] as const;
 
@@ -63,6 +72,7 @@ const EXPORT_COLUMNS = [
 	"marketingUrl",
 	"supportUrl",
 	"privacyUrl",
+	"videoUrl",
 ] as const;
 
 type ExportRow = Record<(typeof EXPORT_COLUMNS)[number], string>;
@@ -134,7 +144,7 @@ function parseCsv(content: string): {
 		if (!inQuotes) {
 			buffer = rawLine;
 		} else {
-			buffer += "\n" + rawLine;
+			buffer += `\n${rawLine}`;
 		}
 		const quoteCount = (buffer.match(/"/g) || []).length;
 		inQuotes = quoteCount % 2 !== 0;
@@ -223,7 +233,10 @@ function parseJsonContent(content: string): {
 export class ListingsService {
 	static async syncFromStore(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		const fetched = await provider.fetchListings(app.externalId);
@@ -244,6 +257,7 @@ export class ListingsService {
 					supportUrl: listing.supportUrl,
 					syncedAt: new Date(),
 					title: listing.title,
+					videoUrl: listing.videoUrl,
 					whatsNew: listing.whatsNew,
 				})
 				.onConflictDoUpdate({
@@ -257,6 +271,7 @@ export class ListingsService {
 						supportUrl: listing.supportUrl,
 						syncedAt: new Date(),
 						title: listing.title,
+						videoUrl: listing.videoUrl,
 						whatsNew: listing.whatsNew,
 					},
 					target: [listings.appId, listings.language, listings.source],
@@ -310,7 +325,7 @@ export class ListingsService {
 	static async updateDraft(
 		appId: string,
 		language: string,
-		data: Record<string, string | undefined>,
+		data: UpdateDraftData,
 	) {
 		const existing = await db
 			.select()
@@ -352,6 +367,7 @@ export class ListingsService {
 		const baseData =
 			remote.length > 0
 				? {
+						doNotTranslateFields: remote[0].doNotTranslateFields,
 						fullDesc: remote[0].fullDesc,
 						keywords: remote[0].keywords,
 						marketingUrl: remote[0].marketingUrl,
@@ -360,6 +376,8 @@ export class ListingsService {
 						shortDesc: remote[0].shortDesc,
 						supportUrl: remote[0].supportUrl,
 						title: remote[0].title,
+						translationInstructions: remote[0].translationInstructions,
+						videoUrl: remote[0].videoUrl,
 						whatsNew: remote[0].whatsNew,
 					}
 				: {};
@@ -379,9 +397,66 @@ export class ListingsService {
 		return draft;
 	}
 
+	static async getDraftDiffs(appId: string) {
+		const all = await db
+			.select()
+			.from(listings)
+			.where(eq(listings.appId, appId));
+
+		// Group by language
+		const byLang = new Map<
+			string,
+			{ draft?: (typeof all)[0]; remote?: (typeof all)[0] }
+		>();
+		for (const row of all) {
+			const entry = byLang.get(row.language) ?? {};
+			if (row.source === "draft") entry.draft = row;
+			else if (row.source === "remote") entry.remote = row;
+			byLang.set(row.language, entry);
+		}
+
+		const diffs: Array<{
+			language: string;
+			fields: Array<{
+				field: string;
+				oldValue: string | null;
+				newValue: string | null;
+			}>;
+		}> = [];
+
+		for (const [language, { draft, remote }] of byLang) {
+			if (!draft) continue;
+
+			const fields: Array<{
+				field: string;
+				oldValue: string | null;
+				newValue: string | null;
+			}> = [];
+
+			for (const field of LISTING_FIELDS) {
+				const draftVal = (draft[field] ?? null) as string | null;
+				const remoteVal = (remote?.[field] ?? null) as string | null;
+				if (draftVal !== remoteVal) {
+					fields.push({ field, newValue: draftVal, oldValue: remoteVal });
+				}
+			}
+
+			if (fields.length > 0) {
+				diffs.push({ fields, language });
+			}
+		}
+
+		// Stable ordering: sort by language for deterministic output
+		diffs.sort((a, b) => a.language.localeCompare(b.language));
+		return diffs;
+	}
+
 	static async publish(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		const dirtyDrafts = await db
@@ -399,8 +474,14 @@ export class ListingsService {
 			return { published: 0 };
 		}
 
+		// Collect changes per language for batch processing
+		const batchUpdates: Array<{
+			draft: (typeof dirtyDrafts)[0];
+			changedFields: Record<string, string | undefined>;
+			remote: (typeof dirtyDrafts)[0] | undefined;
+		}> = [];
+
 		for (const draft of dirtyDrafts) {
-			// Get current remote for history tracking
 			const [remote] = await db
 				.select()
 				.from(listings)
@@ -413,25 +494,71 @@ export class ListingsService {
 				)
 				.limit(1);
 
-			// Only send fields that actually changed compared to remote
 			const changedFields: Record<string, string | undefined> = {};
-			for (const field of LISTING_FIELDS) {
-				const draftVal = draft[field] ?? null;
-				const remoteVal = remote?.[field] ?? null;
-				if (draftVal !== remoteVal && draftVal !== null) {
-					changedFields[field] = draftVal;
+			if (remote) {
+				// Existing remote: send only changed fields
+				for (const field of LISTING_FIELDS) {
+					const draftVal = draft[field] ?? null;
+					const remoteVal = remote[field] ?? null;
+					if (draftVal !== remoteVal && draftVal !== null) {
+						changedFields[field] = draftVal;
+					}
+				}
+			} else {
+				// No remote listing yet: send ALL non-null fields from draft
+				// so the store gets the complete listing (GP requires title etc.)
+				for (const field of LISTING_FIELDS) {
+					const draftVal = draft[field] ?? null;
+					if (draftVal !== null) {
+						changedFields[field] = draftVal;
+					}
 				}
 			}
 
-			if (Object.keys(changedFields).length > 0) {
-				await provider.updateListing(
-					app.externalId,
-					draft.language,
-					changedFields,
-				);
-			}
+			batchUpdates.push({ changedFields, draft, remote });
+		}
 
-			// Record history for changed fields
+		// GP: use single edit+commit for all languages
+		const hasChanges = batchUpdates.some(
+			(u) => Object.keys(u.changedFields).length > 0,
+		);
+
+		if (hasChanges && provider.batchPublishListings) {
+			const updates = batchUpdates
+				.filter((u) => Object.keys(u.changedFields).length > 0)
+				.map((u) => ({
+					data: u.changedFields,
+					language: u.draft.language,
+				}));
+			try {
+				await provider.batchPublishListings(app.externalId, updates);
+				// Successful publish — ensure app is not marked as draft
+				if (app.status === "draft") {
+					await db
+						.update(apps)
+						.set({ status: "active" })
+						.where(eq(apps.id, appId));
+				}
+			} catch (err) {
+				await ListingsService.detectDraftApp(err, appId);
+				throw err;
+			}
+		} else if (hasChanges) {
+			// App Store / fallback: update per-language then publish
+			for (const { changedFields, draft } of batchUpdates) {
+				if (Object.keys(changedFields).length > 0) {
+					await provider.updateListing(
+						app.externalId,
+						draft.language,
+						changedFields,
+					);
+				}
+			}
+			await provider.publishListings(app.externalId);
+		}
+
+		// Record history + update remote + mark clean
+		for (const { draft, remote } of batchUpdates) {
 			for (const field of LISTING_FIELDS) {
 				const oldVal = remote?.[field] ?? null;
 				const newVal = draft[field] ?? null;
@@ -448,7 +575,6 @@ export class ListingsService {
 				}
 			}
 
-			// Update remote with draft values
 			if (remote) {
 				await db
 					.update(listings)
@@ -462,19 +588,17 @@ export class ListingsService {
 						supportUrl: draft.supportUrl,
 						syncedAt: new Date(),
 						title: draft.title,
+						videoUrl: draft.videoUrl,
 						whatsNew: draft.whatsNew,
 					})
 					.where(eq(listings.id, remote.id));
 			}
 
-			// Mark draft as clean
 			await db
 				.update(listings)
 				.set({ isDirty: false })
 				.where(eq(listings.id, draft.id));
 		}
-
-		await provider.publishListings(app.externalId);
 
 		log.info({ appId, count: dirtyDrafts.length }, "Listings published");
 		return { published: dirtyDrafts.length };
@@ -588,10 +712,7 @@ export class ListingsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (!app) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (!app) buildError("notFound", { info: "App not found" });
 
 		return {
 			availableCategories: APP_STORE_CATEGORIES,
@@ -624,12 +745,21 @@ export class ListingsService {
 
 	static async publishCategories(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+
+		if (!app.primaryCategory) {
+			log.info({ appId }, "No primary category set — skipping publish");
+			return { skipped: true, success: true };
+		}
+
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		await provider.updateCategories(
 			app.externalId,
-			app.primaryCategory ?? "",
+			app.primaryCategory,
 			app.secondaryCategory ?? undefined,
 		);
 
@@ -671,31 +801,64 @@ export class ListingsService {
 		const results: Record<string, { model: string; fields: string[] }> = {};
 
 		for (const targetLang of targetLanguages) {
-			const { model, translations } =
-				await AIService.translateLocalization(
+			// Per-target localization settings: which fields must not be translated
+			// and any free-text instructions to steer the AI translation.
+			const { doNotTranslateFields, translationInstructions } =
+				await ListingsService.getTargetLocalizationSettings(appId, targetLang);
+
+			// Exclude "do not translate" fields from the AI request — they are
+			// copied verbatim from the source instead.
+			const aiFieldsToTranslate: Record<string, string> = {};
+			for (const [aiField, value] of Object.entries(aiFields)) {
+				if (!doNotTranslateFields.has(aiField)) {
+					aiFieldsToTranslate[aiField] = value;
+				}
+			}
+
+			const dbData: Record<string, string> = {};
+
+			if (Object.keys(aiFieldsToTranslate).length > 0) {
+				const { model, translations } = await AIService.translateLocalization(
 					workspaceId,
 					appId,
 					app.name,
 					app.platform,
-					aiFields,
+					aiFieldsToTranslate,
 					sourceLanguage,
 					targetLang,
+					translationInstructions ?? undefined,
 				);
 
-			// Convert AI field names back to DB columns and save
-			const dbData: Record<string, string> = {};
-			for (const [aiField, value] of Object.entries(translations)) {
+				// Convert AI field names back to DB columns and save
+				for (const [aiField, value] of Object.entries(translations)) {
+					const dbField = AI_TO_DB_FIELD[aiField];
+					if (dbField && value) {
+						dbData[dbField] = value;
+					}
+				}
+
+				if (Object.keys(dbData).length > 0) {
+					results[targetLang] = {
+						fields: Object.keys(translations),
+						model,
+					};
+				}
+			}
+
+			// Copy "do not translate" fields through verbatim from the source.
+			for (const aiField of doNotTranslateFields) {
+				const sourceValue = aiFields[aiField];
 				const dbField = AI_TO_DB_FIELD[aiField];
-				if (dbField && value) {
-					dbData[dbField] = value;
+				if (dbField && sourceValue) {
+					dbData[dbField] = sourceValue;
 				}
 			}
 
 			if (Object.keys(dbData).length > 0) {
 				await ListingsService.updateDraft(appId, targetLang, dbData);
-				results[targetLang] = {
-					fields: Object.keys(translations),
-					model,
+				results[targetLang] ??= {
+					fields: Object.keys(dbData).map((f) => DB_TO_AI_FIELD[f] ?? f),
+					model: "",
 				};
 			}
 		}
@@ -729,8 +892,9 @@ export class ListingsService {
 		const dbField = AI_TO_DB_FIELD[field] ?? field;
 		const aiField = DB_TO_AI_FIELD[dbField] ?? field;
 
-		const sourceValue =
-			sourceListing[dbField as keyof typeof sourceListing] as string | null;
+		const sourceValue = sourceListing[dbField as keyof typeof sourceListing] as
+			| string
+			| null;
 		if (!sourceValue) {
 			buildError("badRequest", {
 				info: `Field "${field}" is empty in source language "${sourceLanguage}"`,
@@ -751,16 +915,15 @@ export class ListingsService {
 		const results: Record<string, { model: string; value: string }> = {};
 
 		for (const targetLang of targetLanguages) {
-			const { model, translations } =
-				await AIService.translateLocalization(
-					workspaceId,
-					appId,
-					app.name,
-					app.platform,
-					aiFields,
-					sourceLanguage,
-					targetLang,
-				);
+			const { model, translations } = await AIService.translateLocalization(
+				workspaceId,
+				appId,
+				app.name,
+				app.platform,
+				aiFields,
+				sourceLanguage,
+				targetLang,
+			);
 
 			const translatedValue = translations[aiField];
 			if (translatedValue) {
@@ -785,6 +948,44 @@ export class ListingsService {
 		return { results, translated: Object.keys(results).length };
 	}
 
+	/**
+	 * Loads the target language's "do not translate" field keys and free-text
+	 * translation instructions. DNT keys are normalized to AI field names so they
+	 * match the keys used by AIService.translateLocalization. Prefers the draft
+	 * listing, falls back to remote. Returns empty defaults when no row exists.
+	 */
+	private static async getTargetLocalizationSettings(
+		appId: string,
+		language: string,
+	): Promise<{
+		doNotTranslateFields: Set<string>;
+		translationInstructions: string | null;
+	}> {
+		const rows = await db
+			.select({
+				doNotTranslateFields: listings.doNotTranslateFields,
+				source: listings.source,
+				translationInstructions: listings.translationInstructions,
+			})
+			.from(listings)
+			.where(and(eq(listings.appId, appId), eq(listings.language, language)));
+
+		const draft = rows.find((r) => r.source === "draft");
+		const remote = rows.find((r) => r.source === "remote");
+		const target = draft ?? remote;
+
+		const normalized = new Set<string>();
+		for (const key of target?.doNotTranslateFields ?? []) {
+			// Accept either DB column names or AI field names; store AI field names.
+			normalized.add(DB_TO_AI_FIELD[key] ?? key);
+		}
+
+		return {
+			doNotTranslateFields: normalized,
+			translationInstructions: target?.translationInstructions ?? null,
+		};
+	}
+
 	private static async getSourceListing(appId: string, language: string) {
 		const result = await db
 			.select()
@@ -799,7 +1000,6 @@ export class ListingsService {
 			buildError("notFound", {
 				info: `No listing found for language "${language}"`,
 			});
-			throw new Error("unreachable");
 		}
 
 		return sourceListing;
@@ -843,11 +1043,21 @@ export class ListingsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		return { ...result[0].app, store: result[0].store };
+	}
+
+	/**
+	 * Detects "draft app" error from GP API and marks the app accordingly.
+	 */
+	private static async detectDraftApp(err: unknown, appId: string) {
+		const msg =
+			(err as { message?: string })?.message ??
+			JSON.stringify((err as { response?: unknown })?.response ?? "");
+		if (/draft\s+app/i.test(msg)) {
+			log.warn({ appId }, "GP draft app detected — marking status");
+			await db.update(apps).set({ status: "draft" }).where(eq(apps.id, appId));
+		}
 	}
 }

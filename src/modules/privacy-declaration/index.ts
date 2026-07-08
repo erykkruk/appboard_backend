@@ -1,22 +1,25 @@
-import Elysia from "elysia";
+import Elysia, { t } from "elysia";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	privacyDeclarationParams,
 	upsertPrivacyDeclarationBody,
 } from "./privacy-declaration.schema";
 import { PrivacyDeclarationService } from "./privacy-declaration.service";
-import { PRIVACY_TEMPLATES } from "./privacy-declaration.templates";
+import { getTemplatesByPlatform } from "./privacy-declaration.templates";
 
 export const privacyTemplatesController = new Elysia().get(
 	"/privacy-templates",
-	() => {
-		return { templates: PRIVACY_TEMPLATES };
+	({ query }) => {
+		return { templates: getTemplatesByPlatform(query.platform) };
 	},
 	{
 		detail: {
 			description: "List all privacy declaration templates",
 			tags: ["Privacy Declaration"],
 		},
+		query: t.Object({
+			platform: t.Optional(t.Union([t.Literal("ios"), t.Literal("android")])),
+		}),
 	},
 );
 

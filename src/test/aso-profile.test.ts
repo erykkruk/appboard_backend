@@ -3,7 +3,7 @@ import { Elysia } from "elysia";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { storesController } from "@/modules/stores";
-import { authGuard, authRequest, cleanupStores } from "./setup";
+import { authGuard, authRequest, authRequestB, cleanupStores } from "./setup";
 
 describe("ASO Profile module", () => {
 	const app = new Elysia()
@@ -13,10 +13,13 @@ describe("ASO Profile module", () => {
 		);
 
 	let storeId: string;
+	let storeIdB: string;
 	let appId: string;
+	let secondAppId: string;
 
 	afterAll(async () => {
-		if (storeId) await cleanupStores([storeId]);
+		const ids = [storeId, storeIdB].filter(Boolean);
+		if (ids.length) await cleanupStores(ids);
 	});
 
 	it("sets up mock store with apps", async () => {
@@ -41,6 +44,7 @@ describe("ASO Profile module", () => {
 			.then((res) => res.json());
 
 		appId = appsRes.apps[0].id;
+		secondAppId = appsRes.apps[1].id;
 	});
 
 	it("GET /api/apps/:appId/aso-profile returns null when no profile exists", async () => {
@@ -377,5 +381,122 @@ describe("ASO Profile module", () => {
 		expect(getRes.asoProfile.keyFeatures).toEqual(body.keyFeatures);
 		expect(getRes.asoProfile.wordsToInclude).toEqual(body.wordsToInclude);
 		expect(getRes.asoProfile.wordsToAvoid).toEqual(body.wordsToAvoid);
+	});
+
+	// --- Copy From tests ---
+
+	it("POST copy-from copies profile from source to target app", async () => {
+		// Ensure source app has a profile
+		const sourceProfile = {
+			category: "Finance",
+			keyFeatures: ["Budgeting", "Reports"],
+			mainBenefit: "Save money effortlessly",
+			oneLiner: "Smart budgeting app",
+			tone: "Professional",
+		};
+
+		await app.handle(
+			authRequest(`http://localhost/api/apps/${appId}/aso-profile`, {
+				body: JSON.stringify(sourceProfile),
+				headers: { "Content-Type": "application/json" },
+				method: "PUT",
+			}),
+		);
+
+		// Copy from appId → secondAppId
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${secondAppId}/aso-profile/copy-from`,
+				{
+					body: JSON.stringify({ sourceAppId: appId }),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				},
+			),
+		);
+
+		expect(res.status).toBe(200);
+		const copied = (await res.json()).asoProfile;
+
+		expect(copied.appId).toBe(secondAppId);
+		expect(copied.category).toBe("Finance");
+		expect(copied.oneLiner).toBe("Smart budgeting app");
+		expect(copied.keyFeatures).toEqual(["Budgeting", "Reports"]);
+		expect(copied.tone).toBe("Professional");
+	});
+
+	it("POST copy-from returns 404 when source app does not exist", async () => {
+		const nonExistentAppId = "00000000-0000-0000-0000-000000000099";
+
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appId}/aso-profile/copy-from`, {
+				body: JSON.stringify({ sourceAppId: nonExistentAppId }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		// verifyAppOwnership will throw notFound for non-existent app
+		expect(res.status).toBe(404);
+	});
+
+	it("POST copy-from returns 400 when copying to same app", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appId}/aso-profile/copy-from`, {
+				body: JSON.stringify({ sourceAppId: appId }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(400);
+	});
+
+	it("POST copy-from returns 422 for invalid sourceAppId", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appId}/aso-profile/copy-from`, {
+				body: JSON.stringify({ sourceAppId: "not-a-uuid" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(422);
+	});
+
+	it("POST copy-from blocks cross-workspace access", async () => {
+		// Create a store in workspace B
+		const storeResB = await app
+			.handle(
+				authRequestB("http://localhost/api/stores/connect", {
+					body: JSON.stringify({
+						credentials: { mock: true, type: "mock" },
+						name: "Workspace B Store",
+						type: "google_play",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				}),
+			)
+			.then((r) => r.json());
+
+		storeIdB = storeResB.store.id;
+
+		const appsResB = await app
+			.handle(authRequestB("http://localhost/api/apps"))
+			.then((r) => r.json());
+
+		const appIdB = appsResB.apps[0].id;
+
+		// Workspace A tries to copy from workspace B's app
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${appId}/aso-profile/copy-from`, {
+				body: JSON.stringify({ sourceAppId: appIdB }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+
+		expect(res.status).toBe(404);
 	});
 });

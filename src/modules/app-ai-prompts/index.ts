@@ -5,7 +5,11 @@ import { AppAiPromptsService } from "./app-ai-prompts.service";
 const promptParams = t.Object({
 	appId: t.String({ minLength: 1 }),
 	field: t.String({ minLength: 1 }),
-	mode: t.Union([t.Literal("generate"), t.Literal("rephrase")]),
+	mode: t.Union([
+		t.Literal("generate"),
+		t.Literal("rephrase"),
+		t.Literal("chat"),
+	]),
 });
 
 const promptBody = t.Object({

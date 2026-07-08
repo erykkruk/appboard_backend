@@ -126,18 +126,15 @@ describe("Integration: connect → sync → configure → publish", () => {
 	it("save privacy declaration locally", async () => {
 		const res = await app
 			.handle(
-				authRequest(
-					`http://localhost/api/apps/${appId}/privacy-declaration`,
-					{
-						body: JSON.stringify({
-							privacyPolicyUrl: "https://example.com/privacy",
-							templateId: "no_data_collected",
-							trackingEnabled: false,
-						}),
-						headers: { "Content-Type": "application/json" },
-						method: "PUT",
-					},
-				),
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`, {
+					body: JSON.stringify({
+						privacyPolicyUrl: "https://example.com/privacy",
+						templateId: "no_data_collected",
+						trackingEnabled: false,
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				}),
 			)
 			.then((r) => r.json());
 
@@ -175,9 +172,7 @@ describe("Integration: connect → sync → configure → publish", () => {
 		// Privacy declaration
 		const privRes = await app
 			.handle(
-				authRequest(
-					`http://localhost/api/apps/${appId}/privacy-declaration`,
-				),
+				authRequest(`http://localhost/api/apps/${appId}/privacy-declaration`),
 			)
 			.then((r) => r.json());
 		expect(privRes.privacyDeclaration.templateId).toBe("no_data_collected");
@@ -307,16 +302,12 @@ describe("Integration: settings persist across updates", () => {
 		);
 
 		const genRes = await app
-			.handle(
-				authRequest("http://localhost/api/settings/ai_model_generate"),
-			)
+			.handle(authRequest("http://localhost/api/settings/ai_model_generate"))
 			.then((r) => r.json());
 		expect(genRes.setting.value).toBe("google/gemini-2.5-pro");
 
 		const repRes = await app
-			.handle(
-				authRequest("http://localhost/api/settings/ai_model_rephrase"),
-			)
+			.handle(authRequest("http://localhost/api/settings/ai_model_rephrase"))
 			.then((r) => r.json());
 		expect(repRes.setting.value).toBe("anthropic/claude-sonnet-4");
 
@@ -346,10 +337,7 @@ describe("Integration: listings sync → edit draft → publish", () => {
 	const app = new Elysia()
 		.use(authGuard)
 		.group("/api", (app) =>
-			app
-				.use(storesController)
-				.use(appsController)
-				.use(listingsController),
+			app.use(storesController).use(appsController).use(listingsController),
 		);
 
 	let storeId: string;
@@ -403,17 +391,14 @@ describe("Integration: listings sync → edit draft → publish", () => {
 	it("edit listing draft (local save)", async () => {
 		const res = await app
 			.handle(
-				authRequest(
-					`http://localhost/api/apps/${appId}/listings/en-US`,
-					{
-						body: JSON.stringify({
-							title: "Updated Title",
-							shortDesc: "Updated short description",
-						}),
-						headers: { "Content-Type": "application/json" },
-						method: "PUT",
-					},
-				),
+				authRequest(`http://localhost/api/apps/${appId}/listings/en-US`, {
+					body: JSON.stringify({
+						shortDesc: "Updated short description",
+						title: "Updated Title",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				}),
 			)
 			.then((r) => r.json());
 
@@ -423,11 +408,7 @@ describe("Integration: listings sync → edit draft → publish", () => {
 
 	it("verify draft persists on re-read", async () => {
 		const res = await app
-			.handle(
-				authRequest(
-					`http://localhost/api/apps/${appId}/listings/en-US`,
-				),
-			)
+			.handle(authRequest(`http://localhost/api/apps/${appId}/listings/en-US`))
 			.then((r) => r.json());
 
 		// getByLanguage returns { draft, remote }

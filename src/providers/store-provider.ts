@@ -10,7 +10,13 @@ export interface CategoryData {
 }
 
 export interface StoreProvider {
-	validateCredentials(): Promise<boolean>;
+	/**
+	 * Verify the stored credentials against the live store API. On failure the
+	 * human-readable reason is returned so it can be surfaced to the user
+	 * (wrong key, missing permission, expired token…) instead of a generic
+	 * "invalid credentials".
+	 */
+	validateCredentials(): Promise<{ reason?: string; valid: boolean }>;
 	fetchApps(): Promise<AppData[]>;
 	fetchListings(appId: string): Promise<ListingData[]>;
 	updateListing(
@@ -19,6 +25,10 @@ export interface StoreProvider {
 		data: ListingUpdateData,
 	): Promise<void>;
 	publishListings(appId: string): Promise<void>;
+	batchPublishListings?(
+		appId: string,
+		updates: Array<{ language: string; data: ListingUpdateData }>,
+	): Promise<void>;
 	fetchAssets(appId: string, language: string): Promise<AssetData[]>;
 	uploadAsset(
 		appId: string,
@@ -32,7 +42,7 @@ export interface StoreProvider {
 	createVersion(
 		appId: string,
 		versionString: string,
-	): Promise<{ state: string; versionString: string }>;
+	): Promise<{ state: string; versionId?: string; versionString: string }>;
 	getLatestVersion(appId: string): Promise<VersionData | null>;
 	updateAgeRating(
 		appId: string,
@@ -48,12 +58,93 @@ export interface StoreProvider {
 		appId: string,
 		data: PrivacyDeclarationData,
 	): Promise<void>;
+	fetchInAppPurchases(appId: string): Promise<InAppPurchaseData[]>;
+	fetchSubscriptionGroups(appId: string): Promise<SubscriptionGroupData[]>;
+	createInAppPurchase(
+		appId: string,
+		data: InAppPurchaseCreateData,
+	): Promise<InAppPurchaseData>;
+	updateInAppPurchase(
+		appId: string,
+		externalId: string,
+		data: InAppPurchaseUpdateData,
+	): Promise<void>;
+	deleteInAppPurchase(appId: string, externalId: string): Promise<void>;
+	createSubscriptionGroup(
+		appId: string,
+		name: string,
+	): Promise<SubscriptionGroupData>;
+	updateSubscriptionGroup(
+		appId: string,
+		groupExternalId: string,
+		name: string,
+	): Promise<void>;
+	createSubscription(
+		appId: string,
+		groupExternalId: string,
+		data: SubscriptionCreateData,
+	): Promise<InAppPurchaseData>;
+	updateSubscription(
+		appId: string,
+		subExternalId: string,
+		data: SubscriptionUpdateData,
+	): Promise<void>;
+	deleteSubscription(appId: string, subExternalId: string): Promise<void>;
+	deleteSubscriptionGroup(
+		appId: string,
+		groupExternalId: string,
+	): Promise<void>;
+
+	// Optional: Price push
+	updateIapPrices?(
+		iapExternalId: string,
+		prices: PurchasePriceData[],
+	): Promise<void>;
+	updateSubscriptionPrices?(
+		subExternalId: string,
+		prices: PurchasePriceData[],
+	): Promise<void>;
+
+	// Optional: Availability
+	fetchSubscriptionAvailability?(
+		subscriptionExternalId: string,
+	): Promise<string[]>;
+	updateSubscriptionAvailability?(
+		subscriptionExternalId: string,
+		territories: string[],
+	): Promise<void>;
+
+	// Optional: Family sharing
+	updateFamilySharing?(
+		subscriptionExternalId: string,
+		familySharable: boolean,
+	): Promise<void>;
+
+	// Optional: Group localizations
+	fetchGroupLocalizations?(
+		groupExternalId: string,
+	): Promise<PurchaseLocalizationData[]>;
+	createGroupLocalization?(
+		groupExternalId: string,
+		language: string,
+		data: { name: string },
+	): Promise<{ externalId: string }>;
+	updateGroupLocalization?(
+		localizationExternalId: string,
+		data: { name: string },
+	): Promise<void>;
+	deleteGroupLocalization?(localizationExternalId: string): Promise<void>;
+
+	checkMonetizationSupport(
+		appId: string,
+	): Promise<{ reason?: string; supported: boolean }>;
 }
 
 export interface AppData {
 	bundleId: string;
 	externalId: string;
 	iconUrl?: string;
+	isDraft?: boolean;
 	name: string;
 	platform: "android" | "ios";
 }
@@ -68,6 +159,7 @@ export interface ListingData {
 	shortDesc: string;
 	supportUrl?: string;
 	title: string;
+	videoUrl?: string;
 	whatsNew?: string;
 }
 
@@ -80,6 +172,7 @@ export interface ListingUpdateData {
 	shortDesc?: string;
 	supportUrl?: string;
 	title?: string;
+	videoUrl?: string;
 	whatsNew?: string;
 }
 
@@ -102,11 +195,17 @@ export interface AssetMetadata {
 export interface PrivacyDeclarationData {
 	dataCollections: Array<{
 		category: string;
+		collected?: boolean;
 		dataType: string;
+		ephemeral?: boolean;
 		linked: boolean;
 		purposes: string[];
+		required?: boolean;
+		shared?: boolean;
 		tracking: boolean;
 	}>;
+	gpDeletionMechanism: boolean;
+	gpEncryptedInTransit: boolean;
 	privacyPolicyUrl: string | null;
 	trackingDomains: string[] | null;
 	trackingEnabled: boolean;
@@ -126,4 +225,66 @@ export interface ReviewData {
 	reviewDate: Date;
 	territory?: string;
 	title?: string;
+}
+
+export interface SubscriptionGroupData {
+	externalId: string;
+	name: string;
+	subscriptions: InAppPurchaseData[];
+}
+
+export interface InAppPurchaseData {
+	duration?: string;
+	externalId: string;
+	familySharable?: boolean;
+	groupExternalId?: string;
+	localizations?: PurchaseLocalizationData[];
+	name: string;
+	prices?: PurchasePriceData[];
+	productId: string;
+	productType: string;
+	status: string;
+}
+
+export interface PurchaseLocalizationData {
+	description?: string;
+	externalId?: string;
+	language: string;
+	name?: string;
+}
+
+export interface PurchasePriceData {
+	currency: string;
+	externalId?: string;
+	price: string;
+	pricePointId?: string;
+	territory: string;
+}
+
+export interface InAppPurchaseCreateData {
+	localizations?: PurchaseLocalizationData[];
+	name: string;
+	prices?: PurchasePriceData[];
+	productId: string;
+	productType: string;
+}
+
+export interface InAppPurchaseUpdateData {
+	localizations?: PurchaseLocalizationData[];
+	name?: string;
+	prices?: PurchasePriceData[];
+}
+
+export interface SubscriptionCreateData {
+	duration: string;
+	localizations?: PurchaseLocalizationData[];
+	name: string;
+	prices?: PurchasePriceData[];
+	productId: string;
+}
+
+export interface SubscriptionUpdateData {
+	localizations?: PurchaseLocalizationData[];
+	name?: string;
+	prices?: PurchasePriceData[];
 }

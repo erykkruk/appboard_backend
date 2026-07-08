@@ -1,11 +1,41 @@
+# Dependencies
 node_modules/
-.env
-*.log
+
+# Build output
 dist/
+
+# Logs
+*.log
+
+# OS
 .DS_Store
+
+# Env — local only. `.env.example` is the committed template.
+.env
+.env.*
+!.env.example
+
+# Local-only files: present on disk so they load locally, never committed.
+*.local.ts
+*.local.sql
+*.local.json
+
+# Secrets & service-account credentials (App Store .p8, Google Play JSON, etc.)
+/keys
+*.p8
+*.pem
+*-service-account*.json
+
+# Database dumps
 dump.sql
+
+# Local Claude Code config
 /.claude
+
+# Internal / local-only notes & research (kept locally, not published)
 appboard.config.json
+plans.md
+best_practises/
 aso-features-research.md
 aso-api-research.md
-/keys
+/keys.txt

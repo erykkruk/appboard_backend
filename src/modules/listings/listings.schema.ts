@@ -14,6 +14,7 @@ export const exportQuery = t.Object({
 });
 
 export const updateListingBody = t.Object({
+	doNotTranslateFields: t.Optional(t.Array(t.String())),
 	fullDesc: t.Optional(t.String()),
 	keywords: t.Optional(t.String({ maxLength: 255 })),
 	marketingUrl: t.Optional(t.String({ maxLength: 1024 })),
@@ -22,6 +23,8 @@ export const updateListingBody = t.Object({
 	shortDesc: t.Optional(t.String({ maxLength: 255 })),
 	supportUrl: t.Optional(t.String({ maxLength: 1024 })),
 	title: t.Optional(t.String({ maxLength: 255 })),
+	translationInstructions: t.Optional(t.String()),
+	videoUrl: t.Optional(t.String({ maxLength: 1024 })),
 	whatsNew: t.Optional(t.String()),
 });
 

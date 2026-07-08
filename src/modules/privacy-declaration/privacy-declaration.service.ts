@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { appPrivacyDeclarations, apps, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -13,11 +13,17 @@ const log = createLogger("privacy-declaration-service");
 interface UpsertData {
 	dataCollections?: Array<{
 		category: string;
+		collected?: boolean;
 		dataType: string;
+		ephemeral?: boolean;
 		linked: boolean;
 		purposes: string[];
+		required?: boolean;
+		shared?: boolean;
 		tracking: boolean;
 	}> | null;
+	gpDeletionMechanism?: boolean;
+	gpEncryptedInTransit?: boolean;
 	privacyPolicyUrl?: string | null;
 	templateId: string;
 	trackingDomains?: string[] | null;
@@ -38,7 +44,7 @@ export class PrivacyDeclarationService {
 	static async upsert(appId: string, data: UpsertData) {
 		let dataCollections = data.dataCollections ?? [];
 
-		if (data.templateId !== "custom") {
+		if (data.templateId !== "custom" && data.templateId !== "gp_custom") {
 			const template = getPrivacyTemplate(data.templateId);
 			if (template) {
 				dataCollections = template.dataCollections;
@@ -51,6 +57,8 @@ export class PrivacyDeclarationService {
 		const values = {
 			appId,
 			dataCollections,
+			gpDeletionMechanism: data.gpDeletionMechanism ?? false,
+			gpEncryptedInTransit: data.gpEncryptedInTransit ?? false,
 			privacyPolicyUrl: data.privacyPolicyUrl ?? null,
 			templateId: data.templateId,
 			trackingDomains: data.trackingDomains ?? null,
@@ -63,6 +71,8 @@ export class PrivacyDeclarationService {
 			.onConflictDoUpdate({
 				set: {
 					dataCollections: values.dataCollections,
+					gpDeletionMechanism: values.gpDeletionMechanism,
+					gpEncryptedInTransit: values.gpEncryptedInTransit,
 					privacyPolicyUrl: values.privacyPolicyUrl,
 					templateId: values.templateId,
 					trackingDomains: values.trackingDomains,
@@ -80,10 +90,11 @@ export class PrivacyDeclarationService {
 	static async publish(appId: string) {
 		const declaration = await PrivacyDeclarationService.get(appId);
 		if (!declaration) {
-			buildError("notFound", {
-				info: "Privacy declaration not found — save first",
-			});
-			throw new Error("unreachable");
+			log.info(
+				{ appId },
+				"No privacy declaration configured — skipping publish",
+			);
+			return { skipped: true, success: true };
 		}
 
 		const result = await db
@@ -93,29 +104,33 @@ export class PrivacyDeclarationService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		const { app, store } = result[0];
 
-		if (!store.credentials) {
+		if (!store.credentials)
 			buildError("badRequest", { info: "No store credentials configured" });
-			throw new Error("unreachable");
-		}
 
-		const credentials = JSON.parse(decrypt(store.credentials));
+		const credentials = decryptCredentials(
+			store.credentials,
+			store.workspaceId,
+		);
 		const provider = createProvider(store.type as StoreType, credentials);
 
 		await provider.updatePrivacyDeclaration(app.externalId, {
 			dataCollections: declaration.dataCollections as Array<{
 				category: string;
+				collected?: boolean;
 				dataType: string;
+				ephemeral?: boolean;
 				linked: boolean;
 				purposes: string[];
+				required?: boolean;
+				shared?: boolean;
 				tracking: boolean;
 			}>,
+			gpDeletionMechanism: declaration.gpDeletionMechanism,
+			gpEncryptedInTransit: declaration.gpEncryptedInTransit,
 			privacyPolicyUrl: declaration.privacyPolicyUrl,
 			trackingDomains: declaration.trackingDomains,
 			trackingEnabled: declaration.trackingEnabled,

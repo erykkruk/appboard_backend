@@ -122,4 +122,21 @@ describe("Listings module", () => {
 		expect(response.history).toBeArray();
 		expect(response.history.length).toBeGreaterThanOrEqual(1);
 	});
+
+	// --- Publish categories ---
+
+	it("POST /api/apps/:appId/listings/categories/publish skips when no category set", async () => {
+		// Mock store apps have no primaryCategory set by default
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${appId}/listings/categories/publish`,
+				{ method: "POST" },
+			),
+		);
+
+		expect(res.status).toBe(200);
+		const response = await res.json();
+		expect(response.skipped).toBe(true);
+		expect(response.success).toBe(true);
+	});
 });

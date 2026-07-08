@@ -1,0 +1,2 @@
+ALTER TABLE "app_privacy_declarations" ADD COLUMN "gp_deletion_mechanism" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "app_privacy_declarations" ADD COLUMN "gp_encrypted_in_transit" boolean DEFAULT false NOT NULL;

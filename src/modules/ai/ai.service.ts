@@ -1,21 +1,32 @@
 import { and, eq } from "drizzle-orm";
+import config from "@/config";
 import { APP_STORE_CATEGORIES } from "@/config/const";
 import {
 	buildTranslationFieldRules,
 	getSettingKey,
 	type PromptMode,
 } from "@/modules/ai/ai.prompts";
+import {
+	getDefaultPurchasePrompt,
+	getPurchaseSettingKey,
+	type PurchasePromptField,
+	type PurchasePromptMode,
+} from "@/modules/ai/monetization.prompts";
+import { AppGroupsService } from "@/modules/app-groups/app-groups.service";
 import { AsoProfileService } from "@/modules/aso-profile/aso-profile.service";
+import { GroupAsoProfileService } from "@/modules/group-aso-profile/group-aso-profile.service";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { db } from "@/utils/db";
-import { appAiPrompts } from "@/utils/db/schema";
+import { appAiPrompts, apps, listings } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
 const log = createLogger("ai-service");
 
-const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "google/gemini-2.0-flash-001";
+const OPENROUTER_URL =
+	config.OPENROUTER_URL ?? "https://openrouter.ai/api/v1/chat/completions";
+const DEFAULT_MODEL =
+	config.OPENROUTER_MODEL ?? "google/gemini-3-flash-preview";
 
 function truncateToLimit(value: string, limit: number, field: string): string {
 	if (value.length <= limit) return value;
@@ -51,6 +62,7 @@ type ListingField =
 	| "subtitle"
 	| "shortDescription"
 	| "description"
+	| "fullDescription"
 	| "keywords"
 	| "promotionalText"
 	| "whatsNew";
@@ -59,6 +71,7 @@ export type { ListingField };
 
 const FIELD_CHAR_LIMITS: Record<ListingField, number> = {
 	description: 4000,
+	fullDescription: 4000,
 	keywords: 100,
 	promotionalText: 170,
 	shortDescription: 80,
@@ -69,6 +82,7 @@ const FIELD_CHAR_LIMITS: Record<ListingField, number> = {
 
 const FIELD_LABELS: Record<ListingField, string> = {
 	description: "App Description",
+	fullDescription: "Full Description (Google Play)",
 	keywords: "Keywords",
 	promotionalText: "Promotional Text",
 	shortDescription: "Short Description",
@@ -281,6 +295,11 @@ Release notes influence AI-generated review summaries (Apple Intelligence / Gemi
 - Mention bug fixes briefly
 - End with a CTA: invite users to rate/review
 - Positive framing: "Now 2x faster" not "Fixed slow loading"`;
+
+		// fullDescription is resolved to "description" by resolveFieldForPlatform,
+		// so this case should not be reached, but TypeScript requires exhaustiveness
+		case "fullDescription":
+			return buildFieldInstructions("description", false);
 	}
 }
 
@@ -383,6 +402,10 @@ function resolveFieldForPlatform(
 ): ListingField {
 	const isIos = platform === "ios";
 
+	// Google Play uses "fullDescription", internally we map to "description"
+	// which has platform-aware prompts (iOS = conversion only, Android = SEO + conversion)
+	if (field === "fullDescription") return "description";
+
 	if (!isIos && field === "subtitle") return "shortDescription";
 
 	if (!isIos && field === "keywords") {
@@ -405,6 +428,97 @@ function resolveFieldForPlatform(
 	return field;
 }
 
+type PurchaseField =
+	| "purchaseName"
+	| "purchaseDescription"
+	| "reviewNotes"
+	| "productId"
+	| "groupName"
+	| "groupDescription";
+
+const PURCHASE_FIELD_CHAR_LIMITS: Partial<Record<PurchaseField, number>> = {
+	groupDescription: 45,
+	groupName: 30,
+	purchaseDescription: 45,
+	purchaseName: 30,
+	reviewNotes: 4000,
+};
+
+async function resolvePurchasePrompt(
+	field: PurchasePromptField,
+	mode: PurchasePromptMode,
+	workspaceId: string,
+	appId?: string,
+): Promise<string> {
+	// 1. Per-app custom prompt
+	if (appId) {
+		const [row] = await db
+			.select()
+			.from(appAiPrompts)
+			.where(
+				and(
+					eq(appAiPrompts.appId, appId),
+					eq(appAiPrompts.field, field),
+					eq(appAiPrompts.mode, mode),
+				),
+			)
+			.limit(1);
+		if (row?.prompt) return row.prompt;
+	}
+
+	// 2. Global custom prompt from settings
+	const settingKey = getPurchaseSettingKey(field, mode);
+	const globalPrompt = await SettingsService.getRaw(workspaceId, settingKey);
+	if (globalPrompt) return globalPrompt;
+
+	// 3. Built-in default
+	return getDefaultPurchasePrompt(field, mode);
+}
+
+function buildPurchaseUserPrompt(
+	field: PurchaseField,
+	context: {
+		appName: string;
+		productType?: string;
+		productName?: string;
+		groupName?: string;
+		duration?: string;
+		bundleId?: string;
+	},
+	currentValue?: string,
+	language?: string,
+): string {
+	const charLimit = PURCHASE_FIELD_CHAR_LIMITS[field];
+	const isRephrase = !!currentValue;
+
+	let prompt = `App name: ${context.appName}\n`;
+	if (context.productType) prompt += `Product type: ${context.productType}\n`;
+	if (context.productName) prompt += `Product name: ${context.productName}\n`;
+	if (context.groupName) prompt += `Subscription group: ${context.groupName}\n`;
+	if (context.duration) prompt += `Duration: ${context.duration}\n`;
+	if (context.bundleId) prompt += `Bundle ID: ${context.bundleId}\n`;
+	if (language) prompt += `Language: ${language}\n`;
+
+	if (isRephrase) {
+		prompt += `\nCurrent text to improve:\n"""\n${currentValue}\n"""\n\nTASK: Rephrase the text above to be more compelling and effective. Keep the same core meaning.`;
+	} else {
+		prompt += `\nTASK: Generate the content for this field.`;
+	}
+
+	if (charLimit) {
+		prompt += ` Stay within ${charLimit} characters.`;
+	}
+
+	if (language) {
+		prompt += ` Write in ${language} language.`;
+	}
+
+	prompt +=
+		"\n\nIMPORTANT: Return ONLY the generated text, no explanations, no quotes, no labels. Just the raw content.";
+
+	return prompt;
+}
+
 type AiPurpose = "generate" | "rephrase" | "research";
 
 const PURPOSE_SETTING_KEYS: Record<AiPurpose, string> = {
@@ -414,6 +528,20 @@ const PURPOSE_SETTING_KEYS: Record<AiPurpose, string> = {
 };
 
 export class AIService {
+	/**
+	 * Returns the effective ASO profile for an app.
+	 * If the app belongs to a group with shared profile enabled,
+	 * returns the group profile; otherwise returns the app's own profile.
+	 */
+	static async resolveAsoProfile(appId: string) {
+		const groupInfo = await AppGroupsService.getGroupForApp(appId);
+		if (groupInfo?.useSharedProfile) {
+			const groupProfile = await GroupAsoProfileService.get(groupInfo.groupId);
+			if (groupProfile) return groupProfile;
+		}
+		return AsoProfileService.get(appId);
+	}
+
 	private static async resolveModel(
 		workspaceId: string,
 		purpose: AiPurpose,
@@ -497,6 +625,69 @@ export class AIService {
 		return { content: content.trim(), model: data.model ?? DEFAULT_MODEL };
 	}
 
+	static async generatePurchaseField(
+		workspaceId: string,
+		appId: string,
+		field:
+			| "purchaseName"
+			| "purchaseDescription"
+			| "reviewNotes"
+			| "productId"
+			| "groupName"
+			| "groupDescription",
+		context: {
+			appName: string;
+			productType?: string;
+			productName?: string;
+			groupName?: string;
+			duration?: string;
+			bundleId?: string;
+		},
+		currentValue?: string,
+		language?: string,
+	): Promise<{ model: string; result: string }> {
+		const asoProfile = await AIService.resolveAsoProfile(appId);
+		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
+
+		const mode: PurchasePromptMode = currentValue ? "rephrase" : "generate";
+		let systemPrompt = await resolvePurchasePrompt(
+			field,
+			mode,
+			workspaceId,
+			appId,
+		);
+		if (asoContext) {
+			systemPrompt += `\n\nApp context:\n${asoContext}`;
+		}
+		const userPrompt = buildPurchaseUserPrompt(
+			field,
+			context,
+			currentValue,
+			language,
+		);
+
+		log.info(
+			{ appId, currentValue: !!currentValue, field, language },
+			"Generating purchase field",
+		);
+
+		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
+			systemPrompt,
+			userPrompt,
+			mode as AiPurpose,
+		);
+
+		const cleaned = stripEmoji(content);
+		const charLimit = PURCHASE_FIELD_CHAR_LIMITS[field];
+		const result =
+			charLimit && cleaned.length > charLimit
+				? truncateToLimit(cleaned, charLimit, field)
+				: cleaned;
+
+		return { model, result };
+	}
+
 	static async generateListingField(
 		workspaceId: string,
 		field: ListingField,
@@ -508,7 +699,7 @@ export class AIService {
 	): Promise<{ model: string; result: string }> {
 		const resolvedField = resolveFieldForPlatform(field, platform);
 
-		const asoProfile = await AsoProfileService.get(appId);
+		const asoProfile = await AIService.resolveAsoProfile(appId);
 		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
 
 		const mode: PromptMode = currentValue ? "rephrase" : "generate";
@@ -705,8 +896,11 @@ Write a ${isPositive ? "thankful, encouraging reply that reinforces their positi
 		workspaceId: string,
 		appName: string,
 		description: string,
+		platform?: string,
 	): Promise<{ model: string; result: string }> {
-		const systemPrompt = `You are an expert in Apple App Store privacy declarations (App Privacy "nutrition labels").
+		const isAndroid = platform === "android";
+
+		const iosSystemPrompt = `You are an expert in Apple App Store privacy declarations (App Privacy "nutrition labels").
 
 Given an app name and a description of what data it collects and processes, generate a structured privacy declaration.
 
@@ -736,12 +930,50 @@ Rules:
 - Include diagnostics (crash data) by default unless the description explicitly says no analytics
 - Return a JSON array, no markdown, no explanations`;
 
+		const gpSystemPrompt = `You are an expert in Google Play Data Safety declarations.
+
+Given an app name and a description of what data it collects and processes, generate a structured data safety declaration.
+
+Return ONLY valid JSON: an array of objects with this exact shape:
+{ "category": string, "dataType": string, "purposes": string[], "collected": boolean, "shared": boolean, "ephemeral": boolean, "required": boolean, "linked": false, "tracking": false }
+
+Valid categories: "location", "personal_info", "financial_info", "health_fitness", "messages", "photos_videos", "audio", "files_docs", "calendar", "contacts", "app_activity", "web_browsing", "app_info_performance", "device_ids"
+
+Example data types per category:
+- location: "Approximate location", "Precise location"
+- personal_info: "Name", "Email address", "User IDs", "Address", "Phone number"
+- financial_info: "User payment info", "Purchase history", "Credit score"
+- health_fitness: "Health info", "Fitness info"
+- messages: "Emails", "SMS or MMS", "Other in-app messages"
+- photos_videos: "Photos", "Videos"
+- audio: "Voice or sound recordings", "Music files"
+- files_docs: "Files and docs"
+- calendar: "Calendar events"
+- contacts: "Contacts"
+- app_activity: "App interactions", "In-app search history", "Installed apps"
+- web_browsing: "Web browsing history"
+- app_info_performance: "Crash logs", "Diagnostics", "Other app performance data"
+- device_ids: "Device or other IDs"
+
+Valid purposes: "app_functionality", "analytics", "developer_communications", "advertising_marketing", "fraud_prevention", "personalization", "account_management"
+
+Rules:
+- "collected" = true if the app collects this data
+- "shared" = true if the app shares this data with third parties
+- "ephemeral" = true if data is processed ephemerally (not stored)
+- "required" = true if users cannot use the app without providing this data
+- Be realistic and thorough — include all data types implied by the description
+- Include app_info_performance (crash logs) by default unless explicitly excluded
+- Return a JSON array, no markdown, no explanations`;
+
+		const systemPrompt = isAndroid ? gpSystemPrompt : iosSystemPrompt;
+
 		const userPrompt = `App name: ${appName}
 
 Description of data collection:
 ${description}
 
-Generate the privacy declaration JSON array.`;
+Generate the ${isAndroid ? "data safety" : "privacy declaration"} JSON array.`;
 
 		log.info({ appName }, "Generating privacy declaration");
 
@@ -782,6 +1014,7 @@ Generate the privacy declaration JSON array.`;
 		fields: Record<string, string>,
 		sourceLanguage: string,
 		targetLanguage: string,
+		instructions?: string,
 	): Promise<{ model: string; translations: Record<string, string> }> {
 		const fieldEntries = Object.entries(fields).filter(
 			([, v]) => v.trim().length > 0,
@@ -792,8 +1025,10 @@ Generate the privacy declaration JSON array.`;
 
 		const fieldLimits: Record<string, number> = {
 			description: 4000,
+			fullDescription: 4000,
 			keywords: 100,
 			promotionalText: 170,
+			shortDescription: 80,
 			subtitle: 30,
 			title: 30,
 			whatsNew: 4000,
@@ -868,6 +1103,10 @@ ${asoContext}`;
 			systemPrompt += `\nWords/phrases to AVOID: ${asoProfile.wordsToAvoid.join(", ")}`;
 		}
 
+		if (instructions?.trim()) {
+			systemPrompt += `\n\nAdditional translation instructions from the user (follow these STRICTLY, they override defaults where they conflict):\n${instructions.trim()}`;
+		}
+
 		systemPrompt +=
 			"\n\nReturn ONLY valid JSON where keys match the input field names and values are translated content. No explanations, no markdown, just the JSON object.";
 
@@ -917,7 +1156,6 @@ Return ONLY a JSON object with the same keys and translated values.`;
 			buildError("somethingWentWrong", {
 				info: "AI returned invalid translation format",
 			});
-			throw new Error("unreachable");
 		}
 	}
 
@@ -1004,7 +1242,159 @@ Suggest the best primary and secondary category. Return ONLY the JSON.`;
 			buildError("somethingWentWrong", {
 				info: "AI returned invalid category suggestion format",
 			});
-			throw new Error("unreachable");
+		}
+	}
+
+	static async generateAgeRating(
+		workspaceId: string,
+		appId: string,
+	): Promise<{
+		appleQuestionnaire: Record<string, string>;
+		appleRating: string;
+		googleQuestionnaire: Record<string, string | boolean>;
+		model: string;
+		presetId: string;
+		reasoning: string;
+	}> {
+		// Fetch app info
+		const [app] = await db
+			.select()
+			.from(apps)
+			.where(eq(apps.id, appId))
+			.limit(1);
+
+		if (!app) buildError("notFound", { info: "App not found" });
+
+		// Fetch listing (prefer English, fallback to first available)
+		const appListings = await db
+			.select()
+			.from(listings)
+			.where(eq(listings.appId, appId));
+
+		const listing =
+			appListings.find((l) => l.language.startsWith("en")) ??
+			appListings[0] ??
+			null;
+
+		// Fetch ASO profile for additional context
+		const asoProfile = await AIService.resolveAsoProfile(appId);
+
+		const appContext = [
+			`App name: ${app.name}`,
+			`Platform: ${app.platform === "ios" ? "iOS" : "Android"}`,
+			app.primaryCategory ? `Category: ${app.primaryCategory}` : null,
+			listing?.fullDesc
+				? `Description: ${listing.fullDesc.substring(0, 1500)}`
+				: null,
+			asoProfile?.keyFeatures?.length
+				? `Key features: ${asoProfile.keyFeatures.join(", ")}`
+				: null,
+			asoProfile?.targetAudience
+				? `Target audience: ${asoProfile.targetAudience}`
+				: null,
+		]
+			.filter(Boolean)
+			.join("\n");
+
+		const systemPrompt = `You are an expert app content classifier specializing in age rating declarations for Apple App Store and Google Play.
+
+Given information about a mobile app, determine the appropriate age rating by answering the content questionnaire.
+
+For Apple, answer each question with one of: "NONE", "INFREQUENT_MILD", "FREQUENT_INTENSE"
+These are the Apple content questions:
+- CARTOON_FANTASY_VIOLENCE: Cartoon or Fantasy Violence
+- REALISTIC_VIOLENCE: Realistic Violence
+- PROLONGED_GRAPHIC_SADISTIC_REALISTIC_VIOLENCE: Prolonged Graphic or Sadistic Realistic Violence
+- PROFANITY_CRUDE_HUMOR: Profanity or Crude Humor
+- MATURE_SUGGESTIVE: Mature/Suggestive Themes
+- HORROR_FEAR_THEMES: Horror/Fear Themes
+- MEDICAL_TREATMENT_INFO: Medical/Treatment Information
+- ALCOHOL_TOBACCO_DRUG_USE: Alcohol, Tobacco, or Drug Use or References
+- SIMULATED_GAMBLING: Simulated Gambling
+- SEXUAL_CONTENT_NUDITY: Sexual Content or Nudity
+- GRAPHIC_SEXUAL_CONTENT_NUDITY: Graphic Sexual Content and Nudity
+- UNRESTRICTED_WEB_ACCESS: Unrestricted Web Access
+- GAMBLING_CONTESTS: Gambling and Contests
+- LOOT_BOX: Loot Boxes
+- CONTESTS: Contests
+- HEALTH_OR_WELLNESS_TOPICS: Health or Wellness Topics
+- GUNS_OR_OTHER_WEAPONS: Guns or Other Weapons
+- USER_GENERATED_CONTENT: User Generated Content
+- PARENTAL_CONTROLS: Parental Controls
+- GAMBLING: Gambling
+- ADVERTISING: Advertising
+- AGE_ASSURANCE: Age Assurance
+- MESSAGING_AND_CHAT: Messaging and Chat
+
+For Google Play, provide these fields:
+- violence: "none" | "mild" | "moderate" | "intense"
+- sexual_content: "none" | "mild" | "moderate"
+- profanity: "none" | "mild" | "strong"
+- drugs: "none" | "reference" | "use"
+- gambling: boolean
+- user_interaction: boolean
+- shares_location: boolean
+- contains_ads: boolean
+
+Rules:
+- Be conservative — when in doubt, rate higher rather than lower
+- Productivity, utility, and educational apps with no objectionable content should be "everyone"
+- Social apps with user-generated content need appropriate UGC and messaging flags
+- Games should carefully evaluate violence, loot boxes, and gambling elements
+- Health/medical apps should flag HEALTH_OR_WELLNESS_TOPICS and MEDICAL_TREATMENT_INFO
+- Apps with ads should flag ADVERTISING
+- Apps with chat/messaging should flag MESSAGING_AND_CHAT
+
+Return ONLY valid JSON with this exact structure:
+{
+  "presetId": "everyone" | "everyone_mild" | "teen" | "mature",
+  "appleQuestionnaire": { ... all 23 questions with values ... },
+  "googleQuestionnaire": { ... all 8 fields ... },
+  "reasoning": "Brief explanation of the classification"
+}`;
+
+		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
+			systemPrompt,
+			appContext,
+			"generate",
+		);
+
+		let cleaned = content.trim();
+		if (cleaned.startsWith("```")) {
+			cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+		}
+
+		try {
+			const result = JSON.parse(cleaned) as {
+				appleQuestionnaire: Record<string, string>;
+				googleQuestionnaire: Record<string, string | boolean>;
+				presetId: string;
+				reasoning: string;
+			};
+
+			// Import computeAppleRating dynamically to avoid circular deps
+			const { computeAppleRating } = await import(
+				"@/modules/age-rating/age-rating.templates"
+			);
+			const appleRating = computeAppleRating(result.appleQuestionnaire);
+
+			return {
+				appleQuestionnaire: result.appleQuestionnaire,
+				appleRating,
+				googleQuestionnaire: result.googleQuestionnaire,
+				model,
+				presetId: result.presetId,
+				reasoning: result.reasoning,
+			};
+		} catch {
+			log.error(
+				{ content },
+				"AI returned invalid JSON for age rating generation",
+			);
+			buildError("somethingWentWrong", {
+				info: "AI returned invalid age rating format",
+			});
 		}
 	}
 }

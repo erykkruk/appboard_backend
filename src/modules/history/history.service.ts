@@ -33,10 +33,7 @@ export class HistoryService {
 			)
 			.limit(1);
 
-		if (!entry) {
-			buildError("notFound", { info: "History entry not found" });
-			throw new Error("unreachable");
-		}
+		if (!entry) buildError("notFound", { info: "History entry not found" });
 
 		// Find the draft listing for this language
 		const [draft] = await db

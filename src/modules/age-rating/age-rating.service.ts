@@ -1,10 +1,9 @@
 import { eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { appAgeRatings, apps, stores } from "@/utils/db/schema";
-import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import { computeAppleRating, getAgeRatingPreset } from "./age-rating.templates";
 
@@ -83,8 +82,8 @@ export class AgeRatingService {
 	static async publish(appId: string) {
 		const rating = await AgeRatingService.get(appId);
 		if (!rating) {
-			buildError("notFound", { info: "Age rating not found — save first" });
-			throw new Error("unreachable");
+			log.info({ appId }, "No age rating configured — skipping publish");
+			return { skipped: true, success: true };
 		}
 
 		await AgeRatingService.pushToStore(appId, rating.appleQuestionnaire);
@@ -116,7 +115,10 @@ export class AgeRatingService {
 			return;
 		}
 
-		const credentials = JSON.parse(decrypt(store.credentials));
+		const credentials = decryptCredentials(
+			store.credentials,
+			store.workspaceId,
+		);
 		const provider = createProvider(store.type as StoreType, credentials);
 
 		await provider.updateAgeRating(app.externalId, appleQuestionnaire);

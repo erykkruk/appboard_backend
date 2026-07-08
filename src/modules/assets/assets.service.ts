@@ -1,9 +1,9 @@
 import { and, eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
-import { apps, assets, stores } from "@/utils/db/schema";
+import { apps, assets, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
@@ -12,11 +12,23 @@ const log = createLogger("assets-service");
 export class AssetsService {
 	static async syncFromStore(appId: string) {
 		const app = await AssetsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
-		// Fetch assets for all common languages
-		const languages = ["en-US", "pl-PL", "de-DE"];
+		// Derive languages from existing listings (synced from store)
+		const appListings = await db
+			.select({ language: listings.language })
+			.from(listings)
+			.where(eq(listings.appId, appId));
+		const languageSet = new Set(appListings.map((l) => l.language));
+		// Ensure at least en-US so we always try the default language
+		if (languageSet.size === 0) {
+			languageSet.add("en-US");
+		}
+		const languages = [...languageSet];
 		let totalSynced = 0;
 
 		for (const language of languages) {
@@ -64,9 +76,19 @@ export class AssetsService {
 			}
 		}
 
+		// Update app iconUrl from synced icon asset
+		const [iconAsset] = await db
+			.select({ url: assets.url })
+			.from(assets)
+			.where(and(eq(assets.appId, appId), eq(assets.assetType, "icon")))
+			.limit(1);
+
 		await db
 			.update(apps)
-			.set({ lastSyncedAt: new Date() })
+			.set({
+				iconUrl: iconAsset?.url ?? undefined,
+				lastSyncedAt: new Date(),
+			})
 			.where(eq(apps.id, appId));
 
 		log.info({ appId, count: totalSynced }, "Assets synced from store");
@@ -105,7 +127,10 @@ export class AssetsService {
 		fileName?: string,
 	) {
 		const app = await AssetsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		const result = await provider.uploadAsset(app.externalId, language, file, {
@@ -143,10 +168,7 @@ export class AssetsService {
 			.where(and(eq(assets.id, assetId), eq(assets.appId, appId)))
 			.limit(1);
 
-		if (!asset) {
-			buildError("notFound", { info: "Asset not found" });
-			throw new Error("unreachable");
-		}
+		if (!asset) buildError("notFound", { info: "Asset not found" });
 
 		// Draft assets without externalId can be deleted directly
 		if (asset.source === "draft" && !asset.externalId) {
@@ -157,7 +179,10 @@ export class AssetsService {
 		// Remote or uploaded assets — delete from store first
 		if (asset.externalId) {
 			const app = await AssetsService.getAppWithStore(appId);
-			const credentials = JSON.parse(decrypt(app.store.credentials!));
+			const credentials = decryptCredentials(
+				app.store.credentials!,
+				app.store.workspaceId,
+			);
 			const provider = createProvider(app.store.type as StoreType, credentials);
 			await provider.deleteAsset(app.externalId, asset.externalId);
 		}
@@ -218,10 +243,7 @@ export class AssetsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		return { ...result[0].app, store: result[0].store };
 	}

@@ -1,8 +1,21 @@
 import Elysia, { t } from "elysia";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
+import { SettingsService } from "@/modules/settings/settings.service";
 import { PublishingService } from "./publishing.service";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
+
+const PUBLISH_MODE_KEY_PREFIX = "PUBLISH_MODE";
+const PUBLISH_SCHEDULED_AT_KEY_PREFIX = "PUBLISH_SCHEDULED_AT";
+const DEFAULT_PUBLISH_MODE = "manual";
+
+function publishModeKey(appId: string): string {
+	return `${PUBLISH_MODE_KEY_PREFIX}::${appId}`;
+}
+
+function publishScheduledAtKey(appId: string): string {
+	return `${PUBLISH_SCHEDULED_AT_KEY_PREFIX}::${appId}`;
+}
 
 const appIdParams = t.Object({
 	appId: t.String({ format: "uuid" }),
@@ -42,6 +55,94 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		{
 			detail: {
 				description: "Get publishing overview with pending changes",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.get(
+		"/:appId/publishing/push-preview",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PublishingService.getPushPreview(params.appId);
+		},
+		{
+			detail: {
+				description:
+					"Get preview of all changes that will be pushed to the store",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.get(
+		"/:appId/publishing/settings",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const mode = await SettingsService.getRaw(
+				workspaceId!,
+				publishModeKey(params.appId),
+			);
+			const scheduledAt = await SettingsService.getRaw(
+				workspaceId!,
+				publishScheduledAtKey(params.appId),
+			);
+			return {
+				publishMode: mode ?? DEFAULT_PUBLISH_MODE,
+				publishScheduledAt: scheduledAt ?? null,
+			};
+		},
+		{
+			detail: {
+				description: "Get publish mode settings for the app",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
+	.put(
+		"/:appId/publishing/settings",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			await SettingsService.set(
+				workspaceId!,
+				publishModeKey(params.appId),
+				body.publishMode,
+			);
+
+			if (body.publishMode === "scheduled" && body.publishScheduledAt) {
+				await SettingsService.set(
+					workspaceId!,
+					publishScheduledAtKey(params.appId),
+					body.publishScheduledAt,
+				);
+			} else {
+				// Clear scheduled timestamp when not in scheduled mode
+				await SettingsService.delete(
+					workspaceId!,
+					publishScheduledAtKey(params.appId),
+				);
+			}
+
+			return {
+				publishMode: body.publishMode,
+				publishScheduledAt:
+					body.publishMode === "scheduled"
+						? (body.publishScheduledAt ?? null)
+						: null,
+			};
+		},
+		{
+			body: t.Object({
+				publishMode: t.Union([
+					t.Literal("manual"),
+					t.Literal("auto"),
+					t.Literal("scheduled"),
+				]),
+				publishScheduledAt: t.Optional(t.String({ format: "date-time" })),
+			}),
+			detail: {
+				description: "Update publish mode settings for the app",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,
@@ -186,9 +287,11 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		{
 			body: t.Object({
 				description: t.Optional(t.String()),
+				fullDescription: t.Optional(t.String()),
 				keywords: t.Optional(t.String()),
 				marketingUrl: t.Optional(t.String()),
 				promotionalText: t.Optional(t.String()),
+				shortDescription: t.Optional(t.String()),
 				subtitle: t.Optional(t.String()),
 				supportUrl: t.Optional(t.String()),
 				title: t.Optional(t.String()),
@@ -244,6 +347,28 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 				appId: t.String({ format: "uuid" }),
 				versionId: t.String({ minLength: 1 }),
 			}),
+		},
+	)
+	.post(
+		"/:appId/publishing/screenshots/validate",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PublishingService.validateScreenshotFile(
+				body.displayType,
+				body.file,
+			);
+		},
+		{
+			body: t.Object({
+				displayType: t.String({ maxLength: 100, minLength: 1 }),
+				file: screenshotFile,
+			}),
+			detail: {
+				description:
+					"Validate a screenshot's dimensions against the accepted preset(s) for a display type without uploading",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
 		},
 	)
 	.post(
@@ -411,24 +536,62 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		"/:appId/publishing/screenshots/copy",
 		async ({ body, params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
-			return PublishingService.copyScreenshots(
-				params.appId,
-				body.versionId,
-				body.sourceLanguage,
-				body.targetLanguage,
-				body.displayType,
-			);
+
+			// Single target stays the primary contract; targetLanguages lets the
+			// panel fan one upload out to many locales in one request.
+			const targets = body.targetLanguages?.length
+				? [...new Set(body.targetLanguages)]
+				: [body.targetLanguage];
+
+			const results: {
+				copied: number;
+				error?: string;
+				targetLanguage: string;
+			}[] = [];
+			for (const target of targets) {
+				if (!target || target === body.sourceLanguage) continue;
+				try {
+					const result = await PublishingService.copyScreenshots(
+						params.appId,
+						body.versionId,
+						body.sourceLanguage,
+						target,
+						body.displayType,
+						body.copyLocalizations,
+					);
+					results.push({ copied: result.copied, targetLanguage: target });
+				} catch (err) {
+					results.push({
+						copied: 0,
+						error: err instanceof Error ? err.message : String(err),
+						targetLanguage: target,
+					});
+				}
+			}
+
+			const copied = results.reduce((sum, r) => sum + r.copied, 0);
+			// Backward-compatible shape: `copied` total plus per-target results.
+			return { copied, results };
 		},
 		{
 			body: t.Object({
+				copyLocalizations: t.Optional(t.Boolean()),
 				displayType: t.Optional(t.String({ maxLength: 100, minLength: 1 })),
 				sourceLanguage: t.String({ maxLength: 20, minLength: 1 }),
+				// Primary single target (kept required for contract stability);
+				// targetLanguages, when present, supersedes it for multi-locale fan-out.
 				targetLanguage: t.String({ maxLength: 20, minLength: 1 }),
+				targetLanguages: t.Optional(
+					t.Array(t.String({ maxLength: 20, minLength: 1 }), {
+						maxItems: 50,
+						minItems: 1,
+					}),
+				),
 				versionId: t.String({ maxLength: 200, minLength: 1 }),
 			}),
 			detail: {
 				description:
-					"Copy screenshots from one language to another within a version",
+					"Copy screenshots from one language to one or many others within a version; optionally copy text localizations too",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,
@@ -691,7 +854,8 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			detail: {
-				description: "Submit the app for Apple review",
+				description:
+					"Submit changes for store review (App Store or Google Play)",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,

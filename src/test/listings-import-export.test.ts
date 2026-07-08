@@ -57,7 +57,7 @@ describe("Listings import/export", () => {
 	// ── Template ─────────────────────────────────────────────────────────
 
 	describe("GET /api/apps/:appId/listings/template", () => {
-		it("returns CSV template with all 10 column headers", async () => {
+		it("returns CSV template with all 11 column headers", async () => {
 			const res = await app.handle(
 				authRequest(
 					`http://localhost/api/apps/${appId}/listings/template?format=csv`,
@@ -75,7 +75,7 @@ describe("Listings import/export", () => {
 			const lines = text.split("\n");
 
 			const expectedHeaders =
-				"language,title,shortDesc,fullDesc,keywords,promoText,whatsNew,marketingUrl,supportUrl,privacyUrl";
+				"language,title,shortDesc,fullDesc,keywords,promoText,whatsNew,marketingUrl,supportUrl,privacyUrl,videoUrl";
 			expect(lines[0]).toBe(expectedHeaders);
 			expect(lines).toHaveLength(2);
 		});
@@ -92,7 +92,7 @@ describe("Listings import/export", () => {
 			expect(dataRow).toStartWith("en-US,");
 		});
 
-		it("returns JSON template with all 10 keys", async () => {
+		it("returns JSON template with all 11 keys", async () => {
 			const res = await app.handle(
 				authRequest(
 					`http://localhost/api/apps/${appId}/listings/template?format=json`,
@@ -120,7 +120,8 @@ describe("Listings import/export", () => {
 			expect(keys).toContain("marketingUrl");
 			expect(keys).toContain("supportUrl");
 			expect(keys).toContain("privacyUrl");
-			expect(keys).toHaveLength(10);
+			expect(keys).toContain("videoUrl");
+			expect(keys).toHaveLength(11);
 		});
 
 		it("JSON template values are all empty strings", async () => {
@@ -183,7 +184,7 @@ describe("Listings import/export", () => {
 			// Header + at least 3 languages from mock (en-US, ja-JP, de-DE)
 			expect(lines.length).toBeGreaterThanOrEqual(4);
 			expect(lines[0]).toBe(
-				"language,title,shortDesc,fullDesc,keywords,promoText,whatsNew,marketingUrl,supportUrl,privacyUrl",
+				"language,title,shortDesc,fullDesc,keywords,promoText,whatsNew,marketingUrl,supportUrl,privacyUrl,videoUrl",
 			);
 		});
 
@@ -234,6 +235,7 @@ describe("Listings import/export", () => {
 				"marketingUrl",
 				"supportUrl",
 				"privacyUrl",
+				"videoUrl",
 			]);
 
 			// Each data row should have same number of fields as header

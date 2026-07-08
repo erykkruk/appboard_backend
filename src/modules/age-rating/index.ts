@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { AIService } from "@/modules/ai/ai.service";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ageRatingParams, upsertAgeRatingBody } from "./age-rating.schema";
 import { AgeRatingService } from "./age-rating.service";
@@ -60,6 +61,20 @@ export const ageRatingController = new Elysia({
 		{
 			detail: {
 				description: "Publish age rating to store",
+				tags: ["Age Rating"],
+			},
+			params: ageRatingParams,
+		},
+	)
+	.post(
+		"/generate",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return AIService.generateAgeRating(workspaceId!, params.appId);
+		},
+		{
+			detail: {
+				description: "AI-generate age rating suggestion based on app data",
 				tags: ["Age Rating"],
 			},
 			params: ageRatingParams,

@@ -9,6 +9,7 @@ type AndroidPublisher = androidpublisher_v3.Androidpublisher;
 
 export interface GooglePlayClient {
 	api: AndroidPublisher;
+	auth: InstanceType<typeof google.auth.GoogleAuth>;
 	packageNames: string[];
 }
 
@@ -26,7 +27,10 @@ export async function createGooglePlayClient(
 			private_key_id: credentials.private_key_id,
 		},
 		projectId: credentials.project_id,
-		scopes: ["https://www.googleapis.com/auth/androidpublisher"],
+		scopes: [
+			"https://www.googleapis.com/auth/androidpublisher",
+			"https://www.googleapis.com/auth/playdeveloperreporting",
+		],
 	});
 
 	const api = google.androidpublisher({
@@ -34,7 +38,12 @@ export async function createGooglePlayClient(
 		version: "v3",
 	});
 
-	const packageNames = credentials.package_names ?? [];
+	// Use explicitly provided package_names, or auto-discover via Reporting API
+	let packageNames = credentials.package_names ?? [];
+
+	if (packageNames.length === 0) {
+		packageNames = await discoverPackageNames(auth);
+	}
 
 	log.info(
 		{
@@ -44,7 +53,37 @@ export async function createGooglePlayClient(
 		"Google Play API client created",
 	);
 
-	return { api, packageNames };
+	return { api, auth, packageNames };
+}
+
+/**
+ * Discovers all apps accessible by the service account using
+ * the Play Developer Reporting API (supports draft & production apps).
+ */
+async function discoverPackageNames(
+	auth: InstanceType<typeof google.auth.GoogleAuth>,
+): Promise<string[]> {
+	try {
+		const reporting = google.playdeveloperreporting({
+			auth,
+			version: "v1beta1",
+		});
+
+		const { data } = await reporting.apps.search({});
+		const names =
+			data.apps
+				?.map((app) => app.packageName)
+				.filter((name): name is string => !!name) ?? [];
+
+		log.info(
+			{ count: names.length, packages: names },
+			"Auto-discovered apps via Reporting API",
+		);
+		return names;
+	} catch (err) {
+		log.warn({ err }, "Failed to discover apps via Reporting API");
+		return [];
+	}
 }
 
 /**
@@ -65,15 +104,47 @@ export async function createEdit(
 }
 
 /**
- * Commits (publishes) an existing edit.
+ * Commits an existing edit.
+ * By default, changes are NOT sent for review — they stay as a pending
+ * update on Google Play until manually sent for review from the Console.
+ * Set `sendForReview: true` to submit immediately.
+ *
+ * If `changesNotSentForReview` fails (e.g. new app without prior review),
+ * automatically retries without the flag.
  */
 export async function commitEdit(
 	api: AndroidPublisher,
 	packageName: string,
 	editId: string,
+	options?: { sendForReview?: boolean },
 ): Promise<void> {
-	await api.edits.commit({ editId, packageName });
-	log.info({ editId, packageName }, "Edit committed");
+	const wantDraft = !(options?.sendForReview ?? false);
+
+	if (wantDraft) {
+		try {
+			await api.edits.commit({
+				changesNotSentForReview: true,
+				editId,
+				packageName,
+			});
+			log.info(
+				{ editId, packageName, sentForReview: false },
+				"Edit committed (draft)",
+			);
+			return;
+		} catch (err) {
+			log.warn(
+				{ editId, err: (err as Error).message, packageName },
+				"Draft commit failed, retrying without changesNotSentForReview",
+			);
+		}
+	}
+
+	await api.edits.commit({
+		editId,
+		packageName,
+	});
+	log.info({ editId, packageName, sentForReview: true }, "Edit committed");
 }
 
 /**

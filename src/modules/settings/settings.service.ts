@@ -30,10 +30,7 @@ export class SettingsService {
 			.where(and(eq(settings.workspaceId, workspaceId), eq(settings.key, k)))
 			.limit(1);
 
-		if (!row) {
-			buildError("notFound", { info: `Setting '${k}' not found` });
-			throw new Error("unreachable");
-		}
+		if (!row) buildError("notFound", { info: `Setting '${k}' not found` });
 
 		return {
 			...row,

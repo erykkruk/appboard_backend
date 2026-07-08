@@ -1,7 +1,7 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { apps, reviews, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -12,7 +12,10 @@ const log = createLogger("reviews-service");
 export class ReviewsService {
 	static async syncFromStore(appId: string) {
 		const app = await ReviewsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		const fetched = await provider.fetchReviews(app.externalId);
@@ -116,13 +119,13 @@ export class ReviewsService {
 			.where(and(eq(reviews.id, reviewId), eq(reviews.appId, appId)))
 			.limit(1);
 
-		if (!review) {
-			buildError("notFound", { info: "Review not found" });
-			throw new Error("unreachable");
-		}
+		if (!review) buildError("notFound", { info: "Review not found" });
 
 		const app = await ReviewsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		await provider.replyToReview(app.externalId, review.externalId, text);
@@ -185,10 +188,7 @@ export class ReviewsService {
 			.where(eq(apps.id, appId))
 			.limit(1);
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "App not found" });
-			throw new Error("unreachable");
-		}
+		if (result.length === 0) buildError("notFound", { info: "App not found" });
 
 		return { ...result[0].app, store: result[0].store };
 	}

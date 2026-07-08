@@ -5,6 +5,7 @@ import {
 	generateDescriptionBody,
 	generateListingFieldBody,
 	generatePrivacyBody,
+	generatePurchaseFieldBody,
 	generateReleaseNotesBody,
 	suggestCategoryBody,
 	suggestKeywordsBody,
@@ -38,6 +39,29 @@ export const aiController = new Elysia({ prefix: "/ai" })
 		},
 	)
 	.post(
+		"/generate-purchase-field",
+		async ({ body, workspaceId }) => {
+			await verifyAppOwnership(body.appId, workspaceId!);
+			const { model, result } = await AIService.generatePurchaseField(
+				workspaceId!,
+				body.appId,
+				body.field,
+				body.context,
+				body.currentValue,
+				body.language,
+			);
+			return { mock: false, model, result };
+		},
+		{
+			body: generatePurchaseFieldBody,
+			detail: {
+				description:
+					"Generate or improve purchase/subscription field content using AI",
+				tags: ["AI"],
+			},
+		},
+	)
+	.post(
 		"/translate",
 		async ({ body, workspaceId }) => {
 			return AIService.translate(workspaceId!, body.text, body.targetLanguages);
@@ -62,6 +86,7 @@ export const aiController = new Elysia({ prefix: "/ai" })
 				body.fields,
 				body.sourceLanguage,
 				body.targetLanguage,
+				body.instructions,
 			);
 		},
 		{
@@ -136,6 +161,7 @@ export const aiController = new Elysia({ prefix: "/ai" })
 				workspaceId!,
 				body.appName,
 				body.description,
+				body.platform,
 			);
 			return { mock: false, model, result };
 		},

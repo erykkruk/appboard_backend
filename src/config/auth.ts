@@ -17,6 +17,19 @@ const smtpConfigured = !!(
 const DEV_OTP = "123456";
 const isDev = config.NODE_ENV !== "production";
 
+// Dev-only OTP fallback. When SMTP is unconfigured in a NON-production
+// environment we accept a fixed code so local login works without email.
+// This is gated on isDev (never `!smtpConfigured` alone) so production can
+// never silently enable a fixed-OTP login. The startup guard below makes the
+// unsafe state (production without SMTP) impossible by refusing to boot.
+const useDevOtp = isDev && !smtpConfigured;
+
+if (!isDev && !smtpConfigured) {
+	throw new Error(
+		"SMTP must be configured in production: set SMTP_HOST, SMTP_USER and SMTP_PASS",
+	);
+}
+
 // Dev mode: store real OTP per email so we can swap "123456" → real code
 const devOtpStore = new Map<string, string>();
 
@@ -72,7 +85,7 @@ export const auth = betterAuth({
 			expiresIn: 300,
 			otpLength: 6,
 			async sendVerificationOTP({ email, otp, type }) {
-				if (!smtpConfigured) {
+				if (useDevOtp) {
 					// Dev mode: remember the real OTP, user enters "123456"
 					devOtpStore.set(email, otp);
 					log.info({ email, type }, `DEV MODE — use code ${DEV_OTP}`);
@@ -110,7 +123,7 @@ export const auth = betterAuth({
 });
 
 // Dev mode: intercept OTP verification — swap "123456" with the real OTP
-if (!smtpConfigured) {
+if (useDevOtp) {
 	const originalHandler = auth.handler;
 	auth.handler = async (request: Request) => {
 		const url = new URL(request.url);

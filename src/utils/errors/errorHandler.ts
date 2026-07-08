@@ -1,7 +1,10 @@
 import Elysia from "elysia";
+import config from "@/config";
 import { createLogger } from "@/utils/logger";
 
 const log = createLogger("errorHandler");
+
+const isProd = config.NODE_ENV === "production";
 
 export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 	{ as: "global" },
@@ -21,12 +24,26 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 			case "INTERNAL_SERVER_ERROR":
 				log.error(error, "Internal server error");
 				set.status = 500;
-				return { code: "SOMETHING_WENT_WRONG" };
+				return {
+					code: "SOMETHING_WENT_WRONG",
+					data: {
+						info: isProd
+							? "Internal server error"
+							: error?.message || "Internal server error",
+					},
+				};
 
 			case "UNKNOWN":
 				log.error(error, "Unknown error");
 				set.status = 500;
-				return { code: "SOMETHING_WENT_WRONG" };
+				return {
+					code: "SOMETHING_WENT_WRONG",
+					data: {
+						info: isProd
+							? "Internal server error"
+							: error?.message || "Unknown error",
+					},
+				};
 
 			case "PARSE":
 				set.status = 400;
@@ -37,17 +54,39 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 
 			default: {
 				// Handle buildError() responses (status() throws with a specific shape)
-				const statusCode =
-					(error as Record<string, unknown>)?.status ??
-					(error as Record<string, unknown>)?.statusCode;
-				if (typeof statusCode === "number" && statusCode >= 400) {
+				// Elysia status() puts HTTP code in .code (number), external APIs use .status/.statusCode
+				const err = error as Record<string, unknown>;
+				const rawCode = err?.status ?? err?.statusCode ?? err?.code;
+				const statusCode = typeof rawCode === "number" ? rawCode : undefined;
+				if (statusCode !== undefined && statusCode >= 400) {
 					set.status = statusCode;
 					const body = (error as Record<string, unknown>)?.response;
 					if (body && typeof body === "object" && "code" in body) {
 						return body;
 					}
+					// External/upstream API errors (e.g. googleapis). Don't leak raw
+					// upstream messages to clients in production — they can carry
+					// internal/request context. Full detail is still logged above.
+					log.error(error, "Unhandled error with status code");
+					return {
+						code: "EXTERNAL_ERROR",
+						data: {
+							info: isProd
+								? "Upstream service error"
+								: error?.message || `Error (${statusCode})`,
+						},
+					};
 				}
-				return;
+				log.error(error, "Unhandled error");
+				set.status = 500;
+				return {
+					code: "SOMETHING_WENT_WRONG",
+					data: {
+						info: isProd
+							? "Internal server error"
+							: error?.message || "Unknown error",
+					},
+				};
 			}
 		}
 	},
