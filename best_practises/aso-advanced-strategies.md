@@ -1,106 +1,106 @@
-# ASO — Zaawansowane strategie i deep dive (2026)
+# ASO — Advanced strategies and deep dive (2026)
 
-> Rozszerzony research: algorytmy rankingowe, Custom Product Pages, In-App Events, sezonowość, analiza konkurencji, Apple Search Ads synergy, retencja, ikony.
+> Extended research: ranking algorithms, Custom Product Pages, In-App Events, seasonality, competitor analysis, Apple Search Ads synergy, retention, icons.
 
 ---
 
-## Spis treści
+## Table of contents
 
-1. [Algorytm rankingowy — jak naprawdę działa](#1-algorytm-rankingowy)
-2. [Retencja i jakość użytkowników](#2-retencja-i-jakość-użytkowników)
+1. [Ranking algorithm — how it really works](#1-ranking-algorithm)
+2. [Retention and user quality](#2-retention-and-user-quality)
 3. [Custom Product Pages & Custom Store Listings](#3-custom-product-pages)
 4. [In-App Events & Promotional Content](#4-in-app-events--promotional-content)
 5. [Apple Search Ads + ASO Synergy](#5-apple-search-ads--aso-synergy)
-6. [Analiza konkurencji — deep dive](#6-analiza-konkurencji)
-7. [Sezonowe ASO — kalendarz i taktyki](#7-sezonowe-aso)
-8. [Ikona aplikacji — zaawansowany design](#8-ikona-aplikacji)
+6. [Competitor analysis — deep dive](#6-competitor-analysis)
+7. [Seasonal ASO — calendar and tactics](#7-seasonal-aso)
+8. [App icon — advanced design](#8-app-icon)
 9. [Rating Prompt Strategy](#9-rating-prompt-strategy)
-10. [Narzędzia ASO](#10-narzędzia-aso)
+10. [ASO tools](#10-aso-tools)
 
 ---
 
-## 1. Algorytm rankingowy
+## 1. Ranking algorithm
 
-### Apple App Store — czynniki rankingowe (waga malejąca):
+### Apple App Store — ranking factors (decreasing weight):
 
-| Czynnik | Waga | Opis |
-|---------|------|------|
-| **Tytuł + Podtytuł** | Najwyższa | Najsilniej ważone pola tekstowe dla keyword relevance |
-| **Keyword Field** | Wysoka | 100 znaków, uzupełnia tytuł/podtytuł |
-| **Download Velocity** | Wysoka | Prędkość pobrań w czasie — silny sygnał |
-| **Conversion Rate** | Wysoka | % wyświetleń → instalacja |
-| **Retencja D7/D30** | Wysoka | Retencja na 7. i 30. dzień — **większa waga niż CTR** |
-| **Oceny i recenzje** | Wysoka | Poniżej 3.5★ = "znacząco obniżona widoczność"; 4.0+ koreluje z lepszym rankingiem |
-| **Uninstall rate** | Wysoka | Szybka deinstalacja = negatywny wpływ **silniejszy niż niska ocena** |
-| **Session length / DAU** | Średnia | Długość sesji, aktywni użytkownicy dzienni |
-| **Crash rate** | Średnia | Niestabilne wydania → spadek ocen → spadek konwersji → spadek rankingu |
-| **Update frequency** | Średnia | Regularne aktualizacje (co 2-4 tygodnie) sygnalizują aktywny rozwój |
-| **In-App Events** | Niska-Średnia | Indeksowane w search, dodatkowa widoczność |
-| **Screenshot captions** | Nowa! | Niektóre napisy na screenach są teraz uwzględniane w rankingu |
-| **Revenue** | Pośrednia | Wpływ przez engagement metrics |
+| Factor | Weight | Description |
+|---------|------|-------------|
+| **Title + Subtitle** | Highest | The most heavily weighted text fields for keyword relevance |
+| **Keyword Field** | High | 100 characters, complements title/subtitle |
+| **Download Velocity** | High | Download speed over time — a strong signal |
+| **Conversion Rate** | High | % of impressions → install |
+| **Retention D7/D30** | High | Day-7 and day-30 retention — **greater weight than CTR** |
+| **Ratings and reviews** | High | Below 3.5★ = "significantly reduced visibility"; 4.0+ correlates with better ranking |
+| **Uninstall rate** | High | Fast uninstall = negative impact **stronger than a low rating** |
+| **Session length / DAU** | Medium | Session length, daily active users |
+| **Crash rate** | Medium | Unstable releases → lower ratings → lower conversion → lower ranking |
+| **Update frequency** | Medium | Regular updates (every 2-4 weeks) signal active development |
+| **In-App Events** | Low-Medium | Indexed in search, extra visibility |
+| **Screenshot captions** | New! | Some screenshot captions are now factored into ranking |
+| **Revenue** | Indirect | Impact through engagement metrics |
 
-### Google Play — czynniki rankingowe:
+### Google Play — ranking factors:
 
-| Czynnik | Waga | Różnica vs iOS |
+| Factor | Weight | Difference vs iOS |
 |---------|------|---------------|
-| **Tytuł** | Najwyższa | Tak samo jak iOS |
-| **Krótki opis** | Wysoka | iOS nie ma tego pola |
-| **Długi opis** | Średnia | **Indeksowany** (iOS NIE indeksuje opisu!) |
-| **Download velocity** | Wysoka | Tak samo |
-| **Oceny i recenzje** | Wysoka | Sentiment analysis, review velocity |
-| **Retencja / engagement** | Wysoka | DAU, session freq/length, uninstall rate |
-| **Android Vitals** | Wysoka | Crash rate, ANR rate, battery, load time — **penalizacja za złe wyniki** |
-| **Backlinks** | Niska | Google indexuje linki do listingu z webu |
-| **Lokalizacja** | Średnia | Zlokalizowane apps dostają boost w danym regionie |
-| **Update frequency** | Średnia | Regularne aktualizacje = pozytywny sygnał |
+| **Title** | Highest | Same as iOS |
+| **Short description** | High | iOS doesn't have this field |
+| **Long description** | Medium | **Indexed** (iOS does NOT index the description!) |
+| **Download velocity** | High | Same |
+| **Ratings and reviews** | High | Sentiment analysis, review velocity |
+| **Retention / engagement** | High | DAU, session freq/length, uninstall rate |
+| **Android Vitals** | High | Crash rate, ANR rate, battery, load time — **penalty for poor results** |
+| **Backlinks** | Low | Google indexes links to the listing from the web |
+| **Localization** | Medium | Localized apps get a boost in the given region |
+| **Update frequency** | Medium | Regular updates = positive signal |
 
-### Kluczowy insight 2026:
+### Key insight 2026:
 
-> **Ranking w 2026 to mniej "kto najlepiej napcha keywords", a bardziej "kto udowodni na dużą skalę, że prawdziwi użytkownicy chcą aplikacji, lubią ją i ją trzymają."**
+> **Ranking in 2026 is less about "who stuffs keywords best" and more about "who proves at scale that real users want the app, like it, and keep it."**
 
-### Hierarchia ważności (od najważniejszej):
+### Priority hierarchy (from most important):
 ```
-1. Produkt (retencja, engagement, jakość)
-2. Metadata (tytuł, keywords, opis)
-3. Konwersja (screenshoty, ikona, opis)
-4. Wolumen (downloads, velocity)
-5. Social proof (oceny, recenzje)
-6. Sygnały zewnętrzne (ads, editorial, linki)
+1. Product (retention, engagement, quality)
+2. Metadata (title, keywords, description)
+3. Conversion (screenshots, icon, description)
+4. Volume (downloads, velocity)
+5. Social proof (ratings, reviews)
+6. External signals (ads, editorial, links)
 ```
 
 ---
 
-## 2. Retencja i jakość użytkowników
+## 2. Retention and user quality
 
-### Dlaczego retencja jest teraz ważniejsza niż kiedykolwiek:
+### Why retention matters more now than ever:
 
-- **Retencja D7/D30 ma większą wagę niż CTR** w algorytmie
-- Szybka deinstalacja ma **bardziej negatywny wpływ niż niska ocena gwiazdkowa**
-- Sklepy nagradzają aplikacje, które użytkownicy **trzymają i z których korzystają**
+- **Retention D7/D30 carries greater weight than CTR** in the algorithm
+- Fast uninstall has a **more negative impact than a low star rating**
+- Stores reward apps that users **keep and use**
 
-### Metryki retencji wpływające na ranking:
+### Retention metrics affecting ranking:
 
-| Metryka | Opis | Wpływ |
+| Metric | Description | Impact |
 |---------|------|-------|
-| **D1 Retention** | % użytkowników wracających po 1 dniu | Wczesny sygnał jakości |
-| **D7 Retention** | % po 7 dniach | Silny sygnał — wyżej niż CTR |
-| **D30 Retention** | % po 30 dniach | Kluczowy long-term sygnał |
-| **Session frequency** | Jak często otwierają app | Engagement metric |
-| **Session length** | Jak długo spędzają w app | Zaangażowanie |
-| **Uninstall rate** | % deinstalacji po instalacji | Negatywny sygnał |
-| **Churn rate** | % użytkowników odchodzących w danym okresie | Trend quality |
+| **D1 Retention** | % of users returning after 1 day | Early quality signal |
+| **D7 Retention** | % after 7 days | Strong signal — higher than CTR |
+| **D30 Retention** | % after 30 days | Key long-term signal |
+| **Session frequency** | How often they open the app | Engagement metric |
+| **Session length** | How long they spend in the app | Engagement |
+| **Uninstall rate** | % of uninstalls after install | Negative signal |
+| **Churn rate** | % of users leaving in a given period | Trend quality |
 
-### Co to oznacza dla ASO:
+### What this means for ASO:
 
-1. **Nie generuj fałszywych instalacji** — boty/incentivized installs → szybka deinstalacja → penalizacja
-2. **Targetuj właściwych użytkowników** — CPP/CSL dopasowane do intencji → lepszy product-market fit → lepsza retencja
-3. **Nie obiecuj w listingu tego czego nie dostarczasz** — mismatch expectation → deinstalacja → spadek rankingu
-4. **Onboarding jest częścią ASO** — dobry onboarding → lepsza retencja → lepszy ranking
-5. **Monitoruj Android Vitals** — crash rate, ANR, battery → penalizacja za złe wyniki
+1. **Don't generate fake installs** — bots/incentivized installs → fast uninstall → penalty
+2. **Target the right users** — CPP/CSL matched to intent → better product-market fit → better retention
+3. **Don't promise in the listing what you don't deliver** — expectation mismatch → uninstall → ranking drop
+4. **Onboarding is part of ASO** — good onboarding → better retention → better ranking
+5. **Monitor Android Vitals** — crash rate, ANR, battery → penalty for poor results
 
 ### Feedback loop:
 ```
-Lepszy listing → Właściwi użytkownicy → Lepsza retencja → Wyższy ranking → Więcej widoczności → Więcej właściwych użytkowników
+Better listing → Right users → Better retention → Higher ranking → More visibility → More of the right users
 ```
 
 ---
@@ -109,58 +109,58 @@ Lepszy listing → Właściwi użytkownicy → Lepsza retencja → Wyższy ranki
 
 ### Apple — Custom Product Pages (CPP):
 
-| Element | Szczegóły |
+| Element | Details |
 |---------|-----------|
-| **Max liczba** | 70 CPP na aplikację (zwiększone z 35, październik 2025) |
-| **Co można customizować** | Screenshoty, wideo, promotional text, deep links |
-| **Czego NIE można zmienić** | Tytuł, opis, ikona (stałe z default page) |
-| **Lokalizacja** | Pełna per region |
-| **Organic search** | Od lipca 2025 — CPP pojawiają się w **organicznych wynikach** wyszukiwania! |
+| **Max count** | 70 CPPs per app (increased from 35, October 2025) |
+| **What you can customize** | Screenshots, video, promotional text, deep links |
+| **What you CANNOT change** | Title, description, icon (fixed from the default page) |
+| **Localization** | Full per region |
+| **Organic search** | As of July 2025 — CPPs appear in **organic** search results! |
 
-### Przełom 2025 — CPP w organic search:
+### Breakthrough 2025 — CPP in organic search:
 
-- Przypisz keywords z keyword field do konkretnych CPP
-- Gdy app rankuje na te keywords, CPP może **zastąpić default page** w wynikach
-- Każda kombinacja keywords musi być **unikalna** dla jednego CPP
-- App Store Connect pokazuje search impressions per CPP
+- Assign keywords from the keyword field to specific CPPs
+- When the app ranks for those keywords, the CPP can **replace the default page** in results
+- Each keyword combination must be **unique** to one CPP
+- App Store Connect shows search impressions per CPP
 
-### Strategiczne use cases:
+### Strategic use cases:
 
-| Strategia | Przykład |
+| Strategy | Example |
 |-----------|---------|
-| **Feature-based** | Aplikacja designerska: osobny CPP na "photo editor", "background remover", "AI filters" |
-| **Audience-based** | Fitness: CPP dla "strength training" (mężczyźni), CPP dla "yoga" (kobiety) |
-| **Language-based** | App do nauki języków: CPP z obrazkami zabytków Paryża dla "learn French" |
-| **Seasonal** | CPP na Black Friday z promocjami w pierwszym screenshocie |
-| **Campaign-aligned** | CPP dopasowane do kreacji reklamowych (Facebook → CPP z tym samym messaging) |
+| **Feature-based** | Design app: separate CPP for "photo editor", "background remover", "AI filters" |
+| **Audience-based** | Fitness: CPP for "strength training" (men), CPP for "yoga" (women) |
+| **Language-based** | Language-learning app: CPP with images of Paris landmarks for "learn French" |
+| **Seasonal** | Black Friday CPP with promotions in the first screenshot |
+| **Campaign-aligned** | CPP matched to ad creatives (Facebook → CPP with the same messaging) |
 
-### Wydajność:
+### Performance:
 
-| Segment | Wzrost konwersji |
+| Segment | Conversion lift |
 |---------|-----------------|
-| Gry | +8% CVR |
+| Games | +8% CVR |
 | Non-gaming | +6.6% CVR |
-| Generic campaigns | do +8.6% CVR |
+| Generic campaigns | up to +8.6% CVR |
 | SoundCloud (keyword campaigns) | **+58% CVR**, -39% CPI |
-| CBS Sports | +20% konwersji |
+| CBS Sports | +20% conversion |
 
 ### Google Play — Custom Store Listings (CSL):
 
-| Element | Szczegóły |
+| Element | Details |
 |---------|-----------|
-| **Max liczba** | 50 CSL |
-| **Co można customizować** | Tytuł, opis, ikona, screenshoty, wideo — **więcej niż Apple!** |
-| **Deep links** | Działają tylko dla użytkowników z już zainstalowaną app |
-| **Targeting** | Kraj, UTM source, installed state |
+| **Max count** | 50 CSLs |
+| **What you can customize** | Title, description, icon, screenshots, video — **more than Apple!** |
+| **Deep links** | Only work for users who already have the app installed |
+| **Targeting** | Country, UTM source, installed state |
 
-### Best practices CPP/CSL:
+### CPP/CSL best practices:
 
-1. **Ad → CPP alignment** — messaging reklamy musi matchować CPP, inaczej drop-off po kliknięciu
-2. **Pierwszy screenshot = najważniejszy** — często jedyna rzecz którą user widzi
-3. **Jedno jasne CTA** — nie kilka na jednej stronie
-4. **Testuj systematycznie** — jeden wariant na raz
-5. **Nie twórz CPP na każdy minor feature** — skup się na high-impact wariantach
-6. **Cross-team collaboration** — ASO + UA + kreacja muszą współpracować
+1. **Ad → CPP alignment** — the ad's messaging must match the CPP, otherwise drop-off after the click
+2. **The first screenshot = most important** — often the only thing the user sees
+3. **One clear CTA** — not several on one page
+4. **Test systematically** — one variant at a time
+5. **Don't create a CPP for every minor feature** — focus on high-impact variants
+6. **Cross-team collaboration** — ASO + UA + creative must work together
 
 ---
 
@@ -168,85 +168,85 @@ Lepszy listing → Właściwi użytkownicy → Lepsza retencja → Wyższy ranki
 
 ### Apple — In-App Events:
 
-**Typy eventów (badges):**
+**Event types (badges):**
 
-| Badge | Opis | Przykład |
+| Badge | Description | Example |
 |-------|------|---------|
-| Challenge | Cel do osiągnięcia w timeframe | "30-day fitness challenge" |
-| Competition | Rywalizacja z innymi | "Weekly leaderboard" |
-| Live Event | Real-time doświadczenie | "Live Q&A with CEO" |
-| Major Update | Znaczący nowy feature | "AI-powered search is here" |
-| New Season | Nowy cykl contentu | "Season 3 available now" |
-| Premiere | Premiera contentu | "New course: Advanced ASO" |
-| Special Event | Inne unikalne momenty | "Anniversary celebration" |
+| Challenge | Goal to reach within a timeframe | "30-day fitness challenge" |
+| Competition | Competing with others | "Weekly leaderboard" |
+| Live Event | Real-time experience | "Live Q&A with CEO" |
+| Major Update | Significant new feature | "AI-powered search is here" |
+| New Season | New content cycle | "Season 3 available now" |
+| Premiere | Content premiere | "New course: Advanced ASO" |
+| Special Event | Other unique moments | "Anniversary celebration" |
 
-**Limity i wymagania:**
+**Limits and requirements:**
 
 | Element | Limit |
 |---------|-------|
-| Max zatwierdzonych eventów | 15 |
-| Max live jednocześnie | 10 |
-| Czas trwania | 15 min – 31 dni |
-| Publikacja przed startem | Do 14 dni |
-| Event Name | max 30 znaków (searchable!) |
-| Short Description | max 50 znaków |
-| Long Description | max 120 znaków |
+| Max approved events | 15 |
+| Max live simultaneously | 10 |
+| Duration | 15 min – 31 days |
+| Publish before start | Up to 14 days |
+| Event Name | max 30 characters (searchable!) |
+| Short Description | max 50 characters |
+| Long Description | max 120 characters |
 
-**Wymagania graficzne:**
+**Graphic requirements:**
 
-| Element | Rozmiar | Format |
+| Element | Size | Format |
 |---------|---------|--------|
 | Event Card | 1920×1080 (16:9, landscape) | JPG/PNG/Video |
 | Details Page | 1080×1920 (9:16, portrait) | JPG/PNG/Video |
 
-**Gdzie się pojawiają:**
-- Na product page
-- **W wynikach wyszukiwania** (pod listingiem — app pojawia się dwukrotnie!)
-- Today tab, Apps tab, Games tab (edytorialnie kuratowane)
+**Where they appear:**
+- On the product page
+- **In search results** (below the listing — the app appears twice!)
+- Today tab, Apps tab, Games tab (editorially curated)
 
-**Apple odrzuca eventy które:**
-- Promują ongoing/powtarzalne aktywności
-- Skupiają się wyłącznie na zniżce bez nowego contentu
-- Mają generyczny/niejasny opis
+**Apple rejects events that:**
+- Promote ongoing/recurring activities
+- Focus solely on a discount without new content
+- Have a generic/unclear description
 
 ### Google Play — Promotional Content (LiveOps):
 
-**Typy:**
+**Types:**
 
-| Typ | Opis | Wymaganie |
+| Type | Description | Requirement |
 |-----|------|----------|
-| Offers | Zniżki, bundle, free rewards, trial | Min 10% wartości |
-| Time-Limited Events | Konkursy, wyzwania, live stream | Ograniczone czasowo |
-| Major Updates | Nowe features, rozszerzenia | Znaczące zmiany |
+| Offers | Discounts, bundles, free rewards, trial | Min 10% value |
+| Time-Limited Events | Contests, challenges, live stream | Time-limited |
+| Major Updates | New features, expansions | Significant changes |
 
-**Wymagania:**
+**Requirements:**
 
 | Element | Limit |
 |---------|-------|
-| Tagline | max 80 znaków |
-| Description | max 500 znaków |
+| Tagline | max 80 characters |
+| Description | max 500 characters |
 | Image | 1920×1080 (16:9), JPG/PNG |
 | Video | YouTube link, landscape |
-| Approval time | min 4 dni |
-| Featuring request | 14-30 dni przed |
+| Approval time | min 4 days |
+| Featuring request | 14-30 days ahead |
 
 **Targeting:**
-- Everyone (istniejący + potencjalni)
+- Everyone (existing + potential)
 - Potential users only
 - Specific segments (churned, lapsed, buyers)
 
-**Wyniki wg Google:**
+**Results per Google:**
 - **+2% MAU** (monthly active users)
-- **+4% revenue** vs developers bez promotional content
+- **+4% revenue** vs developers without promotional content
 
-### Strategia eventów:
+### Event strategy:
 
-1. **Planuj 2-3 miesiące naprzód** — szczególnie na główne sezony
-2. **Lokalizuj metadane** — Apple NIE tłumaczy automatycznie
-3. **Deep links muszą działać** — testuj przed submission
-4. **Specyficzne, action-oriented opisy** — nie "Something exciting is coming"
-5. **Align z sezonem** — eventy dopasowane do kalendarza sezonowego
-6. **Odświeżaj regularnie** — co 2 tygodnie nowy event = ciągła widoczność
+1. **Plan 2-3 months ahead** — especially for major seasons
+2. **Localize metadata** — Apple does NOT translate automatically
+3. **Deep links must work** — test before submission
+4. **Specific, action-oriented descriptions** — not "Something exciting is coming"
+5. **Align with the season** — events matched to the seasonal calendar
+6. **Refresh regularly** — a new event every 2 weeks = continuous visibility
 
 ---
 
@@ -255,119 +255,119 @@ Lepszy listing → Właściwi użytkownicy → Lepsza retencja → Wyższy ranki
 ### Growth Loop:
 
 ```
-ASO (organiczna widoczność)
-  ↓ lepsze metadata → wyższy Quality Score w Ads
-  ↓ niższy CPT (cost per tap)
+ASO (organic visibility)
+  ↓ better metadata → higher Quality Score in Ads
+  ↓ lower CPT (cost per tap)
 Apple Search Ads (paid)
-  ↓ zwiększone installe → wyższy download velocity
-  ↓ lepszy organic ranking
-ASO (wyższy organic ranking)
-  ↓ więcej organicznych instalacji
+  ↓ increased installs → higher download velocity
+  ↓ better organic ranking
+ASO (higher organic ranking)
+  ↓ more organic installs
   → FEEDBACK LOOP
 ```
 
-### Jak Ads pomagają ASO:
+### How Ads help ASO:
 
-| Mechanizm | Opis |
+| Mechanism | Description |
 |-----------|------|
-| **Keyword discovery** | Ads Discovery campaigns ujawniają keywords o wysokiej konwersji → dodaj do metadata |
-| **Download velocity** | Paid installe zwiększają velocity → boost organic ranking |
-| **Conversion data** | Ads pokazują które keywords konwertują → optymalizuj metadata |
-| **Quality Score** | Dobre ASO → wyższy relevance score → niższy CPT w Ads |
-| **CPP integration** | Łącz Ad Groups z konkretnym CPP dla message alignment |
+| **Keyword discovery** | Ads Discovery campaigns reveal high-converting keywords → add to metadata |
+| **Download velocity** | Paid installs increase velocity → boost organic ranking |
+| **Conversion data** | Ads show which keywords convert → optimize metadata |
+| **Quality Score** | Good ASO → higher relevance score → lower CPT in Ads |
+| **CPP integration** | Connect Ad Groups with a specific CPP for message alignment |
 
 ### Google Ads Campaigns:
-- **Google App Campaigns** automatyzują promocję w Google Search, YouTube, Google Play i Display Network
-- Machine learning optymalizuje bidding na podstawie app store listings
-- Mniejsza granularna kontrola nad keywords niż Apple Ads
-- Komplementarne z ASO — spójne messaging i kreacje w obu kanałach
+- **Google App Campaigns** automate promotion across Google Search, YouTube, Google Play and the Display Network
+- Machine learning optimizes bidding based on app store listings
+- Less granular control over keywords than Apple Ads
+- Complementary to ASO — consistent messaging and creatives across both channels
 
-### Zmiana marzec 2026:
+### Change March 2026:
 
-> Apple rozszerza liczbę slotów reklamowych w wynikach wyszukiwania App Store — wiele płatnych reklam będzie się pojawiać **w całych wynikach**, nie tylko na górze.
+> Apple is expanding the number of ad slots in App Store search results — multiple paid ads will appear **throughout the results**, not just at the top.
 
-**Implikacje:**
-- Większa konkurencja między paid i organic
-- Konieczna strategiczna koordynacja ASO + Ads
-- Monitoruj share of voice (SOV) organic vs paid
-- Budget allocation musi uwzględniać oba kanały
+**Implications:**
+- More competition between paid and organic
+- Strategic coordination of ASO + Ads required
+- Monitor share of voice (SOV) organic vs paid
+- Budget allocation must account for both channels
 
-### Strategia synergii:
+### Synergy strategy:
 
-1. **Discovery Campaign** → zbieraj keyword data → aktualizuj ASO metadata
-2. **Exact Match Campaign** → targetuj top keywords z ASO → boost velocity
-3. **Brand Defense** → licytuj na swoją markę → blokuj konkurencję
-4. **Competitor Keywords** → licytuj na keywords konkurencji + CPP dopasowane
-5. **CPP + Ad Groups** → każda grupa reklam → dedykowany CPP → aligned messaging
+1. **Discovery Campaign** → collect keyword data → update ASO metadata
+2. **Exact Match Campaign** → target top keywords from ASO → boost velocity
+3. **Brand Defense** → bid on your own brand → block competitors
+4. **Competitor Keywords** → bid on competitors' keywords + matched CPP
+5. **CPP + Ad Groups** → each ad group → dedicated CPP → aligned messaging
 
 ---
 
-## 6. Analiza konkurencji
+## 6. Competitor analysis
 
-### Framework analizy konkurencji:
+### Competitor analysis framework:
 
-#### Krok 1: Identyfikacja konkurentów
+#### Step 1: Identify competitors
 
-| Typ | Jak znaleźć |
+| Type | How to find |
 |-----|-------------|
-| Bezpośredni | Te same keywords, ta sama kategoria |
-| Pośredni | Rozwiązują ten sam problem inaczej |
-| Aspiracyjni | Top apps w twojej kategorii |
+| Direct | Same keywords, same category |
+| Indirect | Solve the same problem differently |
+| Aspirational | Top apps in your category |
 
-#### Krok 2: Metadata Audit
+#### Step 2: Metadata Audit
 
-| Element do analizy | Co sprawdzić |
+| Element to analyze | What to check |
 |--------------------|-------------|
-| Tytuł | Keywords użyte, struktura |
-| Podtytuł / Short desc | USP positioning |
-| Opis | Struktura, keywords, tone |
-| Keywords (iOS) | Narzędzia spy (AppTweak, Astro) |
-| What's New | Częstotliwość aktualizacji, focus |
+| Title | Keywords used, structure |
+| Subtitle / Short desc | USP positioning |
+| Description | Structure, keywords, tone |
+| Keywords (iOS) | Spy tools (AppTweak, Astro) |
+| What's New | Update frequency, focus |
 
-#### Krok 3: Creative Audit
+#### Step 3: Creative Audit
 
-| Element | Co sprawdzić |
+| Element | What to check |
 |---------|-------------|
-| Ikona | Kolory, styl, trend w kategorii |
-| Screenshoty | Struktura, captions, storytelling |
-| Wideo | Czy mają, jak długie, co pokazują |
-| CPP/CSL | Ile wariantów, na jakie keywords |
+| Icon | Colors, style, trend in the category |
+| Screenshots | Structure, captions, storytelling |
+| Video | Whether they have one, how long, what it shows |
+| CPP/CSL | How many variants, for which keywords |
 
-#### Krok 4: Performance Audit
+#### Step 4: Performance Audit
 
-| Metryka | Co sprawdzić |
+| Metric | What to check |
 |---------|-------------|
-| Rating | Średnia ocena, trend, velocity |
-| Recenzje | Sentiment, common complaints |
-| Ranking per keyword | Pozycja vs twoja |
-| Download estimates | Narzędzia estymacji |
-| Update frequency | Jak często aktualizują |
+| Rating | Average rating, trend, velocity |
+| Reviews | Sentiment, common complaints |
+| Ranking per keyword | Position vs yours |
+| Download estimates | Estimation tools |
+| Update frequency | How often they update |
 
-#### Krok 5: Keyword Gap Analysis
+#### Step 5: Keyword Gap Analysis
 
 ```
-1. Lista keywords na które rankujesz TY
-2. Lista keywords na które rankują KONKURENCI
-3. Gap = keywords konkurencji MINUS twoje keywords
-4. Priorytetyzuj gap keywords po: relevance × volume × difficulty
-5. Dodaj top gap keywords do swojej metadata
+1. List the keywords YOU rank for
+2. List the keywords COMPETITORS rank for
+3. Gap = competitors' keywords MINUS your keywords
+4. Prioritize gap keywords by: relevance × volume × difficulty
+5. Add the top gap keywords to your metadata
 ```
 
-#### Krok 6: Marketing Events & Update Frequency
+#### Step 6: Marketing Events & Update Frequency
 
-| Element do monitorowania | Co sprawdzić |
+| Element to monitor | What to check |
 |--------------------------|-------------|
-| **In-App Events / LiveOps** | Strategia eventów: częstotliwość, typy, timing |
-| **Update frequency & impact** | Jak często aktualizują i jak to wpływa na ranking/recenzje |
-| **Feature benchmarking** | Porównaj feature set — czego nie masz, a oni mają |
+| **In-App Events / LiveOps** | Event strategy: frequency, types, timing |
+| **Update frequency & impact** | How often they update and how it affects ranking/reviews |
+| **Feature benchmarking** | Compare the feature set — what you lack that they have |
 | **Paid campaigns** | Apple Search Ads keywords, Google Ads creative |
-| **Seasonal strategies** | Dopasowanie do kalendarza sezonowego |
+| **Seasonal strategies** | Alignment with the seasonal calendar |
 
-### Narzędzia do competitor analysis:
+### Competitor analysis tools:
 
-| Narzędzie | Co oferuje |
+| Tool | What it offers |
 |-----------|-----------|
-| **AppTweak** | Keyword spy, CPP Explorer, timeline zmian metadata |
+| **AppTweak** | Keyword spy, CPP Explorer, metadata change timeline |
 | **Sensor Tower** | Download/revenue estimates, keyword rankings |
 | **MobileAction** | Keyword discovery, competitor monitoring |
 | **AppFollow** | Keyword Spy tab, review monitoring |
@@ -375,175 +375,175 @@ ASO (wyższy organic ranking)
 | **Astro** | Competitor keyword discovery, ranking tracking |
 | **App Radar** | Keyword monitoring, competitor alerts |
 
-### Co monitorować cyklicznie:
+### What to monitor on a recurring basis:
 
-- [ ] Zmiany metadata konkurencji (tytuł, opis, keywords)
-- [ ] Nowe screenshoty / ikony (A/B testy)
-- [ ] Nowe CPP/CSL
-- [ ] Rating velocity (nagły wzrost → kampania?)
+- [ ] Competitor metadata changes (title, description, keywords)
+- [ ] New screenshots / icons (A/B tests)
+- [ ] New CPP/CSL
+- [ ] Rating velocity (sudden spike → campaign?)
 - [ ] In-App Events / LiveOps
-- [ ] Nowe wersje (changelog analysis)
+- [ ] New versions (changelog analysis)
 - [ ] Paid campaigns (Apple Search Ads keywords)
 
 ---
 
-## 7. Sezonowe ASO
+## 7. Seasonal ASO
 
-### Kalendarz sezonowy — miesiąc po miesiącu:
+### Seasonal calendar — month by month:
 
-| Miesiąc | Główne eventy | Kategorie z boostem | Co optymalizować |
+| Month | Main events | Categories with a boost | What to optimize |
 |---------|--------------|---------------------|-----------------|
-| **Styczeń** | Nowy Rok, postanowienia | Fitness, Health, Finance, Productivity, Education | Keywords: "new year resolution", "lose weight 2026" |
-| **Luty** | Walentynki (14), Super Bowl | Dating, Social, Food delivery, Sports, Streaming | Keywords: "valentine gift", "dating app" |
-| **Marzec** | Dzień Kobiet (8), Wiosna, St. Patrick | Fashion, Beauty, Health, Social media | Keywords: "women's day", "spring cleaning" |
-| **Kwiecień** | Wielkanoc, Earth Day (22), Tax Season | Finance, Tax, Shopping, Eco apps | Keywords: "easter sale", "tax filing" |
-| **Maj** | Dzień Matki, Memorial Day | Shopping, Gift, Travel, Photo | Keywords: "mother's day gift", "travel deals" |
-| **Czerwiec** | Lato start, Dzień Ojca, Pride | Travel, Fitness outdoor, Social, Entertainment | Keywords: "summer vacation", "beach workout" |
-| **Lipiec** | Wakacje, Independence Day (US) | Travel, Navigation, Language learning, Games | Keywords: "road trip", "learn language" |
-| **Sierpień** | Back to School | Education, Productivity, Calendar, Note-taking | Keywords: "back to school", "study app" |
-| **Wrzesień** | Back to School 2, Apple launch | Education, Productivity, Tech | Keywords: "school organizer", "new iPhone" |
-| **Październik** | Halloween (31), Oktoberfest | Games, Photo editing, Social, Food | Keywords: "halloween costume", "scary games" |
-| **Listopad** | Black Friday, Cyber Monday, Thanksgiving | Shopping, Finance, Deals, ALL categories | Keywords: "black friday deals", "cyber monday" |
-| **Grudzień** | Boże Narodzenie, Nowy Rok, Chanuka | Shopping, Gift, Entertainment, Family games | Keywords: "christmas gift", "holiday" |
+| **January** | New Year, resolutions | Fitness, Health, Finance, Productivity, Education | Keywords: "new year resolution", "lose weight 2026" |
+| **February** | Valentine's Day (14), Super Bowl | Dating, Social, Food delivery, Sports, Streaming | Keywords: "valentine gift", "dating app" |
+| **March** | Women's Day (8), Spring, St. Patrick | Fashion, Beauty, Health, Social media | Keywords: "women's day", "spring cleaning" |
+| **April** | Easter, Earth Day (22), Tax Season | Finance, Tax, Shopping, Eco apps | Keywords: "easter sale", "tax filing" |
+| **May** | Mother's Day, Memorial Day | Shopping, Gift, Travel, Photo | Keywords: "mother's day gift", "travel deals" |
+| **June** | Start of summer, Father's Day, Pride | Travel, Fitness outdoor, Social, Entertainment | Keywords: "summer vacation", "beach workout" |
+| **July** | Holidays, Independence Day (US) | Travel, Navigation, Language learning, Games | Keywords: "road trip", "learn language" |
+| **August** | Back to School | Education, Productivity, Calendar, Note-taking | Keywords: "back to school", "study app" |
+| **September** | Back to School 2, Apple launch | Education, Productivity, Tech | Keywords: "school organizer", "new iPhone" |
+| **October** | Halloween (31), Oktoberfest | Games, Photo editing, Social, Food | Keywords: "halloween costume", "scary games" |
+| **November** | Black Friday, Cyber Monday, Thanksgiving | Shopping, Finance, Deals, ALL categories | Keywords: "black friday deals", "cyber monday" |
+| **December** | Christmas, New Year, Hanukkah | Shopping, Gift, Entertainment, Family games | Keywords: "christmas gift", "holiday" |
 
-### Timeline przygotowań:
+### Preparation timeline:
 
 ```
-T-3 miesiące:  Research — analiza keywords sezonowych, benchmarking
-T-2 miesiące:  Kreacja — nowe screenshoty, ikona, opisy
-T-6 tygodni:   Submission — featuring request do Apple/Google
-T-4 tygodnie:  A/B Test — testuj sezonowe warianty
-T-2 tygodnie:  Launch — publikuj sezonowe metadata + eventy
-T-0:           Event — monitoruj performance codziennie
-T+1 tydzień:   Rollback — wróć do standardowych kreatywnych
+T-3 months:  Research — seasonal keyword analysis, benchmarking
+T-2 months:  Creative — new screenshots, icon, descriptions
+T-6 weeks:   Submission — featuring request to Apple/Google
+T-4 weeks:   A/B Test — test seasonal variants
+T-2 weeks:   Launch — publish seasonal metadata + events
+T-0:         Event — monitor performance daily
+T+1 week:    Rollback — revert to standard creatives
 ```
 
 ### Real-world case studies:
 
-| Marka | Event | Wynik |
+| Brand | Event | Result |
 |-------|-------|-------|
-| **Best Buy** | Black Friday ASO | **+454%** wzrost pobrań |
-| **Adidas** | Black Friday ASO | **+582%** wzrost pobrań |
-| **Upside** | Black Friday keywords | Ranking #9 na "Black Friday" |
-| **Festive icon update** | Boże Narodzenie (SplitMetrics) | **+47% conversion uplift** |
+| **Best Buy** | Black Friday ASO | **+454%** download growth |
+| **Adidas** | Black Friday ASO | **+582%** download growth |
+| **Upside** | Black Friday keywords | Ranked #9 for "Black Friday" |
+| **Festive icon update** | Christmas (SplitMetrics) | **+47% conversion uplift** |
 
-### Taktyki sezonowe:
+### Seasonal tactics:
 
-1. **Keywords** — dodaj sezonowe keywords do metadata 2-4 tygodnie przed eventem
-2. **Screenshoty** — sezonowe tło/dekoracje, ale zachowaj core branding
-3. **Ikona** — subtelne zmiany (czapka Mikołaja, serduszka na walentynki) — **NIE** rewolucja
-4. **Opis** — sezonowe references w promotional text (iOS) / short description (Android)
-5. **In-App Events** — utwórz event dopasowany do sezonu
-6. **CPP/CSL** — sezonowe warianty Custom Product Pages
-7. **Ads** — zwiększ budget na sezonowe keywords
+1. **Keywords** — add seasonal keywords to metadata 2-4 weeks before the event
+2. **Screenshots** — seasonal backgrounds/decorations, but keep the core branding
+3. **Icon** — subtle changes (Santa hat, Valentine's hearts) — **NOT** a revolution
+4. **Description** — seasonal references in promotional text (iOS) / short description (Android)
+5. **In-App Events** — create an event matched to the season
+6. **CPP/CSL** — seasonal Custom Product Page variants
+7. **Ads** — increase budget on seasonal keywords
 
 ---
 
-## 8. Ikona aplikacji
+## 8. App icon
 
-### 10 zasad zaawansowanego designu ikony:
+### 10 rules of advanced icon design:
 
-1. **Jedna idea** — komunikuj jedną koncepcję jasno
-2. **Cel aplikacji widoczny od razu** — użytkownik musi zrozumieć funkcjonalność instant
-3. **Spójność z UI** — ikona musi odzwierciedlać to co jest w środku
-4. **Strategiczne kolory marki** — dominant color = brand + kategoria
-5. **Unikaj tekstu** — pixeluje na małych rozmiarach, problemy z lokalizacją
-6. **Logo tylko dla silnych marek** — nieznane logo nie komunikuje wartości
-7. **Sezonowe warianty** — subtelne zmiany na święta → sygnał aktywności
-8. **Lokalizuj dla kluczowych rynków** — kulturowe niuanse wpływają na konwersję
-9. **Badaj, potem wyróżniaj się** — sprawdź trendy w kategorii, potem złam wzorzec
-10. **A/B testuj ciągle** — nawet subtelne tweaki → double-digit improvements
+1. **One idea** — communicate a single concept clearly
+2. **App's purpose visible instantly** — the user must understand the functionality instantly
+3. **Consistency with the UI** — the icon must reflect what's inside
+4. **Strategic brand colors** — dominant color = brand + category
+5. **Avoid text** — it pixelates at small sizes, causes localization problems
+6. **Logo only for strong brands** — an unknown logo doesn't communicate value
+7. **Seasonal variants** — subtle changes for holidays → activity signal
+8. **Localize for key markets** — cultural nuances affect conversion
+9. **Research, then stand out** — check category trends, then break the pattern
+10. **A/B test continuously** — even subtle tweaks → double-digit improvements
 
-### Wymagania techniczne:
+### Technical requirements:
 
-| Platforma | Rozmiar | Format | Uwagi |
+| Platform | Size | Format | Notes |
 |-----------|---------|--------|-------|
-| iOS | 1024×1024 px | PNG | System dodaje rounded corners |
-| iOS 26 (Liquid Glass) | 1024×1024 px | Layered PNG | Blur, głębia, refrakcja światła |
-| Android | 512×512 px | PNG | Full bleed, bez cieni |
-| watchOS | Circular | PNG | Kształt koła |
+| iOS | 1024×1024 px | PNG | System adds rounded corners |
+| iOS 26 (Liquid Glass) | 1024×1024 px | Layered PNG | Blur, depth, light refraction |
+| Android | 512×512 px | PNG | Full bleed, no shadows |
+| watchOS | Circular | PNG | Circle shape |
 
-### Trendy 2026:
+### Trends 2026:
 
-- **iOS 26 Liquid Glass** — ikony warstwowe z efektami blur i głębi — "największy upgrade UI od iOS 7"
-- **Dark mode first** — ciemne ikony wyróżniają się w morzu jasnych
-- **Minimalizm** — mniej elementów, więcej impact
-- **Gradient revival** — subtletne gradienty wracają
-- **Character-first** (gry) — główna postać prominentna
+- **iOS 26 Liquid Glass** — layered icons with blur and depth effects — "the biggest UI upgrade since iOS 7"
+- **Dark mode first** — dark icons stand out in a sea of bright ones
+- **Minimalism** — fewer elements, more impact
+- **Gradient revival** — subtle gradients are back
+- **Character-first** (games) — the main character prominent
 
-### A/B testing ikon — framework:
+### A/B testing icons — framework:
 
 ```
-1. Baseline: obecna ikona (kontrola)
-2. Wariant A: zmiana koloru tła
-3. Wariant B: zmiana głównego elementu
-4. Użyj A/B/B testing (dwa warianty vs kontrola) — zapobiega false positives
-5. Mierz: CVR (conversion rate), CTR, install rate
-6. Min 7 dni, statystycznie istotna próbka
-7. Zwycięzca → nowa baseline → nowy test
+1. Baseline: current icon (control)
+2. Variant A: change background color
+3. Variant B: change the main element
+4. Use A/B/B testing (two variants vs control) — prevents false positives
+5. Measure: CVR (conversion rate), CTR, install rate
+6. Min 7 days, statistically significant sample
+7. Winner → new baseline → new test
 ```
 
-**Case study:** AppQuantum osiągnął **+21.5% wzrost instalacji** przez A/B testing ikon gier mobilnych.
+**Case study:** AppQuantum achieved a **+21.5% increase in installs** through A/B testing of mobile game icons.
 
 ---
 
 ## 9. Rating Prompt Strategy
 
-### Kiedy prosić o ocenę (optimal timing):
+### When to ask for a rating (optimal timing):
 
-| Moment | Dlaczego działa | Przykład |
+| Moment | Why it works | Example |
 |--------|----------------|---------|
-| **Po ukończeniu zadania** | Satysfakcja z osiągnięcia | Po zakończeniu workoutu |
-| **Po osiągnięciu milestone'u** | Poczucie progresu | "Ukończyłeś 10. lekcję!" |
-| **Po pozytywnym wyniku** | Dobry nastrój | Po zapisaniu budżetu |
-| **Po X sesjach** | Engaged user | Po 5. sesji w app |
-| **Po zakupie** | Investment = commitment | Po subskrypcji |
+| **After completing a task** | Satisfaction from achievement | After finishing a workout |
+| **After reaching a milestone** | Sense of progress | "You completed lesson 10!" |
+| **After a positive result** | Good mood | After saving to a budget |
+| **After X sessions** | Engaged user | After the 5th session in the app |
+| **After a purchase** | Investment = commitment | After subscribing |
 
-### Kiedy NIE prosić:
+### When NOT to ask:
 
-| Moment | Dlaczego nie |
+| Moment | Why not |
 |--------|-------------|
-| Po crashu / błędzie | Frustracja → niska ocena |
-| W trakcie krytycznego zadania | Przerwanie flow → irytacja |
-| Przy pierwszym uruchomieniu | Brak doświadczenia z app |
-| Po odmowie poprzedniej prośby | Spamming → negatywna percepcja |
-| W trakcie onboardingu | Za wcześnie, brak wartości |
+| After a crash / error | Frustration → low rating |
+| During a critical task | Breaking the flow → irritation |
+| On first launch | No experience with the app |
+| After declining a previous request | Spamming → negative perception |
+| During onboarding | Too early, no value yet |
 
-### Implementacja:
+### Implementation:
 
-| Platforma | API | Limit |
+| Platform | API | Limit |
 |-----------|-----|-------|
-| iOS | `SKStoreReviewController` | Max 3 razy na 365 dni |
-| Android | Play In-App Review API | Quota zarządzana przez Google |
+| iOS | `SKStoreReviewController` | Max 3 times per 365 days |
+| Android | Play In-App Review API | Quota managed by Google |
 
-### Strategia recenzji:
+### Review strategy:
 
-1. **Odpowiadaj na WSZYSTKIE recenzje** — pozytywne i negatywne
-2. **Negatywne → szybko** — pokaż że słuchasz
-3. **Pozytywne → podziękowanie** — buduj relację
-4. **Adresuj feedback w aktualizacjach** — "Naprawiliśmy problem zgłoszony przez Was"
-5. **Monitoruj sentiment** — narzędzia AI do analizy trendów
-6. **Cel: 4.0+★** — poniżej 4★ "often struggle to gain traction"
+1. **Respond to ALL reviews** — positive and negative
+2. **Negative → fast** — show that you're listening
+3. **Positive → thank you** — build a relationship
+4. **Address feedback in updates** — "We fixed the issue you reported"
+5. **Monitor sentiment** — AI tools for trend analysis
+6. **Goal: 4.0+★** — below 4★ "often struggle to gain traction"
 
 ---
 
-## 10. Narzędzia ASO
+## 10. ASO tools
 
-### Kompleksowe platformy:
+### Comprehensive platforms:
 
-| Narzędzie | Główne feature | Cena |
+| Tool | Main feature | Price |
 |-----------|---------------|------|
-| **AppTweak** | Keywords, competitor, timeline, CPP Explorer, localization | Od $69/mies |
+| **AppTweak** | Keywords, competitor, timeline, CPP Explorer, localization | From $69/mo |
 | **Sensor Tower** | Downloads/revenue estimates, keyword rankings | Enterprise |
-| **MobileAction** | Keyword discovery, competitor, market intelligence | Od $59/mies |
+| **MobileAction** | Keyword discovery, competitor, market intelligence | From $59/mo |
 | **data.ai** (ex-App Annie) | Market data, competitor analysis, estimates | Enterprise |
-| **AppFollow** | Reviews, keyword spy, ASO monitoring | Od $111/mies |
+| **AppFollow** | Reviews, keyword spy, ASO monitoring | From $111/mo |
 
-### Specjalistyczne narzędzia:
+### Specialized tools:
 
-| Narzędzie | Specjalizacja |
+| Tool | Specialization |
 |-----------|--------------|
-| **SplitMetrics** | A/B testing iOS (CPP, ikony, screenshoty) |
+| **SplitMetrics** | A/B testing iOS (CPP, icons, screenshots) |
 | **StoreMaven** | A/B testing + creative intelligence |
 | **ASO.dev** | Keywords, ranking tracking |
 | **Astro** | Competitor keyword spy |
@@ -551,9 +551,9 @@ T+1 tydzień:   Rollback — wróć do standardowych kreatywnych
 | **AppTamin** | App preview video production |
 | **The ASO Project** | CRO agency + screenshot design |
 
-### Dodatkowe specjalistyczne narzędzia:
+### Additional specialized tools:
 
-| Narzędzie | Specjalizacja |
+| Tool | Specialization |
 |-----------|--------------|
 | **ASODesk** | Keyword tracking, metadata tools, review management (small-mid teams) |
 | **Geeklab** | Pre-launch A/B testing — look-alike product pages, concept validation |
@@ -561,81 +561,81 @@ T+1 tydzień:   Rollback — wróć do standardowych kreatywnych
 | **42matters** | App store data API — metadata, SDK insights, broad analytics |
 | **Reporting Studio (AppTweak)** | Unified dashboards (ASO + consoles + MMPs), no-code reporting |
 
-### MMP / Attribution narzędzia:
+### MMP / Attribution tools:
 
-| Narzędzie | Specjalizacja |
+| Tool | Specialization |
 |-----------|--------------|
 | **AppsFlyer** | Mobile attribution, deep analytics, fraud protection |
 | **Adjust** | Campaign performance, user analytics, CTV |
 | **Branch** | Deep linking, user engagement, web-to-app |
 | **Singular** | Marketing + attribution in one, 1000+ ad networks |
 
-### Creative design narzędzia:
+### Creative design tools:
 
-| Narzędzie | Specjalizacja |
+| Tool | Specialization |
 |-----------|--------------|
 | **Figma** | Collaborative UI/UX design, team workflows |
 | **Canva** | Quick, user-friendly design, templates |
 | **Animoto** | Video creation, drag-and-drop |
 
-### Free narzędzia:
+### Free tools:
 
-| Narzędzie | Co daje |
+| Tool | What it gives |
 |-----------|---------|
 | **Google Play Console** | Store Listing Experiments, Android Vitals |
 | **App Store Connect** | CPP, Product Page Optimization |
 | **Google Trends** | Seasonal keyword trends |
 | **ChatGPT / Claude** | Keyword brainstorming, description writing |
-| **Google Natural Language Analysis** | Sprawdź jak AI interpretuje twoje metadata |
+| **Google Natural Language Analysis** | Check how AI interprets your metadata |
 
 ### Algorithm Change Detector:
-- **AppTweak's App Store Algorithm Change Detector** — monitoruje zmiany algorytmów Apple i Google Play
-- Wykrywa anomalie w keyword rankings
-- Pomaga odróżnić spadek spowodowany zmianą algorytmu od spadku competitive
-- **Nie reaguj impulsywnie** na wahania — najpierw zweryfikuj czy to zmiana algorytmu
+- **AppTweak's App Store Algorithm Change Detector** — monitors changes to the Apple and Google Play algorithms
+- Detects anomalies in keyword rankings
+- Helps distinguish a drop caused by an algorithm change from a competitive drop
+- **Don't react impulsively** to fluctuations — first verify whether it's an algorithm change
 
 ---
 
-## 11. Dodatkowe case studies i benchmarki
+## 11. Additional case studies and benchmarks
 
 ### Case studies (2025-2026):
 
-| Marka | Strategia | Wynik |
+| Brand | Strategy | Result |
 |-------|-----------|-------|
-| **Wix** | Keyword optimization | #1 ranking na top 3 keywords |
-| **Superscale** | Comprehensive ASO on Google Play | **+450% wzrost organic downloads** |
-| **AppQuantum** | Creative A/B testing (ikony, screenshoty) | **+21% wzrost instalacji** |
-| **Upside** | Seasonal ASO (Black Friday) | #9 ranking na "Black Friday", +10% visibility |
-| **The North Face** | Review prompt po zakupie | Rating: 3.68→4.23 iOS, 3.71→4.54 Android |
-| **Vinted** | Keyword research + competitor monitoring | Top 10 na 210 nowych keywords w 6 rynkach EU |
-| **IE Business School study** | Ogólna analiza 16,897 gier | **+12% downloads** średnio dzięki ASO |
+| **Wix** | Keyword optimization | #1 ranking on top 3 keywords |
+| **Superscale** | Comprehensive ASO on Google Play | **+450% growth in organic downloads** |
+| **AppQuantum** | Creative A/B testing (icons, screenshots) | **+21% increase in installs** |
+| **Upside** | Seasonal ASO (Black Friday) | #9 ranking for "Black Friday", +10% visibility |
+| **The North Face** | Review prompt after purchase | Rating: 3.68→4.23 iOS, 3.71→4.54 Android |
+| **Vinted** | Keyword research + competitor monitoring | Top 10 on 210 new keywords across 6 EU markets |
+| **IE Business School study** | General analysis of 16,897 games | **+12% downloads** on average thanks to ASO |
 
-### Kluczowe benchmarki (AppTweak ASO Benchmarks 2025):
+### Key benchmarks (AppTweak ASO Benchmarks 2025):
 
-| Metryka | Wartość |
+| Metric | Value |
 |---------|---------|
-| Apps z rating 4+ wśród featured | **92%** |
-| Top apps aktualizujące screenshoty 2+/rok | **~50%** |
-| Top gry A/B testujące screenshoty/ikony 2+/rok na GP | **57%** |
-| Optymalna kadencja update iOS metadata | Co **4 tygodnie** |
-| Optymalna kadencja update GP metadata | Co **4-6 tygodni** |
-| Subtitles localization rate (top apps iOS) | **88%** |
-| Description localization rate (top apps iOS) | **82%** |
+| Apps with a rating of 4+ among the featured | **92%** |
+| Top apps updating screenshots 2+/year | **~50%** |
+| Top games A/B testing screenshots/icons 2+/year on GP | **57%** |
+| Optimal cadence for updating iOS metadata | Every **4 weeks** |
+| Optimal cadence for updating GP metadata | Every **4-6 weeks** |
+| Subtitles localization rate (top iOS apps) | **88%** |
+| Description localization rate (top iOS apps) | **82%** |
 
 ### On-metadata vs Off-metadata factors:
 
-**On-metadata (kontrolowane przez publishera):**
+**On-metadata (controlled by the publisher):**
 - App title, subtitle, keyword field, short/long description
 - Promo text (iOS), app icon, screenshots, preview video
 - Category, URL/package
 
-**Off-metadata (poza kontrolą, ale ogromny wpływ):**
+**Off-metadata (out of your control, but huge impact):**
 - Ratings & reviews, download count, download velocity
 - App size, bugs/crashes, retention rate, uninstall rate
 
 ---
 
-## Źródła
+## Sources
 
 - [AppTweak — App Store Ranking Factors 2026](https://www.apptweak.com/en/aso-blog/app-store-ranking-factors)
 - [MobileAction — Google Play Ranking Factors](https://www.mobileaction.co/blog/google-play-store-ranking-factors/)

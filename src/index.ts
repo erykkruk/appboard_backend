@@ -34,8 +34,10 @@ import { reviewsController } from "@/modules/reviews";
 import { screenshotScenesController } from "@/modules/screenshot-scenes";
 import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
+import { storeCapabilityGuard } from "@/modules/stores/store-capabilities.guard";
 import { bootstrap, systemController } from "@/modules/system";
 import { vaultController } from "@/modules/vault";
+import { vaultActionGuard } from "@/modules/vault/vault.guard";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import { createLogger } from "@/utils/logger";
 
@@ -65,6 +67,8 @@ const app = new Elysia()
 		app
 			.use(featuresController)
 			.use(featureGuard)
+			.use(vaultActionGuard)
+			.use(storeCapabilityGuard)
 			.use(apiKeysController)
 			.use(vaultController)
 			.use(systemController)

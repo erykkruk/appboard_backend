@@ -249,6 +249,63 @@ describe("Stores module", () => {
 		expect([403, 404]).toContain(res.status);
 	});
 
+	// ── Rename ──────────────────────────────────────────────────────
+
+	it("renames a store", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/stores/${storeIdGP}`, {
+				body: JSON.stringify({ name: "Renamed Google Play" }),
+				headers: { "Content-Type": "application/json" },
+				method: "PATCH",
+			}),
+		);
+
+		expect(res.status).toBe(200);
+
+		const data = await res.json();
+		expect(data.id).toBe(storeIdGP);
+		expect(data.name).toBe("Renamed Google Play");
+	});
+
+	it("rejects a whitespace-only name after trimming", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/stores/${storeIdGP}`, {
+				body: JSON.stringify({ name: "   " }),
+				headers: { "Content-Type": "application/json" },
+				method: "PATCH",
+			}),
+		);
+
+		expect(res.status).toBe(400);
+	});
+
+	it("workspace B cannot rename workspace A store", async () => {
+		const res = await app.handle(
+			authRequestB(`http://localhost/api/stores/${storeIdGP}`, {
+				body: JSON.stringify({ name: "Hacked" }),
+				headers: { "Content-Type": "application/json" },
+				method: "PATCH",
+			}),
+		);
+
+		expect([403, 404]).toContain(res.status);
+	});
+
+	it("returns 404 for non-existent store rename", async () => {
+		const res = await app.handle(
+			authRequest(
+				"http://localhost/api/stores/00000000-0000-0000-0000-000000000000",
+				{
+					body: JSON.stringify({ name: "Nope" }),
+					headers: { "Content-Type": "application/json" },
+					method: "PATCH",
+				},
+			),
+		);
+
+		expect(res.status).toBe(404);
+	});
+
 	// ── Disconnect ──────────────────────────────────────────────────
 
 	it("disconnects a Google Play store", async () => {

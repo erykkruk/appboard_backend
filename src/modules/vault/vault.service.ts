@@ -54,6 +54,30 @@ function verifierMatches(dek: Buffer, verifier: string): boolean {
 }
 
 export const VaultService = {
+	/**
+	 * Up-front gate for store actions: require an unlocked vault before running.
+	 *
+	 * - Unlocked → proceed.
+	 * - Configured but locked → 423 (unlock first).
+	 * - Not configured → proceed and let the credential layer decide (connect
+	 *   raises 428 VAULT_REQUIRED via `encryptCredentials`; read-only actions on
+	 *   apps that never stored credentials are unaffected).
+	 */
+	async assertUnlockedForAction(workspaceId: string): Promise<void> {
+		if (vaultSession.isUnlocked(workspaceId)) return;
+
+		const [vault] = await db
+			.select({ id: workspaceVault.id })
+			.from(workspaceVault)
+			.where(eq(workspaceVault.workspaceId, workspaceId))
+			.limit(1);
+		if (vault) {
+			buildError("vaultLocked", {
+				info: "Vault is locked. Unlock it with your passphrase to perform actions on your stores.",
+			});
+		}
+	},
+
 	/** Re-wrap the SAME DEK under a new passphrase-derived KEK (done in browser). */
 	async changePassphrase(input: ChangePassphraseInput, workspaceId: string) {
 		const [vault] = await db

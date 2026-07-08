@@ -1,74 +1,74 @@
-# Screenshoty ASO — Kompletny przewodnik projektowania
+# ASO Screenshots — Complete design guide
 
-> Jak projektować screenshoty, które konwertują. Psychologia, design, storytelling.
-
----
-
-## Wpływ screenshotów na konwersję
-
-- Dobrze zaprojektowane screenshoty podnoszą konwersję o **20-35%**
-- Użytkownicy zauważają **pierwsze 2-3 screenshoty**
-- Decyzja o pobraniu zapada w **50 milisekund** na podstawie wizualiów
-- Rzadko ktoś scrolluje dalej niż 4. screenshot
+> How to design screenshots that convert. Psychology, design, storytelling.
 
 ---
 
-## Struktura screenshotów
+## Impact of screenshots on conversion
+
+- Well-designed screenshots increase conversion by **20-35%**
+- Users notice the **first 2-3 screenshots**
+- The download decision is made in **50 milliseconds** based on visuals
+- People rarely scroll past the 4th screenshot
+
+---
+
+## Screenshot structure
 
 ### Framework: Value → Usage → Trust
 
-| Pozycja | Cel | Co pokazać |
+| Position | Goal | What to show |
 |---------|-----|-----------|
-| **#1** | Value Promise | Główna korzyść + mocny headline |
-| **#2** | Key Usage | Jak działa — jeden kluczowy scenariusz |
-| **#3** | Trust / Social Proof | Oceny, nagrody, "1M+ downloads" |
-| **#4-6** | Secondary Features | Dodatkowe funkcje, każda z benefit caption |
-| **#7-8** | Edge Cases / Delight | Unikalne funkcje, easter eggs, premium |
-| **#9-10** | Final CTA | "Download now" / Powtórzenie USP |
+| **#1** | Value Promise | Main benefit + strong headline |
+| **#2** | Key Usage | How it works — one key scenario |
+| **#3** | Trust / Social Proof | Ratings, awards, "1M+ downloads" |
+| **#4-6** | Secondary Features | Additional features, each with a benefit caption |
+| **#7-8** | Edge Cases / Delight | Unique features, easter eggs, premium |
+| **#9-10** | Final CTA | "Download now" / USP repetition |
 
 ### Framework: A.I.D.A.
 
-| Etap | Screenshot # | Cel |
+| Stage | Screenshot # | Goal |
 |------|-------------|-----|
-| **Attention** | #1 | Przyciągnij wzrok — bold colors, kontrast |
-| **Interest** | #2-3 | Wzbudź zainteresowanie — pokaż benefit |
-| **Desire** | #4-6 | Stwórz pragnienie — transformacja, rezultat |
-| **Action** | #7+ | Zachęć do działania — CTA, social proof |
+| **Attention** | #1 | Catch the eye — bold colors, contrast |
+| **Interest** | #2-3 | Spark interest — show the benefit |
+| **Desire** | #4-6 | Create desire — transformation, result |
+| **Action** | #7+ | Encourage action — CTA, social proof |
 
 ---
 
-## Psychologia kolorów na screenshotach
+## Color psychology on screenshots
 
-| Kolor | Emocja/Skojarzenie | Użyj gdy... |
+| Color | Emotion/Association | Use when... |
 |-------|-------------------|-------------|
-| **Niebieski** | Zaufanie, profesjonalizm, spokój | Finanse, zdrowie, B2B |
-| **Zielony** | Wzrost, natura, sukces | Fitness, eco, productivity |
-| **Czerwony** | Pilność, energia, pasja | Gry, deal apps, social |
-| **Pomarańczowy** | Entuzjazm, kreatywność, zabawa | Entertainment, food |
-| **Fioletowy** | Premium, luksus, kreatywność | Beauty, art, premium tier |
-| **Czarny** | Elegancja, moc, nowoczesność | Dark mode, premium, tech |
-| **Biały** | Czystość, minimalizm | Utility, productivity |
+| **Blue** | Trust, professionalism, calm | Finance, health, B2B |
+| **Green** | Growth, nature, success | Fitness, eco, productivity |
+| **Red** | Urgency, energy, passion | Games, deal apps, social |
+| **Orange** | Enthusiasm, creativity, fun | Entertainment, food |
+| **Purple** | Premium, luxury, creativity | Beauty, art, premium tier |
+| **Black** | Elegance, power, modernity | Dark mode, premium, tech |
+| **White** | Cleanliness, minimalism | Utility, productivity |
 
-### Wskazówka:
-- Sprawdź kolory konkurencji w twojej kategorii
-- Użyj **kontrastujących** kolorów, żeby się wyróżnić
-- Dark mode screenshoty wyróżniają się w morzu jasnych tła
+### Tip:
+- Check competitor colors in your category
+- Use **contrasting** colors to stand out
+- Dark mode screenshots stand out in a sea of light backgrounds
 
 ---
 
-## Napisy na screenshotach (Captions)
+## Screenshot captions
 
-### Zasady:
+### Rules:
 
-| Zasada | Opis |
+| Rule | Description |
 |--------|------|
 | Benefit > Feature | "Save 2 hours weekly" > "Calendar feature" |
-| Krótkie | Max 5-7 słów na caption |
-| Czytelne | Wystarczający rozmiar na małym ekranie |
-| Kontrastujące | Tekst musi być widoczny na tle |
-| Action-oriented | Rozpoczynaj od czasownika |
+| Short | Max 5-7 words per caption |
+| Readable | Big enough on a small screen |
+| Contrasting | Text must be visible against the background |
+| Action-oriented | Start with a verb |
 
-### Formuły captionów:
+### Caption formulas:
 
 ```
 1. [Verb] + [Outcome]
@@ -94,9 +94,9 @@
 
 ---
 
-## Storytelling na screenshotach
+## Storytelling on screenshots
 
-### Narracja sekwencyjna (6-screenshot story):
+### Sequential narrative (6-screenshot story):
 
 ```
 Screen 1: Problem → "Tired of guessing what works?"
@@ -107,154 +107,154 @@ Screen 5: Result → "Watch your downloads grow"
 Screen 6: CTA → "Join 10K+ developers. Start free."
 ```
 
-### Emocjonalny arc:
+### Emotional arc:
 ```
-Frustracja → Odkrycie → Zrozumienie → Zachwyt → Zaufanie → Akcja
+Frustration → Discovery → Understanding → Delight → Trust → Action
 ```
 
 ---
 
-## Podejście per kategoria
+## Approach per category
 
-### Gry:
+### Games:
 - Gameplay footage > UI screenshots
-- Dynamiczne sceny, postacie, efekty
-- Osiągnięcia i progressja
+- Dynamic scenes, characters, effects
+- Achievements and progression
 - Landscape orientation
-- Minimum tekstu — grafika mówi sama za siebie
+- Minimal text — the graphics speak for themselves
 
 ### Utility / Productivity:
-- Czysty UI z realnym contentem
-- Workflow step-by-step
-- Before/After wyniki
+- Clean UI with real content
+- Step-by-step workflow
+- Before/After results
 - Portrait orientation
-- Jasne captions z benefit
+- Clear captions with a benefit
 
 ### Lifestyle / Social:
-- Ludzie używający aplikacji
-- Estetyczne, aspiracyjne zdjęcia
-- Transformacja osobista
+- People using the app
+- Aesthetic, aspirational photos
+- Personal transformation
 - User-generated content vibe
-- Emocjonalny storytelling
+- Emotional storytelling
 
 ### Finance / Business:
-- Dashboardy z danymi
-- Grafy rosnące w górę
-- Bezpieczeństwo i wiarygodność
-- Profesjonalny, clean design
-- Social proof prominentny
+- Dashboards with data
+- Graphs trending upward
+- Security and credibility
+- Professional, clean design
+- Prominent social proof
 
 ---
 
-## Layout i kompozycja
+## Layout and composition
 
-### Typy layoutów:
+### Layout types:
 
-| Typ | Opis | Użyj gdy... |
+| Type | Description | Use when... |
 |-----|------|-------------|
-| **Single Screen** | Jedno urządzenie, jeden feature | Prosty UI, jasny benefit |
-| **Panoramic** | Screenshoty łączą się w jedną panoramę | Efekt carousel, storytelling |
-| **Split Screen** | Dwa stany obok siebie | Before/After, comparison |
-| **Full Bleed** | Brak ramki, screen do krawędzi | Immersyjne, gaming |
-| **Feature Grid** | Mniejsze elementy UI w gridzie | Wiele features na jednym screenie |
+| **Single Screen** | One device, one feature | Simple UI, clear benefit |
+| **Panoramic** | Screenshots combine into one panorama | Carousel effect, storytelling |
+| **Split Screen** | Two states side by side | Before/After, comparison |
+| **Full Bleed** | No frame, screen to the edge | Immersive, gaming |
+| **Feature Grid** | Smaller UI elements in a grid | Many features on one screen |
 
-### Hierarchia wizualna:
+### Visual hierarchy:
 ```
-1. Headline/Caption (czyta się pierwszy)
-2. Ekran aplikacji (kontekst UI)
-3. Tło (nastrój, kolor)
-4. Dekoracje (gradient, elementy graficzne)
+1. Headline/Caption (read first)
+2. App screen (UI context)
+3. Background (mood, color)
+4. Decorations (gradient, graphic elements)
 ```
 
 ---
 
-## Wymagania techniczne
+## Technical requirements
 
 ### Apple App Store:
 
-| Urządzenie | Rozmiar (px) | Wymagane |
+| Device | Size (px) | Required |
 |------------|-------------|----------|
-| iPhone 6.9" | 1320 × 2868 | Tak (bazowy) |
+| iPhone 6.9" | 1320 × 2868 | Yes (base) |
 | iPhone 6.7" | 1290 × 2796 | Auto-scale |
 | iPhone 6.5" | 1242 × 2688 | Auto-scale |
-| iPad 13" | 2064 × 2752 | Tak (bazowy) |
+| iPad 13" | 2064 × 2752 | Yes (base) |
 
-- Max 10 screenshotów per lokalizacja
-- Format: JPEG lub PNG, 72 dpi, RGB
-- Zakaz tekstu promocyjnego ("Free", rabaty, ceny)
-- Apple automatycznie skaluje z bazowych rozmiarów
+- Max 10 screenshots per localization
+- Format: JPEG or PNG, 72 dpi, RGB
+- No promotional text ("Free", discounts, prices)
+- Apple automatically scales from the base sizes
 
 ### Google Play:
 
-| Element | Wymaganie |
+| Element | Requirement |
 |---------|----------|
-| Format | JPEG lub 24-bit PNG |
-| Transparencja | Niedozwolona |
-| Min rozdzielczość | 320 px |
-| Max rozdzielczość | 3840 px |
-| Max screenshotów | 8 per device type |
-| Device frames | Zabronione |
+| Format | JPEG or 24-bit PNG |
+| Transparency | Not allowed |
+| Min resolution | 320 px |
+| Max resolution | 3840 px |
+| Max screenshots | 8 per device type |
+| Device frames | Prohibited |
 
 ---
 
-## A/B Testing screenshotów
+## A/B Testing screenshots
 
-### Co testować (w kolejności priorytetu):
+### What to test (in priority order):
 
-1. **Pierwszy screenshot** — największy wpływ na konwersję
-2. **Captions** — tekst korzyści vs tekst funkcji
-3. **Kolorystyka** — jasne vs ciemne tło
-4. **Kolejność** — inna sekwencja storytellingu (testuj value propositions order)
-5. **Z ludźmi vs bez** — ludzki element vs czysty UI
-6. **Social proof** — z oceną/liczbą vs bez
-7. **Per-persona koncepty** — male vs female, feature A vs feature B
-8. **Sezonowe warianty** — dopasowane do sezonu/trendów w kategorii
+1. **First screenshot** — biggest impact on conversion
+2. **Captions** — benefit copy vs feature copy
+3. **Color scheme** — light vs dark background
+4. **Order** — different storytelling sequence (test value propositions order)
+5. **With people vs without** — human element vs clean UI
+6. **Social proof** — with rating/count vs without
+7. **Per-persona concepts** — male vs female, feature A vs feature B
+8. **Seasonal variants** — matched to the season/trends in the category
 
-### Konkretne hipotezy do testowania:
+### Specific hypotheses to test:
 
-| Hipoteza | Wariant A | Wariant B |
+| Hypothesis | Variant A | Variant B |
 |----------|-----------|-----------|
-| Social proof konwertuje lepiej | Screenshoty z gwiazdkami/pobraniami | Screenshoty bez social proof |
+| Social proof converts better | Screenshots with stars/downloads | Screenshots without social proof |
 | Feature-first vs benefit-first | "AI Photo Editor" | "Perfect Photos in Seconds" |
-| Dark vs light theme | Ciemne tło screenshotów | Jasne tło screenshotów |
-| Persona targeting | Screenshoty z mężczyzną | Screenshoty z kobietą |
+| Dark vs light theme | Dark screenshot background | Light screenshot background |
+| Persona targeting | Screenshots with a man | Screenshots with a woman |
 | Value proposition order | "Save Money" first | "Track Expenses" first |
-| UI screenshot vs lifestyle | Czysty UI aplikacji | Ludzie korzystający z app |
+| UI screenshot vs lifestyle | Clean app UI | People using the app |
 
-### Narzędzia:
+### Tools:
 - Apple Custom Product Pages (CPP) — Product Page Optimization (PPO)
 - Google Play Store Listing Experiments
-- SplitMetrics (third-party, zaawansowane testy iOS)
+- SplitMetrics (third-party, advanced iOS tests)
 - **Geeklab** — pre-launch A/B testing, look-alike product pages
 
-### Metryki:
-- **CVR (Conversion Rate)** — % odwiedzin → instalacja
-- **CTR (Click-Through Rate)** — % wyświetleń w search → klik
-- **Tap-through rate** — ile screenshotów użytkownik przegląda
+### Metrics:
+- **CVR (Conversion Rate)** — % of visits → install
+- **CTR (Click-Through Rate)** — % of search impressions → click
+- **Tap-through rate** — how many screenshots the user views
 
 ---
 
-## Top 5 błędów screenshotowych (2026)
+## Top 5 screenshot mistakes (2026)
 
-1. **Za dużo tekstu** — screenshot ≠ artykuł. Max 5-7 słów
-2. **Stockowe zdjęcia** — fałszywe, użytkownicy to wyczuwają
-3. **Słaby kontrast** — tekst nieczytelny na tle
-4. **Niewykorzystane sloty** — masz 8-10, użyj ich
-5. **Brak dopasowania do intencji** — screenshoty muszą odpowiadać temu, czego użytkownik szuka
+1. **Too much text** — a screenshot ≠ an article. Max 5-7 words
+2. **Stock photos** — fake, users can sense it
+3. **Poor contrast** — text unreadable against the background
+4. **Unused slots** — you have 8-10, use them
+5. **No match to intent** — screenshots must answer what the user is searching for
 
 ---
 
 ## Quick Reference — Design Tips
 
 ```
-✓ Pierwszy screenshot = najsilniejszy benefit
-✓ Każdy screenshot = jeden feature/benefit
-✓ Caption: benefit-driven, 5-7 słów
-✓ Kontrast: tekst czytelny na każdym tle
-✓ Real UI > mockups > stocki
-✓ Dark mode wyróżnia się
-✓ Panoramic effect łączy story
-✓ Social proof na screenie #3 lub #10
-✓ Testuj, testuj, testuj (A/B)
-✓ Aktualizuj przy zmianie UI
+✓ First screenshot = strongest benefit
+✓ Each screenshot = one feature/benefit
+✓ Caption: benefit-driven, 5-7 words
+✓ Contrast: text readable on any background
+✓ Real UI > mockups > stock
+✓ Dark mode stands out
+✓ Panoramic effect ties the story together
+✓ Social proof on screen #3 or #10
+✓ Test, test, test (A/B)
+✓ Update when the UI changes
 ```

@@ -26,7 +26,7 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"dodajcie",
 			"funkcj",
 		],
-		label: "Brakujące funkcje",
+		label: "Missing features",
 	},
 	"crash-bugi": {
 		keywords: [
@@ -54,7 +54,7 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"wysypuje",
 			"crashuje",
 		],
-		label: "Crashe / Bugi",
+		label: "Crashes / Bugs",
 	},
 	logowanie: {
 		keywords: [
@@ -76,7 +76,7 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"wylogow",
 			"konto",
 		],
-		label: "Logowanie / Konto",
+		label: "Login / Account",
 	},
 	"obsluga-klienta": {
 		keywords: [
@@ -91,7 +91,7 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"kontakt",
 			"odpowiedzi",
 		],
-		label: "Obsługa klienta",
+		label: "Customer support",
 	},
 	platnosci: {
 		keywords: [
@@ -116,15 +116,15 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"abonament",
 			"premium",
 		],
-		label: "Płatności / Subskrypcje",
+		label: "Payments / Subscriptions",
 	},
 	powiadomienia: {
 		keywords: ["notification", "push", "alert", "powiadomie", "przypomnien"],
-		label: "Powiadomienia",
+		label: "Notifications",
 	},
 	reklamy: {
 		keywords: ["ads", "advert", "ad ", "reklam"],
-		label: "Reklamy",
+		label: "Ads / Monetization",
 	},
 	"sync-offline": {
 		keywords: [
@@ -141,7 +141,7 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"odśwież",
 			"odswiez",
 		],
-		label: "Synchronizacja / Offline",
+		label: "Sync / Offline",
 	},
 	"update-zepsul": {
 		keywords: [
@@ -163,7 +163,7 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"kiedyś działało",
 			"kiedys dzialalo",
 		],
-		label: "Update coś zepsuł",
+		label: "Update broke something",
 	},
 	"ux-ui": {
 		keywords: [
@@ -212,7 +212,7 @@ const BUCKETS: Record<string, { label: string; keywords: string[] }> = {
 			"długo się",
 			"dlugo sie",
 		],
-		label: "Wydajność",
+		label: "Performance",
 	},
 };
 

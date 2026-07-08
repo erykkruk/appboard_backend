@@ -3,6 +3,11 @@ import { ArkErrors, type } from "arktype";
 const configSchema = type({
 	"+": "delete",
 	ALLOWED_ORIGINS: "string?",
+	// Sign in with Apple. Native-app bundle id is optional (only needed for
+	// verifying id tokens issued to a native iOS client, not the web flow).
+	APPLE_APP_BUNDLE_ID: "string?",
+	APPLE_CLIENT_ID: "string?",
+	APPLE_CLIENT_SECRET: "string?",
 	// Min 32 chars — used to sign Better Auth sessions. A weak secret here
 	// weakens every session token, so reject short values at startup.
 	BETTER_AUTH_SECRET: "string >= 32",
@@ -15,6 +20,8 @@ const configSchema = type({
 	// Validated here so a misconfigured key fails fast instead of corrupting
 	// encrypted credentials at first use.
 	ENCRYPTION_KEY: "/^[0-9a-fA-F]{64}$/",
+	GOOGLE_CLIENT_ID: "string?",
+	GOOGLE_CLIENT_SECRET: "string?",
 	GP_SERVICE_ACCOUNT_KEY_PATH: "string?",
 	GP_TEST_PACKAGE_NAME: "string?",
 	NODE_ENV: "string?",

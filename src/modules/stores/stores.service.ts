@@ -1,6 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
 import {
+	resolveDefaultCapabilities,
+	validateCapabilitySelection,
+} from "@/config/store-capabilities";
+import {
 	decryptCredentials,
 	encryptCredentials,
 } from "@/modules/vault/credentials";
@@ -19,6 +23,7 @@ export class StoresService {
 		name: string,
 		type: StoreType,
 		credentials: Record<string, unknown>,
+		capabilities?: string[],
 	) {
 		const provider = createProvider(type, credentials);
 		const validation = await provider.validateCredentials();
@@ -30,10 +35,18 @@ export class StoresService {
 			});
 		}
 
+		// Omitted → NULL (treated as all-selectable at read time), preserving the
+		// existing "connect grants everything" behaviour for callers that don't
+		// send a selection. An explicit selection is validated against the catalog.
+		const resolvedCapabilities = capabilities
+			? validateCapabilitySelection(type, capabilities)
+			: null;
+
 		const encryptedCreds = await encryptCredentials(credentials, workspaceId);
 		const [store] = await db
 			.insert(stores)
 			.values({
+				capabilities: resolvedCapabilities,
 				credentials: encryptedCreds,
 				name,
 				status: "connected",
@@ -43,7 +56,11 @@ export class StoresService {
 			.returning();
 
 		const syncResult = await StoresService.syncApps(store.id);
-		return { store, syncedApps: syncResult.synced };
+		return {
+			capabilities: resolvedCapabilities ?? resolveDefaultCapabilities(type),
+			store,
+			syncedApps: syncResult.synced,
+		};
 	}
 
 	static async list(workspaceId: string) {
@@ -61,6 +78,24 @@ export class StoresService {
 
 		await db.delete(stores).where(eq(stores.id, storeId));
 		return { success: true };
+	}
+
+	static async rename(storeId: string, workspaceId: string, name: string) {
+		const trimmed = name.trim();
+		if (!trimmed) {
+			buildError("badRequest", { info: "Store name cannot be empty" });
+		}
+
+		const [updated] = await db
+			.update(stores)
+			.set({ name: trimmed })
+			.where(and(eq(stores.id, storeId), eq(stores.workspaceId, workspaceId)))
+			.returning();
+
+		if (!updated) buildError("notFound", { info: "Store not found" });
+
+		log.info({ storeId }, "Store renamed");
+		return updated;
 	}
 
 	static async syncApps(storeId: string) {

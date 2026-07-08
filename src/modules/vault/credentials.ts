@@ -1,9 +1,5 @@
 import { eq } from "drizzle-orm";
-import {
-	decrypt,
-	decryptWithKey,
-	encryptWithKey,
-} from "@/utils/crypto";
+import { decrypt, decryptWithKey, encryptWithKey } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { workspaceVault } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";

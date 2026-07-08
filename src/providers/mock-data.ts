@@ -61,8 +61,8 @@ function buildListings(appName: string): ListingData[] {
 			short: `${appName} - Work smarter`,
 		},
 		"pl-PL": {
-			full: `${appName} to Twoj najlepszy towarzysz produktywnosci. Zarzadzaj zadaniami, sledz postepy i osiagaj cele z latwoscia. Zaprojektowany dla profesjonalistow i zespolow, ktorzy chca pracowac madrzej.`,
-			short: `${appName} - Pracuj madrzej`,
+			full: `${appName} is your best productivity companion. Manage tasks, track progress and reach your goals with ease. Designed for professionals and teams who want to work smarter.`,
+			short: `${appName} - Work smarter`,
 		},
 	};
 
@@ -283,10 +283,9 @@ export function getMockSubscriptionGroups(
 							name: "Monthly Premium",
 						},
 						{
-							description:
-								"Odblokuj wszystkie funkcje premium z miesięcznym dostępem",
+							description: "Unlock all premium features with monthly access",
 							language: "pl-PL",
-							name: "Miesięczny Premium",
+							name: "Monthly Premium",
 						},
 					],
 					name: "Monthly Premium",
@@ -312,9 +311,9 @@ export function getMockSubscriptionGroups(
 						},
 						{
 							description:
-								"Oszczędź 50% z rocznym dostępem do wszystkich funkcji premium",
+								"Save 50% with yearly access to all premium features",
 							language: "pl-PL",
-							name: "Roczny Premium",
+							name: "Yearly Premium",
 						},
 					],
 					name: "Yearly Premium",
@@ -346,9 +345,9 @@ export function getMockInAppPurchases(
 					name: "100 Coins",
 				},
 				{
-					description: "Zdobądź 100 monet do wykorzystania w aplikacji",
+					description: "Get 100 coins to use in the app",
 					language: "pl-PL",
-					name: "100 Monet",
+					name: "100 Coins",
 				},
 			],
 			name: "100 Coins",
@@ -370,10 +369,9 @@ export function getMockInAppPurchases(
 					name: "500 Coins",
 				},
 				{
-					description:
-						"Zdobądź 500 monet do wykorzystania w aplikacji — najlepsza wartość!",
+					description: "Get 500 coins to use in the app — best value!",
 					language: "pl-PL",
-					name: "500 Monet",
+					name: "500 Coins",
 				},
 			],
 			name: "500 Coins",
@@ -395,9 +393,9 @@ export function getMockInAppPurchases(
 					name: "Remove Ads",
 				},
 				{
-					description: "Usuń wszystkie reklamy na stałe",
+					description: "Remove all ads permanently",
 					language: "pl-PL",
-					name: "Usuń reklamy",
+					name: "Remove Ads",
 				},
 			],
 			name: "Remove Ads",

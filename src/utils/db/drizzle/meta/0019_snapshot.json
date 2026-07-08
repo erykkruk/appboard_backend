@@ -6,9 +6,9 @@
 	},
 	"dialect": "postgresql",
 	"enums": {},
-	"id": "e7160419-17db-4287-bff0-74e076aa24ee",
+	"id": "abe64d1d-68b8-4352-8434-dde972d53173",
 	"policies": {},
-	"prevId": "1faf4b73-cb42-4c6c-bdd6-7aa4f37b0b72",
+	"prevId": "b6e81c35-e8e5-421b-97da-4657a18a825f",
 	"roles": {},
 	"schemas": {},
 	"sequences": {},
@@ -2426,6 +2426,118 @@
 			"schema": "",
 			"uniqueConstraints": {}
 		},
+		"public.screenshot_scenes": {
+			"checkConstraints": {},
+			"columns": {
+				"app_id": {
+					"name": "app_id",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"asset_id": {
+					"name": "asset_id",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "uuid"
+				},
+				"created_at": {
+					"default": "now()",
+					"name": "created_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				},
+				"display_type": {
+					"name": "display_type",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(50)"
+				},
+				"id": {
+					"default": "gen_random_uuid()",
+					"name": "id",
+					"notNull": true,
+					"primaryKey": true,
+					"type": "uuid"
+				},
+				"language": {
+					"name": "language",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(20)"
+				},
+				"name": {
+					"name": "name",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "varchar(255)"
+				},
+				"scene": {
+					"name": "scene",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
+				"sort_order": {
+					"default": 0,
+					"name": "sort_order",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "integer"
+				},
+				"updated_at": {
+					"default": "now()",
+					"name": "updated_at",
+					"notNull": true,
+					"primaryKey": false,
+					"type": "timestamp"
+				}
+			},
+			"compositePrimaryKeys": {},
+			"foreignKeys": {
+				"screenshot_scenes_app_id_apps_id_fk": {
+					"columnsFrom": ["app_id"],
+					"columnsTo": ["id"],
+					"name": "screenshot_scenes_app_id_apps_id_fk",
+					"onDelete": "cascade",
+					"onUpdate": "no action",
+					"tableFrom": "screenshot_scenes",
+					"tableTo": "apps"
+				},
+				"screenshot_scenes_asset_id_assets_id_fk": {
+					"columnsFrom": ["asset_id"],
+					"columnsTo": ["id"],
+					"name": "screenshot_scenes_asset_id_assets_id_fk",
+					"onDelete": "set null",
+					"onUpdate": "no action",
+					"tableFrom": "screenshot_scenes",
+					"tableTo": "assets"
+				}
+			},
+			"indexes": {
+				"screenshot_scenes_app_id_index": {
+					"columns": [
+						{
+							"asc": true,
+							"expression": "app_id",
+							"isExpression": false,
+							"nulls": "last"
+						}
+					],
+					"concurrently": false,
+					"isUnique": false,
+					"method": "btree",
+					"name": "screenshot_scenes_app_id_index",
+					"with": {}
+				}
+			},
+			"isRLSEnabled": false,
+			"name": "screenshot_scenes",
+			"policies": {},
+			"schema": "",
+			"uniqueConstraints": {}
+		},
 		"public.session": {
 			"checkConstraints": {},
 			"columns": {
@@ -2599,6 +2711,12 @@
 		"public.stores": {
 			"checkConstraints": {},
 			"columns": {
+				"capabilities": {
+					"name": "capabilities",
+					"notNull": false,
+					"primaryKey": false,
+					"type": "jsonb"
+				},
 				"created_at": {
 					"default": "now()",
 					"name": "created_at",

@@ -1,17 +1,17 @@
-# Szablony opisów ASO — Templates
+# ASO Description Templates — Templates
 
-> Gotowe wzorce do pisania opisów aplikacji na App Store i Google Play.
+> Ready-made patterns for writing app descriptions for the App Store and Google Play.
 
 ---
 
-## Template 1: Google Play — Krótki opis (80 znaków)
+## Template 1: Google Play — Short description (80 characters)
 
-### Formuła:
+### Formula:
 ```
-[Akcja] [co] [jak/benefit] – [secondary keyword]
+[Action] [what] [how/benefit] – [secondary keyword]
 ```
 
-### Przykłady:
+### Examples:
 ```
 Manage money effortlessly – budget tracker, expense planner & bill reminders.
 Track workouts & build habits – your personal fitness coach in your pocket.
@@ -20,77 +20,77 @@ Optimize app listings fast – ASO keywords, screenshots & analytics in one tool
 
 ---
 
-## Template 2: Długi opis — Formuła HOOK-BENEFIT-PROOF-CTA
+## Template 2: Long description — HOOK-BENEFIT-PROOF-CTA formula
 
-### Struktura:
+### Structure:
 
 ```markdown
-[HOOK — 3 linie, widoczne przed "Read More"]
-Krótki, mocny akapit. Jaki problem rozwiązujesz? Dlaczego użytkownik powinien
-czytać dalej? Użyj primary keyword naturalnie.
+[HOOK — 3 lines, visible before "Read More"]
+Short, powerful paragraph. What problem do you solve? Why should the user
+keep reading? Use the primary keyword naturally.
 
-[BENEFIT BLOCK — Kim jest twój użytkownik]
-Czy jesteś [persona]? Czy zmagasz się z [problem]? [Nazwa app] pomaga Ci
-[główny benefit] bez [główny pain point].
+[BENEFIT BLOCK — Who your user is]
+Are you a [persona]? Do you struggle with [problem]? [App name] helps you
+[main benefit] without [main pain point].
 
-KLUCZOWE KORZYŚCI:
-• [Benefit 1] — [krótki opis jak to działa]
-• [Benefit 2] — [krótki opis jak to działa]
-• [Benefit 3] — [krótki opis jak to działa]
-• [Benefit 4] — [krótki opis jak to działa]
-• [Benefit 5] — [krótki opis jak to działa]
+KEY BENEFITS:
+• [Benefit 1] — [short description of how it works]
+• [Benefit 2] — [short description of how it works]
+• [Benefit 3] — [short description of how it works]
+• [Benefit 4] — [short description of how it works]
+• [Benefit 5] — [short description of how it works]
 
-CO WYRÓŻNIA [APP NAME]:
-• [USP 1 — czego konkurencja nie ma]
-• [USP 2 — unikalne podejście]
-• [USP 3 — technologia/design]
+WHAT MAKES [APP NAME] STAND OUT:
+• [USP 1 — what competitors don't have]
+• [USP 2 — unique approach]
+• [USP 3 — technology/design]
 
 [SOCIAL PROOF]
-Dołącz do [X] użytkowników, którzy już [osiągnęli benefit].
-★★★★★ "[Cytat z recenzji]" — [Użytkownik]
-Wyróżnione przez: [Media/Nagrody]
+Join [X] users who already [achieved a benefit].
+★★★★★ "[Review quote]" — [User]
+Featured by: [Media/Awards]
 
 [CTA]
-Pobierz [App Name] za darmo i zacznij [benefit] już dziś!
+Download [App Name] for free and start [benefit] today!
 
-[OPCJONALNIE: Informacje techniczne]
-Wymaga: [wersja OS]
-Kontakt: [email]
-Polityka prywatności: [link]
+[OPTIONAL: Technical information]
+Requires: [OS version]
+Contact: [email]
+Privacy policy: [link]
 ```
 
 ---
 
-## Template 3: iOS — Promotional Text (170 znaków, nad opisem)
+## Template 3: iOS — Promotional Text (170 characters, above the description)
 
-### Formuła:
+### Formula:
 ```
-[Nowość/Update] + [Co nowego] + [Benefit]
+[New/Update] + [What's new] + [Benefit]
 ```
 
-### Przykłady:
+### Examples:
 ```
 NEW: AI-powered keyword suggestions! Get smarter ASO recommendations and boost your app's visibility in minutes.
 🎉 Version 3.0 is here! Redesigned dashboard, faster analytics, and custom reports for your entire app portfolio.
 ```
 
-> Promotional Text NIE jest indeksowany pod keywords — służy wyłącznie konwersji.
+> Promotional Text is NOT indexed for keywords — it serves conversion only.
 
 ---
 
 ## Template 4: What's New (Release Notes)
 
-### Formuła:
+### Formula:
 ```
-[Emoji opcjonalnie] [Co nowego/poprawiono]:
-• [Zmiana 1 — benefit]
-• [Zmiana 2 — benefit]
-• [Bug fix jeśli istotny]
+[Optional emoji] [What's new/fixed]:
+• [Change 1 — benefit]
+• [Change 2 — benefit]
+• [Bug fix if relevant]
 
-[CTA/Podziękowanie]
+[CTA/Thank you]
 ```
 
-### Przykład:
+### Example:
 ```
 What's new in v2.5:
 
@@ -104,16 +104,16 @@ Found a bug? Contact us at support@appboard.com
 
 ---
 
-## Template 5: Napisy na screenshoty (Captions)
+## Template 5: Screenshot captions
 
-### Formuła:
+### Formula:
 ```
-[Rezultat/Benefit] + [Jak/W jaki sposób]
+[Result/Benefit] + [How/In what way]
 ```
 
-### Słabe vs Mocne:
+### Weak vs Strong:
 
-| Słabe (feature-based) | Mocne (benefit-based) |
+| Weak (feature-based) | Strong (benefit-based) |
 |----------------------|---------------------|
 | "Dashboard" | "All your apps at a glance" |
 | "Keyword tracker" | "Track rankings in real-time" |
@@ -123,7 +123,7 @@ Found a bug? Contact us at support@appboard.com
 | "Push notifications" | "Never miss an important update" |
 | "Settings" | "Customize to your workflow" |
 
-### Formuły caption:
+### Caption formulas:
 
 1. **Action + Outcome**: "Track rankings. Grow downloads."
 2. **Question + Answer**: "Losing users? See exactly why."
@@ -135,7 +135,7 @@ Found a bug? Contact us at support@appboard.com
 
 ## Template 6: Subtitle/Short Description per Persona
 
-### Dla różnych segmentów (Custom Product Pages):
+### For different segments (Custom Product Pages):
 
 | Persona | Subtitle (iOS) | Short Desc (Android) |
 |---------|----------------|---------------------|
@@ -147,58 +147,58 @@ Found a bug? Contact us at support@appboard.com
 
 ## Template 7: Feature Graphic (Google Play — 1024×500 px)
 
-### Opis:
-Feature graphic to kluczowy asset na Google Play — wyświetlany prominentnie nad screenshotami. Często niedoceniany przez marketerów, ale może znacząco wpływać na konwersję.
+### Description:
+The feature graphic is a key asset on Google Play — displayed prominently above the screenshots. Often underrated by marketers, but it can significantly impact conversion.
 
-### Formuła:
+### Formula:
 ```
-[Brand visual] + [Primary value proposition] + [CTA lub social proof]
+[Brand visual] + [Primary value proposition] + [CTA or social proof]
 ```
 
-### Wskazówki:
-- Traktuj jak banner reklamowy — jedno jasne przesłanie
-- Tekst czytelny na małych ekranach (duża czcionka)
-- Kolory spójne z ikoną i screenshotami
-- Sezonowe warianty (święta, Black Friday, etc.)
-- **A/B testuj** — to jeden z elementów testowanych w Google Play Experiments
+### Tips:
+- Treat it like an ad banner — one clear message
+- Text readable on small screens (large font)
+- Colors consistent with the icon and screenshots
+- Seasonal variants (holidays, Black Friday, etc.)
+- **A/B test it** — it's one of the elements tested in Google Play Experiments
 
-### Przykłady:
+### Examples:
 ```
-"Save Money Effortlessly — Join 1M+ Users" [z gradientowym tłem i ikoną app]
-"Your All-in-One ASO Tool — Start Free" [z UI preview i brand colors]
+"Save Money Effortlessly — Join 1M+ Users" [with a gradient background and app icon]
+"Your All-in-One ASO Tool — Start Free" [with a UI preview and brand colors]
 ```
 
 ---
 
-## Template 8: Metadata Update Cadencja
+## Template 8: Metadata Update Cadence
 
-### Rekomendowany cykl aktualizacji:
+### Recommended update cycle:
 
-| Platforma | Kadencja | Co aktualizować |
+| Platform | Cadence | What to update |
 |-----------|----------|----------------|
-| **iOS** | Co **4 tygodnie** | Keywords, subtitle, promotional text |
-| **Google Play** | Co **4-6 tygodni** | Title, short desc, long desc |
-| **Screenshoty** | Co **2-3 miesiące** lub przy UI changes | Captions, visual style, order |
-| **Sezonowe** | Wg kalendarza (T-2 tygodnie) | Seasonal keywords, creatives, promo text |
+| **iOS** | Every **4 weeks** | Keywords, subtitle, promotional text |
+| **Google Play** | Every **4-6 weeks** | Title, short desc, long desc |
+| **Screenshots** | Every **2-3 months** or on UI changes | Captions, visual style, order |
+| **Seasonal** | Per calendar (T-2 weeks) | Seasonal keywords, creatives, promo text |
 
-### Zasady:
+### Rules:
 - **Sequential**: keyword changes FIRST, creative changes SECOND
-- **3-4 tygodnie** między znaczącymi zmianami — pozwól algorytmowi ustabilizować ranking
-- Nie usuwaj high-performing keywords przy update
-- Iteracyjne updates > sporadyczne duże zmiany
+- **3-4 weeks** between significant changes — let the algorithm stabilize the ranking
+- Don't remove high-performing keywords during an update
+- Iterative updates > sporadic large changes
 
 ---
 
-## Checklist opisu — przed publikacją
+## Description checklist — before publishing
 
-- [ ] Hook w pierwszych 3 liniach (widoczne bez rozwijania)
-- [ ] Primary keyword w pierwszym akapicie
-- [ ] Korzyści przed funkcjami
-- [ ] Bullet points (skanowalna struktura)
-- [ ] Social proof (liczby, oceny, nagrody)
-- [ ] CTA na końcu
-- [ ] Naturalny język (brak keyword stuffing)
-- [ ] Max 5 powtórzeń głównego keyword
-- [ ] Przetestowany z osobą nie znającą aplikacji
-- [ ] Sprawdzony pod kątem literówek i formatowania
-- [ ] Zgodny z guidelines App Store / Google Play
+- [ ] Hook in the first 3 lines (visible without expanding)
+- [ ] Primary keyword in the first paragraph
+- [ ] Benefits before features
+- [ ] Bullet points (scannable structure)
+- [ ] Social proof (numbers, ratings, awards)
+- [ ] CTA at the end
+- [ ] Natural language (no keyword stuffing)
+- [ ] Max 5 repetitions of the main keyword
+- [ ] Tested with someone unfamiliar with the app
+- [ ] Checked for typos and formatting
+- [ ] Compliant with App Store / Google Play guidelines

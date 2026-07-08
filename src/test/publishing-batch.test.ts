@@ -54,7 +54,7 @@ describe("publishAll per-item report", () => {
 				source: "draft",
 				title: "Hello",
 			},
-			{ appId, isDirty: true, language: "pl", source: "draft", title: "Cześć" },
+			{ appId, isDirty: true, language: "pl", source: "draft", title: "Hello" },
 		]);
 
 		const result = await PublishingService.publishAll(appId);

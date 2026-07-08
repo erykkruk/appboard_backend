@@ -1,84 +1,84 @@
-# Skill: Marketing Psychology (ze skills.sh)
+# Skill: Marketing Psychology (from skills.sh)
 
-> Źródło: `coreyhaines31/marketingskills/marketing-psychology`
-> Instalacja: `npx skillsadd coreyhaines31/marketingskills/marketing-psychology`
-
----
-
-## Framework 4-krokowy
-
-1. Zidentyfikuj, które modele mentalne pasują do sytuacji
-2. Wyjaśnij psychologię za każdym modelem
-3. Podaj konkretne zastosowania marketingowe
-4. Zasugeruj etyczne podejście do implementacji
+> Source: `coreyhaines31/marketingskills/marketing-psychology`
+> Install: `npx skillsadd coreyhaines31/marketingskills/marketing-psychology`
 
 ---
 
-## Modele mentalne — zastosowanie w ASO
+## 4-step framework
 
-### Zrozumienie kupujących (Psychology)
+1. Identify which mental models fit the situation
+2. Explain the psychology behind each model
+3. Provide concrete marketing applications
+4. Suggest an ethical approach to implementation
 
-| Model | Opis | Zastosowanie w ASO |
+---
+
+## Mental models — application in ASO
+
+### Understanding buyers (Psychology)
+
+| Model | Description | Application in ASO |
 |-------|------|-------------------|
-| **Mere Exposure Effect** | Znajomość rodzi preferencję | Spójna identyfikacja wizualna ikona → screenshoty → UX |
-| **Availability Heuristic** | To co łatwo sobie wyobrazić, wydaje się bardziej prawdopodobne | Pokaż na screenach sukces — "10K użytkowników oszczędza czas" |
-| **Mimetic Desire** | Social proof wywołuje pragnienie | Wyświetlaj liczbę pobrań, oceny, cytaty z recenzji |
-| **Zero-Price Effect** | "Free" ma nieproporcjonalny apel | "Free" w opisie/subtitle konwertuje mocno |
-| **Endowment Effect** | Free trial zwiększa postrzeganą wartość | Podkreśl trial w opisie i na screenshotach |
-| **Paradox of Choice** | Mniej opcji = więcej decyzji | Jedno jasne CTA na listingu, nie 5 funkcji na raz |
-| **Peak-End Rule** | Pamiętamy szczyty i zakończenia | Pierwszy i ostatni screenshot muszą być najsilniejsze |
-| **Pratfall Effect** | Małe wady zwiększają wiarygodność | Uczciwy opis z "ograniczeniami" buduje trust |
-| **Curse of Knowledge** | Znasz swój produkt za dobrze | Testuj opis z osobami nie znającymi aplikacji |
+| **Mere Exposure Effect** | Familiarity breeds preference | Consistent visual identity: icon → screenshots → UX |
+| **Availability Heuristic** | What's easy to imagine seems more likely | Show success on screenshots — "10K users saving time" |
+| **Mimetic Desire** | Social proof triggers desire | Display download counts, ratings, review quotes |
+| **Zero-Price Effect** | "Free" has a disproportionate appeal | "Free" in the description/subtitle converts strongly |
+| **Endowment Effect** | A free trial increases perceived value | Highlight the trial in the description and on screenshots |
+| **Paradox of Choice** | Fewer options = more decisions made | One clear CTA on the listing, not 5 features at once |
+| **Peak-End Rule** | We remember peaks and endings | The first and last screenshot must be the strongest |
+| **Pratfall Effect** | Small flaws increase credibility | An honest description with "limitations" builds trust |
+| **Curse of Knowledge** | You know your product too well | Test the description with people unfamiliar with the app |
 
-### Perswazja i wpływ (Ethical)
+### Persuasion and influence (Ethical)
 
-| Model | Opis | Zastosowanie w ASO |
+| Model | Description | Application in ASO |
 |-------|------|-------------------|
-| **Reciprocity** | Daj wartość przed proszeniem | Pokaż w opisie co daje wersja free |
-| **Authority Bias** | Eksperci wiarygodni | "Rekomendowane przez X", nagrody App Store |
-| **Social Proof (Bandwagon)** | Tłum buduje zaufanie | "1M+ pobrań", "4.8★ z 50K recenzji" |
-| **Scarcity/Urgency** | Ograniczona dostępność ↑ wartość | "Limitowana oferta launch" (etycznie!) |
-| **Loss Aversion** | Strach przed utratą > zysk | "Nie przegap X" > "Zyskaj X" |
-| **Anchoring** | Pierwsza cena kotwica | Pokaż droższą opcję najpierw |
-| **Framing Effect** | Prezentacja zmienia percepcję | "99% uptime" > "1% downtime" |
-| **Contrast Effect** | Przed/Po | Screenshoty before/after z wynikami |
+| **Reciprocity** | Give value before asking | Show in the description what the free version offers |
+| **Authority Bias** | Experts are credible | "Recommended by X", App Store awards |
+| **Social Proof (Bandwagon)** | The crowd builds trust | "1M+ downloads", "4.8★ from 50K reviews" |
+| **Scarcity/Urgency** | Limited availability ↑ value | "Limited launch offer" (ethically!) |
+| **Loss Aversion** | Fear of loss > gain | "Don't miss X" > "Get X" |
+| **Anchoring** | The first price is the anchor | Show the more expensive option first |
+| **Framing Effect** | Presentation changes perception | "99% uptime" > "1% downtime" |
+| **Contrast Effect** | Before/After | Before/after screenshots with results |
 
-### Psychologia cen
+### Pricing psychology
 
-| Model | Opis | Zastosowanie |
+| Model | Description | Application |
 |-------|------|-------------|
-| **Charm Pricing** | .99 wydaje się znacząco taniej | $9.99 vs $10.00 |
-| **Rule of 100** | Pod $100 → procenty; nad $100 → kwoty | "Oszczędź 30%" vs "Oszczędź $50" |
-| **Mental Accounting** | Podział kosztu | "$1/dzień" lepsze niż "$30/miesiąc" |
+| **Charm Pricing** | .99 seems significantly cheaper | $9.99 vs $10.00 |
+| **Rule of 100** | Under $100 → percentages; over $100 → amounts | "Save 30%" vs "Save $50" |
+| **Mental Accounting** | Splitting the cost | "$1/day" is better than "$30/month" |
 | **Price Relativity** | 3-tier pricing | Basic/Pro/Premium anchoring |
 
 ### Design & Delivery
 
-| Model | Opis | Zastosowanie w ASO |
+| Model | Description | Application in ASO |
 |-------|------|-------------------|
-| **Hick's Law** | Więcej opcji = wolniejsze decyzje | Screenshoty: 1 feature per screen |
-| **AIDA** | Attention → Interest → Desire → Action | Struktura screenshotów i opisu |
-| **Rule of 7** | ~7 touchpoints do konwersji | ASO + social + ads = kompletna ścieżka |
-| **BJ Fogg Model** | Behavior = Motivation × Ability × Prompt | Ułatw instalację: jasne CTA + wysoka motywacja (social proof) |
+| **Hick's Law** | More options = slower decisions | Screenshots: 1 feature per screen |
+| **AIDA** | Attention → Interest → Desire → Action | Structure of screenshots and description |
+| **Rule of 7** | ~7 touchpoints to conversion | ASO + social + ads = complete path |
+| **BJ Fogg Model** | Behavior = Motivation × Ability × Prompt | Make installing easy: clear CTA + high motivation (social proof) |
 
 ---
 
 ## Quick Reference — Problem → Model
 
-| Problem ASO | Modele do zastosowania |
+| ASO problem | Models to apply |
 |------------|----------------------|
-| Niska konwersja | Hick's Law, AIDA, BJ Fogg, Paradox of Choice |
-| Opór cenowy | Anchoring, Framing, Mental Accounting, Loss Aversion |
-| Budowanie zaufania | Authority, Social Proof, Reciprocity, Pratfall Effect |
-| Tworzenie pilności | Scarcity, Loss Aversion, Zeigarnik Effect |
-| Retencja | Endowment Effect, Switching Costs, IKEA Effect |
+| Low conversion | Hick's Law, AIDA, BJ Fogg, Paradox of Choice |
+| Price resistance | Anchoring, Framing, Mental Accounting, Loss Aversion |
+| Building trust | Authority, Social Proof, Reciprocity, Pratfall Effect |
+| Creating urgency | Scarcity, Loss Aversion, Zeigarnik Effect |
+| Retention | Endowment Effect, Switching Costs, IKEA Effect |
 
 ---
 
-## Pytania diagnostyczne (przed optymalizacją listingu)
+## Diagnostic questions (before optimizing a listing)
 
-1. Jakie zachowanie chcę wywołać u użytkownika?
-2. W co użytkownik już wierzy o moim typie aplikacji?
-3. Gdzie jest w ścieżce (awareness/consideration/decision)?
-4. Co mu przeszkadza w pobraniu?
-5. Czy testowałem z prawdziwymi użytkownikami?
+1. What behavior do I want to trigger in the user?
+2. What does the user already believe about my type of app?
+3. Where are they in the journey (awareness/consideration/decision)?
+4. What's stopping them from downloading?
+5. Have I tested with real users?

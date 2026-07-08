@@ -157,6 +157,10 @@ export const stores = pgTable(
 	{
 		id: uuid().defaultRandom().primaryKey(),
 		...timeColumns,
+		// Per-connection capabilities the user opted into (see
+		// `store-capabilities.ts`). NULL means "not set" and is treated as all
+		// selectable capabilities enabled, so existing connections keep full access.
+		capabilities: jsonb().$type<string[]>(),
 		credentials: text(),
 		lastSyncedAt: timestamp(),
 		name: varchar({ length: 255 }).notNull(),

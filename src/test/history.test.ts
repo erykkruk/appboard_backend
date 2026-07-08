@@ -216,8 +216,8 @@ describe("History module", () => {
 		await insertHistoryEntry(appIdA, {
 			field: "title",
 			language: "pl-PL",
-			newValue: "PL nowy",
-			oldValue: "PL stary",
+			newValue: "PL new",
+			oldValue: "PL old",
 		});
 
 		const res = await app.handle(
@@ -247,8 +247,8 @@ describe("History module", () => {
 		await insertHistoryEntry(appIdA, {
 			field: "title",
 			language: "pl-PL",
-			newValue: "nowy tytuł",
-			oldValue: "stary tytuł",
+			newValue: "new title",
+			oldValue: "old title",
 		});
 
 		const res = await app.handle(

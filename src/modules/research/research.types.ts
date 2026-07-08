@@ -124,18 +124,18 @@ export interface ParsedStoreUrl {
 
 export const RESEARCH_CATEGORIES = [
 	{ id: "ux-ui", label: "UX / UI" },
-	{ id: "wydajnosc", label: "Wydajność" },
-	{ id: "crash-bugi", label: "Crashe / Bugi" },
-	{ id: "platnosci", label: "Płatności / Subskrypcje" },
-	{ id: "logowanie", label: "Logowanie / Konto" },
-	{ id: "brak-funkcji", label: "Brakujące funkcje" },
-	{ id: "obsluga-klienta", label: "Obsługa klienta" },
-	{ id: "powiadomienia", label: "Powiadomienia" },
-	{ id: "sync-offline", label: "Synchronizacja / Offline" },
-	{ id: "reklamy", label: "Reklamy / Monetyzacja" },
-	{ id: "prywatnosc", label: "Prywatność / Bezpieczeństwo" },
-	{ id: "pochwaly", label: "Pochwały (co działa)" },
-	{ id: "inne", label: "Inne" },
+	{ id: "wydajnosc", label: "Performance" },
+	{ id: "crash-bugi", label: "Crashes / Bugs" },
+	{ id: "platnosci", label: "Payments / Subscriptions" },
+	{ id: "logowanie", label: "Login / Account" },
+	{ id: "brak-funkcji", label: "Missing features" },
+	{ id: "obsluga-klienta", label: "Customer support" },
+	{ id: "powiadomienia", label: "Notifications" },
+	{ id: "sync-offline", label: "Sync / Offline" },
+	{ id: "reklamy", label: "Ads / Monetization" },
+	{ id: "prywatnosc", label: "Privacy / Security" },
+	{ id: "pochwaly", label: "Praise (what works)" },
+	{ id: "inne", label: "Other" },
 ] as const;
 
 export const RESEARCH_DEFAULT_MARKETS = [

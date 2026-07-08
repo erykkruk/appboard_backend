@@ -627,9 +627,9 @@ describe("Purchases module", () => {
 							name: "100 Coins",
 						},
 						{
-							description: "100 złotych monet",
+							description: "100 gold coins",
 							language: "pl-PL",
-							name: "100 Monet",
+							name: "100 Coins",
 						},
 					],
 					name: "100 Coins",
@@ -839,7 +839,7 @@ describe("Purchases module", () => {
 									name: `Pro ${label}`,
 								},
 								{
-									description: `Subskrypcja ${label}`,
+									description: `${label} subscription`,
 									language: "pl-PL",
 									name: `Pro ${label}`,
 								},
@@ -1020,9 +1020,9 @@ describe("Purchases module", () => {
 							name: "500 Gems",
 						},
 						{
-							description: "Paczka 500 klejnotów",
+							description: "Pack of 500 gems",
 							language: "pl-PL",
-							name: "500 Klejnotów",
+							name: "500 Gems",
 						},
 					],
 					name: "500 Gems",
@@ -1181,7 +1181,7 @@ describe("Purchases module", () => {
 									name: `GP Pro ${label}`,
 								},
 								{
-									description: `Subskrypcja ${label}`,
+									description: `${label} subscription`,
 									language: "pl-PL",
 									name: `GP Pro ${label}`,
 								},

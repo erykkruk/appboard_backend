@@ -79,7 +79,7 @@ describe("computeHeuristics", () => {
 	it("buckets negative reviews by keyword (EN + PL) with quotes", () => {
 		const stats = computeHeuristics([
 			review(1, "the app keeps crashing after login"),
-			review(2, "aplikacja się wywala i nie działa"),
+			review(2, "the app crashes and doesn't work"),
 			review(1, "too many ads everywhere"),
 			review(5, "crash? never happened, love it"),
 		]);
@@ -102,9 +102,9 @@ describe("computeHeuristics", () => {
 
 	it("sorts buckets by count descending", () => {
 		const stats = computeHeuristics([
-			review(1, "wolno działa i muli"),
-			review(2, "strasznie wolne, muli się"),
-			review(1, "za dużo reklam"),
+			review(1, "runs slow and lags"),
+			review(2, "terribly slow and laggy"),
+			review(1, "too many ads"),
 		]);
 		expect(stats.buckets[0].id).toBe("wydajnosc");
 	});
@@ -117,7 +117,7 @@ describe("extractJson", () => {
 	});
 
 	it("slices from first { to last } for unfenced content", () => {
-		expect(extractJson('Oto wynik: {"a":{"b":2}} — koniec')).toBe(
+		expect(extractJson('Here is the result: {"a":{"b":2}} — end')).toBe(
 			'{"a":{"b":2}}',
 		);
 	});

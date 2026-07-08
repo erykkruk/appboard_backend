@@ -1,100 +1,100 @@
-# Skill: Content Strategy (ze skills.sh)
+# Skill: Content Strategy (from skills.sh)
 
-> Źródło: `coreyhaines31/marketingskills/content-strategy`
-> Instalacja: `npx skillsadd coreyhaines31/marketingskills/content-strategy`
+> Source: `coreyhaines31/marketingskills/content-strategy`
+> Install: `npx skillsadd coreyhaines31/marketingskills/content-strategy`
 
 ---
 
 ## Pre-Planning Phase
 
-### Zbierz informacje w 4 obszarach:
+### Gather information across 4 areas:
 
-1. **Business Context** — co robi firma, kto jest idealnym klientem, cele, problemy do rozwiązania
-2. **Customer Research** — pytania przed zakupem, obiekcje sprzedażowe, wzorce supportu, język klienta
-3. **Current State** — wydajność obecnego contentu, dostępne zasoby, możliwości produkcji
-4. **Competitive Landscape** — główni konkurenci, luki w contencie
+1. **Business Context** — what the company does, who the ideal customer is, goals, problems to solve
+2. **Customer Research** — pre-purchase questions, sales objections, support patterns, customer language
+3. **Current State** — performance of current content, available resources, production capacity
+4. **Competitive Landscape** — main competitors, content gaps
 
 ---
 
-## Klasyfikacja contentu
+## Content classification
 
-### Searchable Content (łapie istniejący popyt):
-- Keywords w tytułach, nagłówkach, pierwszym akapicie
-- Kompletne pokrycie tematu
-- Dane i autorytatywne źródła
-- Optymalizacja pod AI/LLM discovery (trend 2026!)
+### Searchable Content (captures existing demand):
+- Keywords in titles, headings, first paragraph
+- Complete topic coverage
+- Data and authoritative sources
+- Optimization for AI/LLM discovery (2026 trend!)
 
-### Shareable Content (tworzy popyt):
-- Nowe insights
-- Kontraintuicyjne tezy
+### Shareable Content (creates demand):
+- New insights
+- Counterintuitive takes
 - Storytelling
-- Trendy
-- Autentyczne doświadczenia
+- Trends
+- Authentic experiences
 
 ---
 
-## Typy contentu — zastosowanie w ASO
+## Content types — application in ASO
 
 ### Searchable:
 
-| Typ | Zastosowanie ASO |
+| Type | ASO application |
 |-----|-----------------|
-| **Use-Case Content** | Opis na listing pod konkretną personę + use case |
-| **Hub and Spoke** | Główna strona app + linki do features |
-| **Template Libraries** | Szablony screenshotów, opisów per locale |
+| **Use-Case Content** | Listing description for a specific persona + use case |
+| **Hub and Spoke** | Main app page + links to features |
+| **Template Libraries** | Screenshot and description templates per locale |
 
 ### Shareable:
 
-| Typ | Zastosowanie ASO |
+| Type | ASO application |
 |-----|-----------------|
-| **Data-Driven** | "Nasi użytkownicy oszczędzają średnio 2h/tygodniowo" — na listing |
-| **Case Studies** | Problem → Rozwiązanie → Rezultat — na stronę i w opis |
-| **Social Proof** | Recenzje, nagrody, wyróżnienia — na screenshoty |
+| **Data-Driven** | "Our users save an average of 2h/week" — on the listing |
+| **Case Studies** | Problem → Solution → Result — on the site and in the description |
+| **Social Proof** | Reviews, awards, recognition — on screenshots |
 
 ---
 
-## Content Pillars — aplikacja ASO
+## Content Pillars — ASO application
 
-Zdefiniuj 3-5 filarów treści dla twojej aplikacji:
+Define 3-5 content pillars for your app:
 
-### Przykład dla aplikacji ASO:
+### Example for an ASO app:
 
-| Filar | Opis | Gdzie widoczny |
+| Pillar | Description | Where visible |
 |-------|------|---------------|
-| **Optymalizacja** | Jak poprawić listing | Opis, screenshoty |
-| **Analytics** | Dane i trendy | Social proof, screenshoty |
-| **Productivity** | Oszczędność czasu | Headline, napisy na screenach |
-| **Global Reach** | Wielojęzyczność | Lokalizowane wersje |
+| **Optimization** | How to improve a listing | Description, screenshots |
+| **Analytics** | Data and trends | Social proof, screenshots |
+| **Productivity** | Time savings | Headline, screenshot captions |
+| **Global Reach** | Multi-language support | Localized versions |
 
 ---
 
-## Keywords per Buyer Stage — zastosowanie ASO
+## Keywords per Buyer Stage — ASO application
 
-| Etap | Typ keywords | Przykłady dla ASO tool |
+| Stage | Keyword type | Examples for an ASO tool |
 |------|-------------|----------------------|
-| **Awareness** | "what is ASO", "how to optimize app store" | Blog, SEO, strona www |
+| **Awareness** | "what is ASO", "how to optimize app store" | Blog, SEO, website |
 | **Consideration** | "best ASO tools", "ASO tool comparison" | Landing pages, Google Ads |
-| **Decision** | "AppBoard pricing", "AppBoard review" | App Store listing, konwersja |
+| **Decision** | "AppBoard pricing", "AppBoard review" | App Store listing, conversion |
 | **Implementation** | "ASO templates", "keyword research tutorial" | In-app onboarding |
 
 ---
 
-## Priorytetyzacja contentu (scoring)
+## Content prioritization (scoring)
 
-| Kryterium | Waga | Pytanie |
+| Criterion | Weight | Question |
 |-----------|------|---------|
-| Customer Impact | 40% | Jak bardzo wpłynie na użytkowników? |
-| Content-Market Fit | 30% | Czy pasuje do naszego produktu? |
-| Search Potential | 20% | Czy ludzie tego szukają? |
-| Resource Requirements | 10% | Ile zasobów potrzeba? |
+| Customer Impact | 40% | How much will it impact users? |
+| Content-Market Fit | 30% | Does it fit our product? |
+| Search Potential | 20% | Are people searching for it? |
+| Resource Requirements | 10% | How many resources are needed? |
 
 ---
 
-## Źródła ideacji
+## Ideation sources
 
 1. Keyword exports (Ahrefs, SEMrush, GSC)
-2. Transkrypty rozmów z klientami
-3. Odpowiedzi z ankiet
-4. Forum: Reddit, Quora
-5. Analiza konkurencji
-6. Input od zespołu sprzedaży/supportu
+2. Customer conversation transcripts
+3. Survey responses
+4. Forums: Reddit, Quora
+5. Competitor analysis
+6. Input from the sales/support team

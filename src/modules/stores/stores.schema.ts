@@ -3,9 +3,18 @@ import { STORE_TYPES } from "@/config/const";
 import { unionEnum } from "@/utils/helpers";
 
 export const connectStoreBody = t.Object({
+	capabilities: t.Optional(t.Array(t.String())),
 	credentials: t.Record(t.String(), t.Unknown()),
 	name: t.String({ minLength: 1 }),
 	type: unionEnum(STORE_TYPES),
+});
+
+export const storeCapabilitiesBody = t.Object({
+	capabilities: t.Array(t.String()),
+});
+
+export const renameStoreBody = t.Object({
+	name: t.String({ maxLength: 255, minLength: 1 }),
 });
 
 export const storeIdParams = t.Object({

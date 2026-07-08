@@ -1,150 +1,150 @@
-# ASO (App Store Optimization) - Kompletny Przewodnik 2026
+# ASO (App Store Optimization) - Complete Guide 2026
 
-> Kompletny zbiór najlepszych praktyk ASO na luty 2026. Dotyczy zarówno Apple App Store, jak i Google Play Store.
+> A complete collection of ASO best practices as of February 2026. Covers both the Apple App Store and the Google Play Store.
 
 ---
 
-## Spis treści
+## Table of contents
 
-1. [Czym jest ASO i dlaczego jest ważne](#1-czym-jest-aso)
-2. [Tytuł i podtytuł aplikacji](#2-tytuł-i-podtytuł-aplikacji)
-3. [Strategia słów kluczowych](#3-strategia-słów-kluczowych)
-4. [Pisanie opisów](#4-pisanie-opisów)
-5. [Ikona aplikacji](#5-ikona-aplikacji)
-6. [Screenshoty](#6-screenshoty)
-7. [Wideo podglądowe](#7-wideo-podglądowe)
-8. [Oceny i recenzje](#8-oceny-i-recenzje)
-9. [Lokalizacja i wielojęzyczność](#9-lokalizacja-i-wielojęzyczność)
+1. [What ASO is and why it matters](#1-what-aso-is)
+2. [App title and subtitle](#2-app-title-and-subtitle)
+3. [Keyword strategy](#3-keyword-strategy)
+4. [Writing descriptions](#4-writing-descriptions)
+5. [App icon](#5-app-icon)
+6. [Screenshots](#6-screenshots)
+7. [Preview video](#7-preview-video)
+8. [Ratings and reviews](#8-ratings-and-reviews)
+9. [Localization and multilingual support](#9-localization-and-multilingual-support)
 10. [A/B Testing](#10-ab-testing)
-11. [Różnice między iOS a Androidem](#11-różnice-między-ios-a-androidem)
-12. [Trendy ASO na 2026 rok](#12-trendy-aso-na-2026)
-13. [Najczęstsze błędy](#13-najczęstsze-błędy)
-14. [Checklista ASO](#14-checklista-aso)
+11. [Differences between iOS and Android](#11-differences-between-ios-and-android)
+12. [ASO trends for 2026](#12-aso-trends-2026)
+13. [Most common mistakes](#13-most-common-mistakes)
+14. [ASO checklist](#14-aso-checklist)
 
 ---
 
-## 1. Czym jest ASO
+## 1. What ASO is
 
-**App Store Optimization (ASO)** to proces optymalizacji aplikacji mobilnych w celu uzyskania wyższych pozycji w wynikach wyszukiwania sklepów z aplikacjami.
+**App Store Optimization (ASO)** is the process of optimizing mobile apps to achieve higher positions in app store search results.
 
-### Kluczowe statystyki:
-- **70%** odwiedzających App Store używa wyszukiwania do znajdowania nowych aplikacji
-- **65%** pobrań następuje bezpośrednio po wyszukiwaniu
-- **50 milisekund** — tyle czasu użytkownik potrzebuje na wyrobienie sobie pierwszej opinii wizualnej
+### Key statistics:
+- **70%** of App Store visitors use search to discover new apps
+- **65%** of downloads happen directly after a search
+- **50 milliseconds** — how long it takes a user to form their first visual impression
 
-### Cel ASO:
-Głównym celem ASO jest zwiększenie **widoczności** i **współczynnika konwersji** w sklepach z aplikacjami, co prowadzi do większej liczby pobrań i zaangażowania użytkowników. ASO to wielowymiarowa strategia optymalizująca każdy aspekt obecności aplikacji: keywords, metadane, wizualia, recenzje i oceny.
+### The goal of ASO:
+The main goal of ASO is to increase the **visibility** and **conversion rate** in app stores, which leads to more downloads and user engagement. ASO is a multidimensional strategy that optimizes every aspect of an app's presence: keywords, metadata, visuals, reviews and ratings.
 
-### Dwa filary ASO:
-1. **Widoczność (Discovery)** — pozycjonowanie w wynikach wyszukiwania
-2. **Konwersja (Conversion)** — przekształcanie odwiedzin w pobrania
+### The two pillars of ASO:
+1. **Visibility (Discovery)** — ranking in search results
+2. **Conversion** — turning visits into downloads
 
-### Ścieżka użytkownika:
+### User journey:
 ```
-Wyszukiwanie → Wyświetlenie w wynikach → Kliknięcie → Przeglądanie listingu → Instalacja
+Search → Appearance in results → Click → Browsing the listing → Install
 ```
 
-### Dlaczego ASO jest ważniejsze niż kiedykolwiek w 2026:
+### Why ASO matters more than ever in 2026:
 
-| Czynnik | Opis |
+| Factor | Description |
 |---------|------|
-| **Rosnąca złożoność sklepów** | Algorytmy ewoluują poza proste dopasowanie keywords — uwzględniają zachowanie użytkowników, metryki engagement, kontekstualną trafność |
-| **Zaostrzająca się konkurencja** | Miliony aplikacji i codziennie nowe — solidna strategia ASO pozwala przebić się przez szum |
-| **Efektywność kosztowa** | W przeciwieństwie do płatnych reklam (ciągły wydatek), ASO daje zrównoważony wzrost widoczności i pobrań przy lepszym ROI |
-| **Jakość i trafność** | Ciągła aktualizacja metadanych, monitoring feedbacku i adaptacja do trendów utrzymuje aplikację atrakcyjną |
-| **Akwizycja + retencja** | ASO nie tylko pozyskuje nowych użytkowników, ale też wpływa na retencję dzięki spójnym oczekiwaniom z listingu |
-| **Zasięg globalny** | Lokalizacja treści dla różnych rynków geograficznych i językowych rozszerza globalny footprint |
-| **Adaptacyjność** | Preferencje użytkowników i technologia ewoluują — elastyczna strategia ASO utrzymuje konkurencyjność |
+| **Growing store complexity** | Algorithms evolve beyond simple keyword matching — they account for user behavior, engagement metrics, and contextual relevance |
+| **Intensifying competition** | Millions of apps with new ones daily — a solid ASO strategy lets you cut through the noise |
+| **Cost efficiency** | Unlike paid ads (a continuous spend), ASO delivers sustainable growth in visibility and downloads with a better ROI |
+| **Quality and relevance** | Continuously updating metadata, monitoring feedback and adapting to trends keeps the app appealing |
+| **Acquisition + retention** | ASO not only acquires new users but also affects retention thanks to expectations consistent with the listing |
+| **Global reach** | Localizing content for different geographic and language markets expands your global footprint |
+| **Adaptability** | User preferences and technology evolve — a flexible ASO strategy keeps you competitive |
 
 ---
 
-## 2. Tytuł i podtytuł aplikacji
+## 2. App title and subtitle
 
-### Dlaczego tytuł jest najważniejszy?
-Tytuł aplikacji ma **najsilniejszą wagę algorytmiczną** dla rankingu wyszukiwania na obu platformach. Umieszczenie słowa kluczowego w tytule może poprawić ranking o **10.3%**.
+### Why is the title the most important?
+The app title carries the **strongest algorithmic weight** for search ranking on both platforms. Placing a keyword in the title can improve ranking by **10.3%**.
 
-### Zasady pisania tytułu:
+### Rules for writing the title:
 
-| Zasada | Opis |
+| Rule | Description |
 |--------|------|
-| Limit znaków | 30 znaków (iOS i Android) |
-| Formuła | `[Nazwa marki] – [Opis funkcji]` |
-| Słowa kluczowe | Umieść główne słowo kluczowe naturalnie |
-| Czytelność | Musi być czytelny, nie spamowy |
+| Character limit | 30 characters (iOS and Android) |
+| Formula | `[Brand name] – [Feature description]` |
+| Keywords | Place the main keyword naturally |
+| Readability | Must be readable, not spammy |
 
-**Przykłady dobrych tytułów:**
+**Examples of good titles:**
 - `Calm – Meditation and Sleep`
 - `Duolingo – Language Lessons`
 - `Mint – Budget & Money Tracker`
 
-**Czego unikać:**
-- Upychanie wielu słów kluczowych
-- Superlative jak "#1" lub "Best"
-- Nazwy konkurencyjnych platform
+**What to avoid:**
+- Stuffing many keywords
+- Superlatives like "#1" or "Best"
+- Names of competing platforms
 
-### Podtytuł (iOS — 30 znaków):
-- Drugi najsilniejszy czynnik rankingowy na iOS
-- Podkreśl unikalną propozycję wartości (USP)
-- Dodaj dodatkowe słowa kluczowe naturalnie
-- Widoczny w wynikach wyszukiwania
+### Subtitle (iOS — 30 characters):
+- The second strongest ranking factor on iOS
+- Highlight your unique value proposition (USP)
+- Add extra keywords naturally
+- Visible in search results
 
-### Statystyki:
-- **41%** top aplikacji iOS zawiera słowa kluczowe poza nazwą marki
-- **47%** top aplikacji Android robi to samo
+### Statistics:
+- **41%** of top iOS apps include keywords beyond the brand name
+- **47%** of top Android apps do the same
 
 ---
 
-## 3. Strategia słów kluczowych
+## 3. Keyword strategy
 
-### Kategorie słów kluczowych:
+### Keyword categories:
 
-| Typ | Opis | Przykład |
+| Type | Description | Example |
 |-----|------|---------|
-| **Primary** | Główne słowa, tytuł/podtytuł | "budget planner" |
-| **Secondary** | Wspierające, opisy | "expense calculator" |
-| **Long-tail** | Specyficzne frazy, mniej konkurencji | "budget planner for freelancers" |
+| **Primary** | Main terms, title/subtitle | "budget planner" |
+| **Secondary** | Supporting, descriptions | "expense calculator" |
+| **Long-tail** | Specific phrases, less competition | "budget planner for freelancers" |
 
-### Cechy dobrych słów kluczowych:
-1. **Trafność** — bezpośrednio związane z funkcjonalnością aplikacji
-2. **Wolumen wyszukiwań** — dostateczna liczba wyszukiwań
-3. **Realny potencjał rankingowy** — osiągalny w twojej kategorii
+### Traits of good keywords:
+1. **Relevance** — directly related to the app's functionality
+2. **Search volume** — a sufficient number of searches
+3. **Realistic ranking potential** — achievable in your category
 
-### Strategia według platformy:
+### Strategy by platform:
 
-**iOS — trzy pola do optymalizacji:**
-- Tytuł (30 znaków)
-- Podtytuł (30 znaków)
-- Ukryte pole Keywords (100 znaków, oddzielone przecinkami)
+**iOS — three fields to optimize:**
+- Title (30 characters)
+- Subtitle (30 characters)
+- Hidden Keywords field (100 characters, comma-separated)
 
-**Android — brak ukrytego pola keywords:**
-- Google indeksuje tytuł (najwyższa waga)
-- Krótki opis (80 znaków — druga waga)
-- Pełny opis (najniższa waga, ale też indeksowany)
+**Android — no hidden keywords field:**
+- Google indexes the title (highest weight)
+- Short description (80 characters — second weight)
+- Full description (lowest weight, but also indexed)
 
-### Zasady keyword research:
+### Keyword research rules:
 
-1. **Analizuj konkurencję** — jakie słowa kluczowe używają top aplikacje w twojej kategorii
-2. **Szukaj luk** — słowa kluczowe, których konkurencja nie pokrywa
-3. **Sezonowość** — np. "Black Friday cashback" w sezonie
-4. **Long-tail** — konwertują lepiej, mniejsza konkurencja
-5. **Iteruj** — ASO to ciągły proces, monitoruj i aktualizuj regularnie
-6. **Balance volume vs niche** — znajdź równowagę między keywords z dużym ruchem a specyficznymi, które przyciągają lepszych użytkowników
-7. **Semantic clusters** — grupuj keywords w intent-driven klastry tematyczne zamiast targetować pojedyncze frazy w izolacji (np. core features, user problems, category terms)
+1. **Analyze competitors** — which keywords top apps in your category use
+2. **Look for gaps** — keywords the competition doesn't cover
+3. **Seasonality** — e.g. "Black Friday cashback" in season
+4. **Long-tail** — they convert better, less competition
+5. **Iterate** — ASO is an ongoing process, monitor and update regularly
+6. **Balance volume vs niche** — find the balance between high-traffic keywords and specific ones that attract better users
+7. **Semantic clusters** — group keywords into intent-driven thematic clusters instead of targeting single phrases in isolation (e.g. core features, user problems, category terms)
 
-### Optymalna gęstość w opisie:
-- Powtórz główne słowo kluczowe **max 5 razy** w opisie
-- Tylko jeśli pasuje naturalnie do zdania
-- Upychanie obniża ranking
+### Optimal density in the description:
+- Repeat the main keyword **max 5 times** in the description
+- Only if it fits naturally into the sentence
+- Stuffing lowers the ranking
 
-### Super Geo Localization (zaawansowana):
-- Dodaj keywords do lokalizacji arabskiej, chińskiej, holenderskiej, etc. — nadal są indeksowane w US/głównym rynku
-- Zamiast 160 znaków na keywords, zyskujesz **~10x więcej przestrzeni**
-- Pozwala testować znacznie więcej keywords bez czekania na wiele aktualizacji aplikacji
-- Strategia potwierdzona przez Yodel Mobile i AppFollow — może **podwoić liczbę indeksowanych keywords**
+### Super Geo Localization (advanced):
+- Add keywords to the Arabic, Chinese, Dutch, etc. localizations — they are still indexed in the US/main market
+- Instead of 160 characters for keywords, you gain **~10x more space**
+- Lets you test far more keywords without waiting for multiple app updates
+- A strategy confirmed by Yodel Mobile and AppFollow — it can **double the number of indexed keywords**
 
 ### Buyer Stage Keywords:
 
-| Etap | Prefiksy słów kluczowych |
+| Stage | Keyword prefixes |
 |------|--------------------------|
 | Awareness | "what is", "how to", "guide to" |
 | Consideration | "best", "top", "vs", "alternatives" |
@@ -153,485 +153,485 @@ Tytuł aplikacji ma **najsilniejszą wagę algorytmiczną** dla rankingu wyszuki
 
 ---
 
-## 4. Pisanie opisów
+## 4. Writing descriptions
 
-### Formuła opisu aplikacji:
+### App description formula:
 
 ```
-1. HOOK — Mocny pierwszy akapit (kluczowy, bo reszta "pod foldem")
-2. BENEFITS — Lista korzyści, nie funkcji
-3. FEATURES — Kluczowe funkcje jako bullet points
-4. SOCIAL PROOF — Nagrody, oceny, wyróżnienia
-5. CTA — Wezwanie do działania na końcu
+1. HOOK — A strong first paragraph (crucial, since the rest is "below the fold")
+2. BENEFITS — A list of benefits, not features
+3. FEATURES — Key features as bullet points
+4. SOCIAL PROOF — Awards, ratings, recognitions
+5. CTA — Call to action at the end
 ```
 
-### Krótki opis (Google Play — 80 znaków):
-- Wpleć 1-2 główne słowa kluczowe naturalnie
-- Podkreśl główną wartość
-- Przykład: `"Manage money effortlessly – budget tracker, expense planner & bill reminders."`
+### Short description (Google Play — 80 characters):
+- Weave in 1-2 main keywords naturally
+- Highlight the main value
+- Example: `"Manage money effortlessly – budget tracker, expense planner & bill reminders."`
 
-### Długi opis (4000 znaków):
+### Long description (4000 characters):
 
-**Struktura:**
+**Structure:**
 ```
-[Akapit 1: Hook — główna wartość, problem który rozwiązujesz]
+[Paragraph 1: Hook — main value, the problem you solve]
 
-[Akapit 2: Kto powinien używać — persona, use case]
+[Paragraph 2: Who should use it — persona, use case]
 
-KLUCZOWE FUNKCJE:
-• [Korzyść 1] — [krótkie wyjaśnienie]
-• [Korzyść 2] — [krótkie wyjaśnienie]
-• [Korzyść 3] — [krótkie wyjaśnienie]
-• [Korzyść 4] — [krótkie wyjaśnienie]
+KEY FEATURES:
+• [Benefit 1] — [short explanation]
+• [Benefit 2] — [short explanation]
+• [Benefit 3] — [short explanation]
+• [Benefit 4] — [short explanation]
 
-[Akapit 3: Social proof — "Dołącz do X użytkowników...", nagrody]
+[Paragraph 3: Social proof — "Join X users...", awards]
 
-[Akapit 4: CTA — "Pobierz teraz i...", "Zacznij już dziś!"]
+[Paragraph 4: CTA — "Download now and...", "Get started today!"]
 ```
 
-### Zasady pisania:
+### Writing rules:
 
-| Zasada | Opis |
+| Rule | Description |
 |--------|------|
-| Pisz korzyści, nie funkcje | "Oszczędzaj 2h tygodniowo" zamiast "Ma funkcję kalendarza" |
-| Bullet points | Lista jest skanowalna, ściana tekstu nie |
-| Jasny język | Zakładaj, że użytkownik nic nie wie o aplikacji |
-| Specyficzność | "50 pięknych filtrów" zamiast "Dużo filtrów" |
-| Aktywny głos | "Generujemy raporty" zamiast "Raporty są generowane" |
-| Bez upychania keywords | Najpierw napisz przekonujący tekst, potem wpleć słowa kluczowe |
+| Write benefits, not features | "Save 2h a week" instead of "Has a calendar feature" |
+| Bullet points | A list is scannable, a wall of text is not |
+| Clear language | Assume the user knows nothing about the app |
+| Specificity | "50 beautiful filters" instead of "Lots of filters" |
+| Active voice | "We generate reports" instead of "Reports are generated" |
+| No keyword stuffing | First write compelling copy, then weave in keywords |
 
-### Różnice platformowe:
+### Platform differences:
 
 | Element | iOS | Android |
 |---------|-----|---------|
-| Indeksowanie opisu | **NIE** — opis nie wpływa na ranking | **TAK** — Google indeksuje opis |
-| Cel opisu | Wyłącznie konwersja/perswazja | Konwersja + SEO |
-| Strategia keywords | Bez upychania, pisz naturalnie | Naturalnie wpleć 2-3x kluczowe frazy |
+| Description indexing | **NO** — the description doesn't affect ranking | **YES** — Google indexes the description |
+| Purpose of the description | Conversion/persuasion only | Conversion + SEO |
+| Keyword strategy | No stuffing, write naturally | Naturally weave in key phrases 2-3x |
 
-### Czego unikać w opisach:
+### What to avoid in descriptions:
 - Keyword stuffing
-- Twierdzenia "#1 aplikacja"
-- Nazwy konkurencyjnych platform
-- Nadmierne emoji
-- Przestarzałe informacje o funkcjach
-- Ściany tekstu bez formatowania
+- "#1 app" claims
+- Names of competing platforms
+- Excessive emoji
+- Outdated feature information
+- Walls of text without formatting
 
 ---
 
-## 5. Ikona aplikacji
+## 5. App icon
 
-### Wpływ na konwersję:
-Testy A/B wykazały wzrost instalacji o **+10% do +32%** po samej zmianie ikony.
+### Impact on conversion:
+A/B tests have shown an increase in installs of **+10% to +32%** from just changing the icon.
 
-### Zasady projektowania:
+### Design rules:
 
-| Zasada | Opis |
+| Rule | Description |
 |--------|------|
-| Prostota | Rozpoznawalna w małej skali, bez detali |
-| Trafność | Sugeruje przeznaczenie aplikacji |
-| Spójność z marką | Kolory i styl zgodne z brandem |
-| Jakość | 1024×1024px PNG (iOS), 512×512px (Android) |
-| Testowanie | Sprawdź na jasnym i ciemnym tle |
+| Simplicity | Recognizable at small scale, no fine detail |
+| Relevance | Suggests the app's purpose |
+| Brand consistency | Colors and style aligned with the brand |
+| Quality | 1024×1024px PNG (iOS), 512×512px (Android) |
+| Testing | Check against light and dark backgrounds |
 
-### Wskazówki kolorystyczne:
-- **Niebieski/Zielony** — zaufanie, spokój
-- **Czerwony/Pomarańczowy** — pilność, energia
-- **Wyróżnij się** — sprawdź ikony konkurencji i użyj kontrastujących kolorów
+### Color tips:
+- **Blue/Green** — trust, calm
+- **Red/Orange** — urgency, energy
+- **Stand out** — check competitors' icons and use contrasting colors
 
-### Testowanie A/B ikon:
-- **Google Play** — natywne wsparcie w konsoli deweloperskiej
-- **iOS** — tylko przez narzędzia third-party (SplitMetrics)
+### A/B testing icons:
+- **Google Play** — native support in the developer console
+- **iOS** — only through third-party tools (SplitMetrics)
 
 ---
 
-## 6. Screenshoty
+## 6. Screenshots
 
-### Dlaczego screenshoty są kluczowe:
-- Dobrze zaprojektowane screenshoty mogą podnieść konwersję o **20-35%**
-- Użytkownicy zauważają średnio **pierwsze 2-3 screenshoty**
-- Rzadko przewijają dalej
+### Why screenshots are crucial:
+- Well-designed screenshots can raise conversion by **20-35%**
+- Users notice on average the **first 2-3 screenshots**
+- They rarely scroll further
 
-### Struktura top 3 screenshotów (Value - Usage - Trust):
+### Structure of the top 3 screenshots (Value - Usage - Trust):
 
-| # | Cel | Treść |
+| # | Goal | Content |
 |---|-----|-------|
-| 1 | **Value** | Obietnica wartości — co użytkownik dostaje |
-| 2 | **Usage** | Kluczowy scenariusz użycia — jak to działa |
-| 3 | **Trust** | Zaufanie — oceny, nagrody, social proof |
+| 1 | **Value** | Value promise — what the user gets |
+| 2 | **Usage** | Key usage scenario — how it works |
+| 3 | **Trust** | Trust — ratings, awards, social proof |
 
-### Framework A.I.D.A. dla screenshotów:
-1. **Attention** — Przyciągnij wzrok (kolory, kontrast)
-2. **Interest** — Wzbudź zainteresowanie (korzyść)
-3. **Desire** — Stwórz pragnienie (transformacja)
-4. **Action** — Zachęć do działania (CTA)
+### The A.I.D.A. framework for screenshots:
+1. **Attention** — Catch the eye (colors, contrast)
+2. **Interest** — Spark interest (benefit)
+3. **Desire** — Create desire (transformation)
+4. **Action** — Encourage action (CTA)
 
-### Zasady projektowania:
+### Design rules:
 
-**Napisy (captions):**
-- Pisz korzyści, nie nazwy funkcji: "Track your workouts effortlessly" zamiast "Workout tracker app"
-- Krótkie, skanowalne
-- Czytelna czcionka na każdym urządzeniu
-- Wystarczający kontrast tekst-tło
+**Captions:**
+- Write benefits, not feature names: "Track your workouts effortlessly" instead of "Workout tracker app"
+- Short, scannable
+- Legible font on every device
+- Sufficient text-background contrast
 
-**Wizualia:**
-- Pokazuj prawdziwy interfejs aplikacji, nie stocki
-- Realistyczne scenariusze użycia
-- Ludzie korzystający z aplikacji → wyższe zaangażowanie
-- Kolory dopasowane do kategorii i emocji
+**Visuals:**
+- Show the real app interface, not stock imagery
+- Realistic usage scenarios
+- People using the app → higher engagement
+- Colors matched to the category and emotion
 
 **Layout:**
-- Portret dla utility/lifestyle
-- Landscape dla gier
-- Panoramiczny design łączący screenshoty (efekt carousel)
+- Portrait for utility/lifestyle
+- Landscape for games
+- Panoramic design linking screenshots (carousel effect)
 
-### Podejście kategoryzowane:
+### Category-based approach:
 
-| Kategoria | Co pokazywać |
+| Category | What to show |
 |-----------|-------------|
-| Gaming | Gameplay, postacie, osiągnięcia |
-| Utility | Efektywność, szybkość, rozwiązanie problemu |
-| Lifestyle | Estetyka, transformacja osobista |
-| Finance | Wiarygodność, bezpieczeństwo, przejrzystość |
+| Gaming | Gameplay, characters, achievements |
+| Utility | Efficiency, speed, problem-solving |
+| Lifestyle | Aesthetics, personal transformation |
+| Finance | Credibility, security, transparency |
 
-### Wymagania techniczne:
+### Technical requirements:
 
 **Apple App Store:**
-- Max 10 screenshotów na lokalizację
-- Format: JPEG lub PNG (72 dpi, RGB)
-- Rozmiary bazowe: 1320 × 2868 px (iPhone 6.9"), 2064 × 2752 px (iPad 13")
-- Apple automatycznie skaluje na mniejsze modele
-- Zakaz tekstu promocyjnego ("Free", rabaty)
+- Max 10 screenshots per localization
+- Format: JPEG or PNG (72 dpi, RGB)
+- Base sizes: 1320 × 2868 px (iPhone 6.9"), 2064 × 2752 px (iPad 13")
+- Apple automatically scales down to smaller models
+- No promotional text ("Free", discounts)
 
 **Google Play:**
-- Max 8 screenshotów na typ urządzenia
-- Format: JPEG lub 24-bit PNG (bez transparencji)
-- Rozdzielczość: 320–3840 px
-- Zakaz ramek urządzeń
-- Ograniczenia aspect ratio
+- Max 8 screenshots per device type
+- Format: JPEG or 24-bit PNG (no transparency)
+- Resolution: 320–3840 px
+- No device frames
+- Aspect ratio restrictions
 
-### Social proof na screenshotach:
-- Pokaż ocenę "4.8 stars" bezpośrednio na screenie
-- Subtelne cytaty recenzji
-- Liczba pobrań lub użytkowników
+### Social proof on screenshots:
+- Show a "4.8 stars" rating directly on the screenshot
+- Subtle review quotes
+- Number of downloads or users
 
-### Najczęstsze błędy:
-- Za dużo tekstu na screenie
-- Generyczne stockowe zdjęcia
-- Słaba czytelność (kontrast)
-- Niewykorzystanie wszystkich dostępnych slotów
-- Niedopasowanie do intencji wyszukiwania użytkownika
-- Ukryty lub nieczytelny interfejs aplikacji
+### Most common mistakes:
+- Too much text on a screenshot
+- Generic stock photos
+- Poor readability (contrast)
+- Not using all available slots
+- Mismatch with the user's search intent
+- Hidden or illegible app interface
 
 ---
 
-## 7. Wideo podglądowe
+## 7. Preview video
 
 ### Trend 2026:
-Wideo staje się coraz ważniejsze. Google Play reformuje listing experience z naciskiem na **angażujące pionowe wideo**.
+Video is becoming increasingly important. Google Play is reshaping the listing experience with an emphasis on **engaging vertical video**.
 
-### Zasady:
-- Pokaż prawdziwe funkcjonalności w ruchu
-- Testuj różne starty i długości wideo
-- Pionowy format (vertical) preferowany
-- Pierwsze 3 sekundy decydują o zaangażowaniu
-- Wideo znacząco wpływa na metryki konwersji
+### Rules:
+- Show real functionality in motion
+- Test different intros and video lengths
+- Vertical format preferred
+- The first 3 seconds decide engagement
+- Video significantly affects conversion metrics
 
 ---
 
-## 8. Oceny i recenzje
+## 8. Ratings and reviews
 
-### Wpływ na ASO:
-- Oceny i recenzje wpływają zarówno na **ranking**, jak i na **konwersję**
-- Wyżej oceniane aplikacje rankują lepiej
-- Użytkownicy czytają recenzje przed decyzją o pobraniu
+### Impact on ASO:
+- Ratings and reviews affect both **ranking** and **conversion**
+- Higher-rated apps rank better
+- Users read reviews before deciding to download
 
-### Strategia:
+### Strategy:
 
-**Kiedy prosić o recenzję:**
-- Po pozytywnym doświadczeniu użytkownika
-- Po osiągnięciu milestone'u
-- Po ukończeniu wartościowego zadania
-- **NIE** po pierwszym uruchomieniu
-- **NIE** w środku krytycznej operacji
+**When to ask for a review:**
+- After a positive user experience
+- After reaching a milestone
+- After completing a valuable task
+- **NOT** after the first launch
+- **NOT** in the middle of a critical operation
 
-**Zarządzanie recenzjami:**
-- Odpowiadaj na **wszystkie** recenzje (pozytywne i negatywne)
-- Reaguj szybko na negatywne feedback — **w ciągu 24h**, bo użytkownicy zapominają o recenzji po kilku dniach
-- Podkreślaj aktualizacje adresujące feedback użytkowników w "What's New"
-- Analizuj trendy w recenzjach (sentiment analysis)
-- Nie oferuj nagród pieniężnych za recenzje (naruszenie guidelines)
-- Dopuszczalne: incentywy niepieniężne (np. in-game gift, limited content unlock) — zgodne z guidelines
-- **Automatyzacja**: możliwe zautomatyzowanie do **80% odpowiedzi** na recenzje za pomocą tagów i szablonów (case: europejski publisher)
+**Managing reviews:**
+- Respond to **all** reviews (positive and negative)
+- React quickly to negative feedback — **within 24h**, because users forget the review after a few days
+- Highlight updates that address user feedback in "What's New"
+- Analyze trends in reviews (sentiment analysis)
+- Don't offer monetary rewards for reviews (a guideline violation)
+- Acceptable: non-monetary incentives (e.g. in-game gift, limited content unlock) — compliant with guidelines
+- **Automation**: it's possible to automate up to **80% of responses** to reviews using tags and templates (case: a European publisher)
 
-### Checklist zarządzania recenzjami:
-1. Proś o recenzję po milestone'u lub pozytywnym doświadczeniu (np. ukończeniu zadania)
-2. Oferuj "Remind me later" zamiast wymuszonego prompta
-3. Odpowiadaj na ALL featured reviews (widoczne na stronie)
-4. Taguj recenzje: fixable vs non-fixable, priorytetyzuj
-5. Trackuj reply rate i % konwersji 1★→5★ po odpowiedzi
-6. Na Google Play: zgłaszaj spam/nieodpowiednie recenzje do moderacji
+### Review management checklist:
+1. Ask for a review after a milestone or a positive experience (e.g. completing a task)
+2. Offer "Remind me later" instead of a forced prompt
+3. Respond to ALL featured reviews (visible on the page)
+4. Tag reviews: fixable vs non-fixable, prioritize
+5. Track reply rate and % of 1★→5★ conversion after a response
+6. On Google Play: report spam/inappropriate reviews for moderation
 
 ### Case study:
-- **The North Face**: rating z 3.68 → 4.23 (+59% konwersji) na iOS; z 3.71 → 4.54 (+75%) na Google Play — dzięki review prompt po zakupie
+- **The North Face**: rating from 3.68 → 4.23 (+59% conversion) on iOS; from 3.71 → 4.54 (+75%) on Google Play — thanks to a review prompt after purchase
 
 ### Google Play 2026:
-- Google implementuje **AI-generowane podsumowania recenzji i FAQ** — dodatkowy powód do dbania o jakość recenzji
-- **Gemini AI** może wyświetlać wskaźnik deinstalacji bezpośrednio na listingu — jeśli dużo osób szybko odinstalowuje app, to widać
+- Google is implementing **AI-generated review summaries and FAQ** — another reason to care about review quality
+- **Gemini AI** may show the uninstall rate directly on the listing — if many people quickly uninstall the app, it shows
 
 ### Apple 2026:
-- **AI review summaries** — podsumowania recenzji generowane przez AI wyświetlane przed recenzjami użytkowników
-- Wpływają bezpośrednio na decyzję o pobraniu
+- **AI review summaries** — AI-generated review summaries displayed before user reviews
+- They directly affect the download decision
 
 ---
 
-## 9. Lokalizacja i wielojęzyczność
+## 9. Localization and multilingual support
 
-### Dlaczego lokalizacja jest kluczowa:
-- Aplikacja bez lokalizacji traci **do 13% użytkowników** w danym regionie
-- Lokalizacja to **NIE tylko tłumaczenie** — to adaptacja kulturowa
+### Why localization is crucial:
+- An app without localization loses **up to 13% of users** in a given region
+- Localization is **NOT just translation** — it's cultural adaptation
 
-### Co lokalizować:
+### What to localize:
 
-| Element | Opis |
+| Element | Description |
 |---------|------|
-| Tytuł i podtytuł | Badanie słów kluczowych w docelowym języku |
-| Opis | Naturalnie przetłumaczony, nie maszynowo |
-| Screenshoty | Przetłumaczone napisy, kulturowo odpowiednie obrazy |
-| Waluta i kontekst | Lokalna waluta, scenariusze use-case |
-| Wideo | Przetłumaczone napisy lub lokalna wersja audio |
-| Ton i humor | Dopasowany do kultury |
+| Title and subtitle | Keyword research in the target language |
+| Description | Naturally translated, not machine-translated |
+| Screenshots | Translated captions, culturally appropriate imagery |
+| Currency and context | Local currency, use-case scenarios |
+| Video | Translated captions or a local audio version |
+| Tone and humor | Adapted to the culture |
 
-### Zasady keyword research w lokalizacji:
-- **Nie tłumacz dosłownie** słów kluczowych z angielskiego
-- Użytkownicy wyszukują inaczej w każdym języku
-- Użyj lokalnych narzędzi ASO do identyfikacji słów kluczowych
-- Przykład: "Calorie Counter" → po hiszpańsku w Ameryce Łacińskiej: "Contador de Calorías", ale w Hiszpanii użytkownicy częściej szukają "Dieta App"
+### Keyword research rules in localization:
+- **Do not translate keywords literally** from English
+- Users search differently in each language
+- Use local ASO tools to identify keywords
+- Example: "Calorie Counter" → in Spanish in Latin America: "Contador de Calorías", but in Spain users more often search for "Dieta App"
 
-### Cross-lokalizacja (zaawansowana):
-- Wykorzystaj indeksowanie wielu locali
-- Aplikacja może rankować na szerszą gamę słów kluczowych
-- Strategia specyficzna dla App Store, gdzie primary + secondary locale są indeksowane
+### Cross-localization (advanced):
+- Leverage indexing across multiple locales
+- The app can rank for a broader range of keywords
+- A strategy specific to the App Store, where the primary + secondary locale are indexed
 
-### Podejście regionalne:
-- Badaj lokalne preferencje i zwyczaje
-- Adaptuj styl wizualny — np. manga-style dla Japonii
-- Testuj lokalizowane wersje przed pełnym launchem
-- Monitoruj wydajność per locale
+### Regional approach:
+- Research local preferences and customs
+- Adapt the visual style — e.g. manga-style for Japan
+- Test localized versions before a full launch
+- Monitor performance per locale
 
 ---
 
 ## 10. A/B Testing
 
-### Co testować:
+### What to test:
 
-| Element | Priorytet | Platforma |
+| Element | Priority | Platform |
 |---------|----------|-----------|
-| Pierwszy screenshot | Najwyższy | iOS + Android |
-| Ikona | Wysoki | Android (natywne), iOS (third-party) |
-| Napisy na screenach | Wysoki | iOS + Android |
-| Kolorystyka | Średni | iOS + Android |
-| Tytuł/podtytuł | Średni | Android (Experiments) |
-| Krótki opis | Średni | Android (Experiments) |
-| Długi opis | Średni | Android (Experiments) |
-| Feature Graphic | Średni | Android |
-| Wideo | Średni | iOS + Android |
+| First screenshot | Highest | iOS + Android |
+| Icon | High | Android (native), iOS (third-party) |
+| Screenshot captions | High | iOS + Android |
+| Color scheme | Medium | iOS + Android |
+| Title/subtitle | Medium | Android (Experiments) |
+| Short description | Medium | Android (Experiments) |
+| Long description | Medium | Android (Experiments) |
+| Feature Graphic | Medium | Android |
+| Video | Medium | iOS + Android |
 
-### Konkretne sugestie testów A/B:
+### Specific A/B test suggestions:
 - **Screenshot elements**: caption text, background color, imagery
-- **Screenshot order**: testuj kolejność wg value propositions — który feature przyciąga bardziej
-- **Koncepcje**: Social proof (gwiazdki, pobrania, nagrody) vs per-persona (mężczyzna vs kobieta, feature A vs B)
-- **Trendy i sezonowość**: testuj najnowsze trendy z kategorii i sezonowe warianty
-- **57% top gier** na Google Play testuje A/B screenshoty i ikony 2+ razy rocznie (AppTweak Benchmarks 2025)
+- **Screenshot order**: test the order by value propositions — which feature draws people in more
+- **Concepts**: Social proof (stars, downloads, awards) vs per-persona (man vs woman, feature A vs B)
+- **Trends and seasonality**: test the latest category trends and seasonal variants
+- **57% of top games** on Google Play A/B test screenshots and icons 2+ times a year (AppTweak Benchmarks 2025)
 
-### Zasady testowania:
-1. **Testuj jedną zmienną** — izoluj wpływ każdego elementu
-2. **Mierz właściwe metryki** — CTR, conversion rate, install rate
-3. **Min ~1000 instalacji per wariant** — nie wyciągaj wniosków z małych prób
-4. **Uwzględnij sezonowość** — testy w różnych okresach
-5. **Custom Product Pages (iOS)** i **Custom Store Listings (Android)** — twórz warianty pod segmenty
-6. **Nie testuj A/B text metadata** — to dla visibility, nie conversion
-7. **Oddziel timeline**: keyword changes osobno, creative changes osobno, 3-4 tygodnie między zmianami
+### Testing rules:
+1. **Test one variable** — isolate the impact of each element
+2. **Measure the right metrics** — CTR, conversion rate, install rate
+3. **Min ~1000 installs per variant** — don't draw conclusions from small samples
+4. **Account for seasonality** — test across different periods
+5. **Custom Product Pages (iOS)** and **Custom Store Listings (Android)** — create variants for segments
+6. **Don't A/B test text metadata** — that's for visibility, not conversion
+7. **Separate the timelines**: keyword changes separately, creative changes separately, 3-4 weeks between changes
 
-### Narzędzia:
-- Google Play Console Experiments (natywne A/B testy)
+### Tools:
+- Google Play Console Experiments (native A/B tests)
 - Apple Custom Product Pages
-- SplitMetrics (third-party dla iOS)
+- SplitMetrics (third-party for iOS)
 - StoreMaven
 
 ---
 
-## 11. Różnice między iOS a Androidem
+## 11. Differences between iOS and Android
 
 | Element | Apple App Store | Google Play Store |
 |---------|----------------|-------------------|
-| Tytuł | 30 znaków | 30 znaków |
-| Podtytuł | Tak (30 znaków) | Nie |
-| Pole Keywords | 100 znaków (ukryte) | Brak |
-| Krótki opis | Nie | Tak (80 znaków) |
-| Indeksowanie opisu | **Nie** | **Tak** |
-| A/B Test ikony | Third-party | Natywne w konsoli |
-| A/B Test listingu | Custom Product Pages | Store Listing Experiments |
-| Wideo format | App Preview | Vertical video (trend 2026) |
-| Max screenshotów | 10 per locale | 8 per device type |
+| Title | 30 characters | 30 characters |
+| Subtitle | Yes (30 characters) | No |
+| Keywords field | 100 characters (hidden) | None |
+| Short description | No | Yes (80 characters) |
+| Description indexing | **No** | **Yes** |
+| Icon A/B test | Third-party | Native in the console |
+| Listing A/B test | Custom Product Pages | Store Listing Experiments |
+| Video format | App Preview | Vertical video (trend 2026) |
+| Max screenshots | 10 per locale | 8 per device type |
 
 ---
 
-## 12. Trendy ASO na 2026
+## 12. ASO trends for 2026
 
 ### AI-Driven Optimization:
-- Automatyczne rekomendacje metadanych i słów kluczowych
-- AI-generowane opisy aplikacji — automatyczny research i rekomendacja keyword selection, title/subtitle, long descriptions
-- Sugestie kreatywnych na podstawie analizy konkurencji — AI generuje/sugeruje visual i textual content
-- **Predictive analytics** — AI modeluje dane historyczne i przewiduje przyszłe zmiany w zachowaniach użytkowników i dynamice rynku
-- Google Play: **AI-generowane podsumowania recenzji, FAQ i app highlights**
-- Apple: **AI-compiled review summaries** wyświetlane przed recenzjami
-- **Google Gemini** na Google Play: wyświetla metryki jakości (uninstall rate, Android Vitals) bezpośrednio na listingu
-- Użyj **Google Natural Language Analysis** by sprawdzić jak AI interpretuje twoje metadata
+- Automatic metadata and keyword recommendations
+- AI-generated app descriptions — automatic research and recommendation of keyword selection, title/subtitle, long descriptions
+- Creative suggestions based on competitor analysis — AI generates/suggests visual and textual content
+- **Predictive analytics** — AI models historical data and forecasts future changes in user behavior and market dynamics
+- Google Play: **AI-generated review summaries, FAQ and app highlights**
+- Apple: **AI-compiled review summaries** displayed before reviews
+- **Google Gemini** on Google Play: displays quality metrics (uninstall rate, Android Vitals) directly on the listing
+- Use **Google Natural Language Analysis** to check how AI interprets your metadata
 
 ### Voice Search Optimization:
-- Sklepy wykorzystują **NLP** do interpretacji konwersacyjnych zapytań
-- Optymalizuj metadane z naturalnymi, pełnozdaniowymi frazami
-- "How do I track my budget" zamiast samego "budget tracker"
+- Stores use **NLP** to interpret conversational queries
+- Optimize metadata with natural, full-sentence phrases
+- "How do I track my budget" instead of just "budget tracker"
 
-### Personalizacja:
-- Google Play: **Custom Store Listings per keyword** (od października 2024) — unikalne listingi dopasowane do konkretnych keywords
-- **App Intents** i proactive discovery — kontekstowe surfacowanie aplikacji
-- **Real-time metadata adjustments** i multi-variant creative experiences
-- ASO ewoluuje z "ranking" do "bycia surfacowanym w odpowiednim miejscu, momencie, z odpowiednim przekazem"
+### Personalization:
+- Google Play: **Custom Store Listings per keyword** (since October 2024) — unique listings matched to specific keywords
+- **App Intents** and proactive discovery — contextual surfacing of apps
+- **Real-time metadata adjustments** and multi-variant creative experiences
+- ASO is evolving from "ranking" to "being surfaced in the right place, moment, with the right message"
 
 ### Vertical Video:
-- Google Play reformuje listing z naciskiem na vertical video
-- Wideo staje się kluczowym elementem kreatywnym
-- Krótkie, angażujące formaty (TikTok-style)
-- **Collections** na Google Play — kuratowane kategorie bezpośrednio na urządzeniach
+- Google Play is reshaping the listing with an emphasis on vertical video
+- Video is becoming a key creative element
+- Short, engaging formats (TikTok-style)
+- **Collections** on Google Play — curated categories directly on devices
 
 ### Custom Product Pages / Custom Store Listings:
-- Różne wersje strony produktu dla różnych segmentów
-- Dopasowane do kampanii reklamowych
-- Personalizacja doświadczenia pre-install
-- Od 2025 — CPP pojawiają się w **organicznych wynikach** wyszukiwania
+- Different versions of the product page for different segments
+- Matched to ad campaigns
+- Personalizing the pre-install experience
+- As of 2025 — CPPs appear in **organic** search results
 
-### Holistyczna integracja marketingowa:
-- ASO nie żyje w próżni — spójność z social media, reklamami, stroną www
-- Seamless doświadczenie od discovery do post-install
+### Holistic marketing integration:
+- ASO doesn't live in a vacuum — consistency with social media, ads, website
+- A seamless experience from discovery to post-install
 - Paid + Organic synergy (Apple Search Ads + ASO)
-- **Organic users z ASO dostarczają 20-40% wyższe LTV** niż paid cohorts (Scalebay)
+- **Organic users from ASO deliver 20-40% higher LTV** than paid cohorts (Scalebay)
 
 ### Engagement-Focused Features (Google Play 2026):
-- **Collections**: kuratowane kategorie na urządzeniach, discovery wg zainteresowań
-- **Enhanced promotional content**: zaawansowane narzędzia re-engagement
-- **Vertical format videos**: nowy mobile-friendly format
+- **Collections**: curated categories on devices, discovery by interests
+- **Enhanced promotional content**: advanced re-engagement tools
+- **Vertical format videos**: a new mobile-friendly format
 
 ---
 
-## 13. Najczęstsze błędy
+## 13. Most common mistakes
 
-| Błąd | Konsekwencja |
+| Mistake | Consequence |
 |------|-------------|
-| Keyword stuffing | Obniżenie rankingu, spamowy wygląd |
-| Nieadekwatne słowa kluczowe | Wysoki bounce rate obniża ranking |
-| Ignorowanie konkurencji | Przegapione okazje optymalizacyjne |
-| Przestarzałe screenshoty | Sygnalizuje porzuconą aplikację |
-| Tylko jeden język | Utrata 80%+ globalnych użytkowników |
-| Brak A/B testów | Niewykorzystany potencjał konwersji |
-| Ignorowanie recenzji | Spadek rankingu i zaufania |
-| Brak monitoringu | "Latanie na ślepo" |
-| Niekonsekwentna aktualizacja | Brak sygnałów aktywności |
-| Mocks zamiast prawdziwego UI | Rozczarowanie po instalacji = odinstalowanie |
-| Traktowanie ASO jako jednorazowego zadania | Utrata konkurencyjności — rynek, algorytmy i zachowania ewoluują |
-| Nadreakcja na zmiany algorytmu | Impulsywne zmiany bez weryfikacji mogą pogorszyć performance |
-| Brak lokalizacji przy globalnym launchu | Ograniczony zasięg keywords i trafność na rynkach międzynarodowych |
-| Ignorowanie sezonowych spike'ów | Utrata potencjału z okresów jak Black Friday, Nowy Rok |
-| Duplikacja keywords w metadata | Marnowanie cennego miejsca na znaki; App Store nie wymaga powtórzeń |
-| Keyword stuffing w opisie | Penalizacja algorytmu, spadek czytelności |
-| Słabe creative assets | Niskiej jakości screenshoty obniżają conversion rate |
+| Keyword stuffing | Lower ranking, spammy look |
+| Irrelevant keywords | High bounce rate lowers ranking |
+| Ignoring competitors | Missed optimization opportunities |
+| Outdated screenshots | Signals an abandoned app |
+| Only one language | Loss of 80%+ of global users |
+| No A/B tests | Untapped conversion potential |
+| Ignoring reviews | Drop in ranking and trust |
+| No monitoring | "Flying blind" |
+| Inconsistent updates | No activity signals |
+| Mocks instead of the real UI | Disappointment after install = uninstall |
+| Treating ASO as a one-off task | Loss of competitiveness — the market, algorithms and behaviors evolve |
+| Overreacting to algorithm changes | Impulsive changes without verification can worsen performance |
+| No localization for a global launch | Limited keyword reach and relevance in international markets |
+| Ignoring seasonal spikes | Loss of potential from periods like Black Friday, New Year |
+| Duplicating keywords in metadata | Wasting valuable character space; the App Store doesn't require repetition |
+| Keyword stuffing in the description | Algorithm penalty, drop in readability |
+| Weak creative assets | Low-quality screenshots lower conversion rate |
 
-### Dodatkowe statystyki:
-- **IE Business School** (dane AppTweak): ASO prowadzi do **+12% wzrostu pobrań** średnio (+9% iOS, +12% Google Play)
-- **92% aplikacji featured** na App Store ma ocenę 4.0+
-- **~50% top aplikacji iOS** aktualizowało screenshoty 2+ razy w ciągu roku
-- **~80% aplikacji** NIE aktualizowało tytułów, mimo że keywords w tytule mają największy wpływ na ranking
-- Poprawa conversion rate o **3-5%** może materialnie zwiększyć organic installs bez dodatkowego ruchu
+### Additional statistics:
+- **IE Business School** (AppTweak data): ASO leads to a **+12% increase in downloads** on average (+9% iOS, +12% Google Play)
+- **92% of featured apps** on the App Store have a rating of 4.0+
+- **~50% of top iOS apps** updated screenshots 2+ times during the year
+- **~80% of apps** did NOT update titles, even though title keywords have the greatest impact on ranking
+- Improving conversion rate by **3-5%** can materially increase organic installs without additional traffic
 
 ---
 
-## 14. 6-krokowy framework budowania strategii ASO
+## 14. 6-step framework for building an ASO strategy
 
-> Na podstawie AppTweak, Moburst, MobileAction — konsensus branżowy 2026.
+> Based on AppTweak, Moburst, MobileAction — industry consensus 2026.
 
-### Krok 1: Zdefiniuj cele i KPI
-- Cele: wzrost visibility o 20-30% w 3 miesiące, poprawa CVR o 5%, utrzymanie 4.5+ rating
-- KPI: keyword rankings, conversion rate, organic downloads, download velocity, retention
-- Poprawa CVR o **3-5%** może materialnie zwiększyć organic installs bez dodatkowego ruchu
+### Step 1: Define goals and KPIs
+- Goals: increase visibility by 20-30% in 3 months, improve CVR by 5%, maintain a 4.5+ rating
+- KPIs: keyword rankings, conversion rate, organic downloads, download velocity, retention
+- Improving CVR by **3-5%** can materially increase organic installs without additional traffic
 
-### Krok 2: Audyt obecnej wydajności keywords
-- Które keywords generują impressions i installs?
-- Gdzie rankujesz na high-intent terms?
-- Benchmark vs konkurencja: gdzie cię przewyższają?
-- Analiza conversion i engagement metrics
+### Step 2: Audit current keyword performance
+- Which keywords generate impressions and installs?
+- Where do you rank on high-intent terms?
+- Benchmark vs competitors: where do they outperform you?
+- Analysis of conversion and engagement metrics
 
-### Krok 3: Analiza konkurencji i creative strategy
-- Keyword positioning: jakie semantic clusters priorytetyzują?
-- Creative assets: jak komunikują wartość w pierwszych 3 screenshotach?
-- A/B testing patterns: jak często aktualizują assets?
+### Step 3: Competitor analysis and creative strategy
+- Keyword positioning: which semantic clusters do they prioritize?
+- Creative assets: how do they communicate value in the first 3 screenshots?
+- A/B testing patterns: how often do they update assets?
 
-### Krok 4: Optymalizacja metadata i creative assets
-- Keywords: high-volume, relevant terms aligned z user intent
-- Creative: primary value propositions w pierwszych 3 screenshotach
+### Step 4: Optimize metadata and creative assets
+- Keywords: high-volume, relevant terms aligned with user intent
+- Creative: primary value propositions in the first 3 screenshots
 - Localization: translate + adapt per market
-- **Nie rób wszystkich zmian naraz** — stagger updates
+- **Don't make all changes at once** — stagger updates
 
-### Krok 5: Structured update timeline
-- **Sequential changes**: keyword changes first, potem creative updates
-- **Testing windows**: 3-4 tygodnie między znaczącymi zmianami
-- **Kadencja**: iOS metadata co 4 tygodnie, Google Play co 4-6 tygodni
-- Cross-department coordination z UA, marketing, product
+### Step 5: Structured update timeline
+- **Sequential changes**: keyword changes first, then creative updates
+- **Testing windows**: 3-4 weeks between significant changes
+- **Cadence**: iOS metadata every 4 weeks, Google Play every 4-6 weeks
+- Cross-department coordination with UA, marketing, product
 
-### Krok 6: Pomiar i ciągła iteracja
+### Step 6: Measurement and continuous iteration
 - Track: keyword rankings, impressions, downloads, conversion rates
-- Analyze: które aktualizacje zadziałały i dlaczego?
-- Iterate: przyrostowe zmiany na podstawie danych
+- Analyze: which updates worked and why?
+- Iterate: incremental changes based on data
 - **Quarterly ASO sprint**: research → hypothesis → testing → analysis → rollout
 
 ---
 
-## 15. Checklista ASO
+## 15. ASO checklist
 
-### Przed publikacją:
+### Before publishing:
 
-- [ ] Keyword research zakończony (primary, secondary, long-tail)
-- [ ] Tytuł zawiera główne słowo kluczowe (max 30 znaków)
-- [ ] Podtytuł/krótki opis zoptymalizowany
-- [ ] Pole Keywords wypełnione (iOS, 100 znaków)
-- [ ] Długi opis napisany (korzyści > funkcje, skanowalna struktura)
-- [ ] Ikona przetestowana na jasnym i ciemnym tle
-- [ ] 8-10 screenshotów przygotowanych (Value-Usage-Trust)
-- [ ] Napisy na screenshotach — korzyści, nie nazwy funkcji
-- [ ] Wideo podglądowe (jeśli możliwe)
-- [ ] Kategoria dobrana (sprawdzona konkurencja w kategorii)
-- [ ] Lokalizacja przygotowana (przynajmniej główne rynki)
+- [ ] Keyword research complete (primary, secondary, long-tail)
+- [ ] Title includes the main keyword (max 30 characters)
+- [ ] Subtitle/short description optimized
+- [ ] Keywords field filled in (iOS, 100 characters)
+- [ ] Long description written (benefits > features, scannable structure)
+- [ ] Icon tested against light and dark backgrounds
+- [ ] 8-10 screenshots prepared (Value-Usage-Trust)
+- [ ] Screenshot captions — benefits, not feature names
+- [ ] Preview video (if possible)
+- [ ] Category chosen (competition in the category checked)
+- [ ] Localization prepared (at least the main markets)
 
-### Po publikacji:
+### After publishing:
 
-- [ ] Monitoring rankingu słów kluczowych
-- [ ] Śledzenie CTR i conversion rate
-- [ ] Zarządzanie recenzjami (odpowiadanie)
-- [ ] A/B testy zaplanowane i uruchomione
-- [ ] Analiza konkurencji (regularna)
-- [ ] Aktualizacja metadanych co 4-6 tygodni
-- [ ] Refresh screenshotów przy zmianach UI
+- [ ] Keyword ranking monitoring
+- [ ] Tracking CTR and conversion rate
+- [ ] Review management (responding)
+- [ ] A/B tests planned and running
+- [ ] Competitor analysis (regular)
+- [ ] Metadata updates every 4-6 weeks
+- [ ] Screenshot refresh on UI changes
 
-### Cyklicznie:
+### On a recurring basis:
 
-- [ ] Przegląd keyword strategy (co 2-4 tygodnie)
-- [ ] Analiza trendów sezonowych
-- [ ] Sprawdzenie zmian algorytmu
-- [ ] Benchmarking vs konkurencja
-- [ ] Aktualizacja lokalizacji
+- [ ] Review of keyword strategy (every 2-4 weeks)
+- [ ] Seasonal trend analysis
+- [ ] Checking for algorithm changes
+- [ ] Benchmarking vs competitors
+- [ ] Localization updates
 
 ---
 
-## Źródła
+## Sources
 
 - [AppTweak — ASO Best Practices 2026](https://www.apptweak.com/en/aso-blog/app-store-optimization-aso-best-practices)
 - [AppTweak — What is ASO](https://www.apptweak.com/en/aso-blog/what-is-app-store-optimization-and-why-is-aso-important)

@@ -33,6 +33,28 @@ if (!isDev && !smtpConfigured) {
 // Dev mode: store real OTP per email so we can swap "123456" → real code
 const devOtpStore = new Map<string, string>();
 
+// Social providers are opt-in per environment: a provider is only registered
+// when both its client id and secret are present, so a dev backend without
+// OAuth keys still boots (with just email/OTP). The same GOOGLE_*/APPLE_*
+// credentials can be reused across services — each backend just adds its own
+// callback URL to the shared OAuth client's authorized redirect URIs.
+const googleProvider =
+	config.GOOGLE_CLIENT_ID && config.GOOGLE_CLIENT_SECRET
+		? {
+				clientId: config.GOOGLE_CLIENT_ID,
+				clientSecret: config.GOOGLE_CLIENT_SECRET,
+			}
+		: undefined;
+
+const appleProvider =
+	config.APPLE_CLIENT_ID && config.APPLE_CLIENT_SECRET
+		? {
+				appBundleIdentifier: config.APPLE_APP_BUNDLE_ID,
+				clientId: config.APPLE_CLIENT_ID,
+				clientSecret: config.APPLE_CLIENT_SECRET,
+			}
+		: undefined;
+
 let transporter: nodemailer.Transporter | null = null;
 if (smtpConfigured) {
 	transporter = nodemailer.createTransport({
@@ -119,7 +141,15 @@ export const auth = betterAuth({
 		}),
 	],
 	secret: config.BETTER_AUTH_SECRET,
-	trustedOrigins: config.ALLOWED_ORIGINS?.split(",") ?? [],
+	socialProviders: {
+		...(appleProvider && { apple: appleProvider }),
+		...(googleProvider && { google: googleProvider }),
+	},
+	trustedOrigins: [
+		...(config.ALLOWED_ORIGINS?.split(",") ?? []),
+		// Apple posts the OAuth callback from its own origin (form_post mode).
+		...(appleProvider ? ["https://appleid.apple.com"] : []),
+	],
 });
 
 // Dev mode: intercept OTP verification — swap "123456" with the real OTP

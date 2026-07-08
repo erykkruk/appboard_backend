@@ -1,72 +1,72 @@
-# Skill: Copywriting (ze skills.sh)
+# Skill: Copywriting (from skills.sh)
 
-> Źródło: `coreyhaines31/marketingskills/copywriting`
-> Instalacja: `npx skillsadd coreyhaines31/marketingskills/copywriting`
+> Source: `coreyhaines31/marketingskills/copywriting`
+> Install: `npx skillsadd coreyhaines31/marketingskills/copywriting`
 
 ---
 
 ## Pre-Writing Checklist
 
-Przed pisaniem zbierz kontekst w 4 obszarach:
+Before writing, gather context across 4 areas:
 
-1. **Cel strony/listingu** — typ strony i główna akcja użytkownika
-2. **Odbiorcy** — idealny klient, problemy, obiekcje, ich język
-3. **Produkt/Oferta** — co sprzedajesz, czym się wyróżniasz, transformacja, dowody
-4. **Kontekst** — skąd przychodzi ruch, co użytkownik już wie
+1. **Goal of the page/listing** — page type and the user's main action
+2. **Audience** — ideal customer, problems, objections, their language
+3. **Product/Offer** — what you're selling, what sets you apart, the transformation, the proof
+4. **Context** — where the traffic comes from, what the user already knows
 
 ---
 
-## Zasady główne
+## Core principles
 
-| Zasada | Opis |
+| Principle | Description |
 |--------|------|
-| **Clarity Over Cleverness** | Jasność > Sprytność. Gdy musisz wybrać, wybierz jasność |
-| **Benefits Over Features** | Skup się na rezultatach, nie na tym co produkt "robi" |
-| **Specificity Over Vagueness** | Konkretne metryki zamiast "boost efficiency" |
-| **Customer Language** | Używaj słów, których klienci sami używają do opisu problemów |
-| **One Idea Per Section** | Każda sekcja = jeden argument, logiczny flow |
+| **Clarity Over Cleverness** | Clarity > Cleverness. When you must choose, choose clarity |
+| **Benefits Over Features** | Focus on outcomes, not on what the product "does" |
+| **Specificity Over Vagueness** | Concrete metrics instead of "boost efficiency" |
+| **Customer Language** | Use the words customers themselves use to describe their problems |
+| **One Idea Per Section** | Each section = one argument, logical flow |
 
 ---
 
-## Styl pisania
+## Writing style
 
-1. Prosty język ("użyj" nie "zutylizuj")
-2. Specyficzne terminy (unikaj "streamline", "optimize")
-3. Aktywny głos ("generujemy" nie "raporty są generowane")
-4. Pewny ton (usuń kwalifikatory: "bardzo", "prawie", "trochę")
-5. Pokaż rezultaty zamiast je deklarować
-6. Tylko uczciwe twierdzenia
+1. Simple language ("use" not "utilize")
+2. Specific terms (avoid "streamline", "optimize")
+3. Active voice ("we generate" not "reports are generated")
+4. Confident tone (remove qualifiers: "very", "almost", "a bit")
+5. Show results instead of declaring them
+6. Only honest claims
 
 ---
 
-## Struktura strony/listingu
+## Page/listing structure
 
-### Above the Fold (widoczne bez scrollowania):
-- **Nagłówek**: Główna propozycja wartości — specyficzna > generyczna
-- **Podnagłówek**: Rozwija nagłówek w 1-2 zdaniach
-- **Główne CTA**: Zorientowane na akcję z jasną wartością
+### Above the Fold (visible without scrolling):
+- **Headline**: Main value proposition — specific > generic
+- **Subheadline**: Expands the headline in 1-2 sentences
+- **Main CTA**: Action-oriented with clear value
 
-### Sekcje główne:
-1. **Social Proof** — budowanie wiarygodności
-2. **Problem/Pain** — pokaż że rozumiesz problem
-3. **Solution/Benefits** — 3-5 kluczowych korzyści
-4. **How It Works** — 3-4 kroki
-5. **Objection Handling** — FAQ, gwarancje
-6. **Final CTA** — podsumowanie + redukcja ryzyka
+### Main sections:
+1. **Social Proof** — building credibility
+2. **Problem/Pain** — show that you understand the problem
+3. **Solution/Benefits** — 3-5 key benefits
+4. **How It Works** — 3-4 steps
+5. **Objection Handling** — FAQ, guarantees
+6. **Final CTA** — summary + risk reduction
 
 ---
 
 ## CTA (Call to Action)
 
-### Słabe CTA (unikaj):
+### Weak CTAs (avoid):
 - Submit, Sign Up, Learn More, Click Here
 
-### Wzorzec silnego CTA:
+### Strong CTA pattern:
 ```
-[Czasownik akcji] + [Konkretna wartość] + [Kwalifikator opcjonalnie]
+[Action verb] + [Concrete value] + [Optional qualifier]
 ```
 
-### Przykłady:
+### Examples:
 - "Start My Free Trial"
 - "Get the Complete Checklist"
 - "Download Free Budget Template"
@@ -74,30 +74,30 @@ Przed pisaniem zbierz kontekst w 4 obszarach:
 
 ---
 
-## Zastosowanie w ASO
+## Application in ASO
 
-### Tytuł aplikacji:
-- Traktuj jak **headline** — jasna propozycja wartości
-- `[Marka] – [Benefit]`
+### App title:
+- Treat it like a **headline** — clear value proposition
+- `[Brand] – [Benefit]`
 
-### Krótki opis (Google Play 80 znaków):
-- Traktuj jak **subheadline** — rozwija tytuł
-- Jeden specyficzny benefit + CTA implikowane
+### Short description (Google Play, 80 characters):
+- Treat it like a **subheadline** — expands the title
+- One specific benefit + implied CTA
 
-### Pierwszy akapit opisu:
-- Traktuj jak **Above the Fold** — hook + problem + wartość
-- Kluczowe 3 linie przed "Read More"
+### First paragraph of the description:
+- Treat it like **Above the Fold** — hook + problem + value
+- The key 3 lines before "Read More"
 
-### Napisy na screenshotach:
-- Traktuj jak **benefit bullets** — krótkie, specyficzne korzyści
-- "Oszczędzaj 2h tygodniowo" > "Zarządzanie czasem"
+### Screenshot captions:
+- Treat them like **benefit bullets** — short, specific benefits
+- "Save 2h weekly" > "Time management"
 
 ---
 
-## Powiązane skille
+## Related skills
 
-| Skill | Zastosowanie | Instalacja |
+| Skill | Application | Install |
 |-------|-------------|------------|
-| copy-editing | Polerowanie istniejącego copy | `npx skillsadd coreyhaines31/marketingskills/copy-editing` |
-| seo-audit | SEO strony (23.4K instalacji) | `npx skillsadd coreyhaines31/marketingskills/seo-audit` |
-| product-marketing-context | Kontekst produktowy | `npx skillsadd coreyhaines31/marketingskills/product-marketing-context` |
+| copy-editing | Polishing existing copy | `npx skillsadd coreyhaines31/marketingskills/copy-editing` |
+| seo-audit | Website SEO (23.4K installs) | `npx skillsadd coreyhaines31/marketingskills/seo-audit` |
+| product-marketing-context | Product context | `npx skillsadd coreyhaines31/marketingskills/product-marketing-context` |

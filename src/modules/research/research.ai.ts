@@ -69,28 +69,28 @@ const compareSchema = type({
 });
 
 const ANALYSIS_JSON_SPEC = (catIds: string) => `{
-  "summary": "3-5 zdań po polsku: ogólny obraz — co użytkowników boli najbardziej, co chwalą, jaki trend",
-  "sentiment": { "positive": <liczba recenzji 4-5★>, "neutral": <3★>, "negative": <1-2★> },
+  "summary": "3-5 sentences in English: the overall picture — what hurts users the most, what they praise, what the trend is",
+  "sentiment": { "positive": <number of 4-5★ reviews>, "neutral": <3★>, "negative": <1-2★> },
   "categories": [
     {
-      "id": "<jedno z: ${catIds}>",
-      "count": <ile recenzji dotyczy tej kategorii>,
+      "id": "<one of: ${catIds}>",
+      "count": <how many reviews concern this category>,
       "severity": "low" | "medium" | "high",
-      "insight": "1-2 zdania po polsku: co konkretnie się powtarza",
-      "quotes": ["max 3 dosłowne, krótkie cytaty"]
+      "insight": "1-2 sentences in English: what specifically recurs",
+      "quotes": ["max 3 verbatim, short quotes"]
     }
   ],
   "featuresLoved": [
-    { "name": "<konkretna funkcja apki>", "mentions": <ile razy chwalona>, "insight": "co dokładnie ludzie w niej cenią (po polsku)" }
+    { "name": "<specific app feature>", "mentions": <how many times praised>, "insight": "what exactly people value in it (in English)" }
   ],
   "featuresHated": [
-    { "name": "<konkretna funkcja apki>", "mentions": <ile razy krytykowana>, "insight": "co dokładnie w niej wkurza (po polsku)" }
+    { "name": "<specific app feature>", "mentions": <how many times criticized>, "insight": "what exactly is annoying about it (in English)" }
   ],
-  "topIrritations": ["5-8 rzeczy, które najbardziej denerwują użytkowników, od najczęstszej — po polsku, konkretnie"],
-  "quickWins": ["3-6 konkretnych, technicznych rekomendacji po polsku, posortowane wg efekt/nakład"],
-  "metadataTips": ["2-4 wskazówki ASO dot. tytułu/podtytułu/opisu apki po polsku (np. brakująca fraza w tytule, propozycja lepszego podtytułu — pamiętaj o limicie 30 znaków)"],
+  "topIrritations": ["5-8 things that annoy users the most, from the most frequent — in English, specific"],
+  "quickWins": ["3-6 specific, technical recommendations in English, sorted by impact/effort"],
+  "metadataTips": ["2-4 ASO tips regarding the app's title/subtitle/description in English (e.g. a missing phrase in the title, a proposal for a better subtitle — remember the 30-character limit)"],
   "asoKeywords": [
-    { "keyword": "<fraza 1-3 słowa w języku rynku apki>", "reason": "dlaczego" }
+    { "keyword": "<1-3 word phrase in the language of the app's market>", "reason": "why" }
   ]
 }`;
 
@@ -115,7 +115,7 @@ function metaBlock(meta: ResearchAppMeta[]): string {
 	return meta
 		.map(
 			(m) =>
-				`${m.store === "appstore" ? "App Store" : "Google Play"}: "${m.title}" (${m.developer}), rating ${m.rating?.toFixed(2) ?? "?"} przy ${m.ratingsCount ?? "?"} ocenach, wersja ${m.version ?? "?"}.\nOpis (fragment): ${(m.description ?? "").slice(0, 600)}`,
+				`${m.store === "appstore" ? "App Store" : "Google Play"}: "${m.title}" (${m.developer}), rating ${m.rating?.toFixed(2) ?? "?"} from ${m.ratingsCount ?? "?"} ratings, version ${m.version ?? "?"}.\nDescription (excerpt): ${(m.description ?? "").slice(0, 600)}`,
 		)
 		.join("\n\n");
 }
@@ -251,21 +251,21 @@ export class ResearchAiService {
 		const catList = RESEARCH_CATEGORIES.map(
 			(c) => `- "${c.id}": ${c.label}`,
 		).join("\n");
-		const prompt = `Jesteś analitykiem ASO i jakości aplikacji mobilnych. Przeanalizuj recenzje.
+		const prompt = `You are an ASO and mobile-app quality analyst. Analyze the reviews.
 
-APLIKACJA:
+APP:
 ${metaBlock(meta)}
 
-RECENZJE (${Math.min(reviews.length, MAX_REVIEWS_SINGLE_PASS)} najnowszych):
+REVIEWS (${Math.min(reviews.length, MAX_REVIEWS_SINGLE_PASS)} most recent):
 ${reviewLines(reviews, MAX_REVIEWS_SINGLE_PASS)}
 
-ZADANIE — zwróć WYŁĄCZNIE poprawny JSON (bez markdown) o strukturze:
+TASK — return ONLY valid JSON (no markdown) with the structure:
 ${ANALYSIS_JSON_SPEC(catIds)}
 
-Kategorie:
+Categories:
 ${catList}
 
-Zasady: pomiń kategorie z count=0; recenzja może należeć do wielu kategorii; featuresLoved/featuresHated to KONKRETNE funkcje produktu (np. "skanowanie paragonów", "tryb offline"), nie ogólniki; asoKeywords: 8-14 fraz.`;
+Rules: skip categories with count=0; a review can belong to multiple categories; featuresLoved/featuresHated are SPECIFIC product features (e.g. "receipt scanning", "offline mode"), not generalities; asoKeywords: 8-14 phrases.`;
 		return parseAnalysis(await callModel(apiKey, model, prompt));
 	}
 
@@ -288,16 +288,16 @@ Zasady: pomiń kategorie z count=0; recenzja może należeć do wielu kategorii;
 			const batch = chunks.slice(i, i + DEEP_PARALLEL);
 			const results = await Promise.all(
 				batch.map(async (chunk) => {
-					const prompt = `Ekstrahuj dane z recenzji aplikacji "${meta[0]?.title}". Zwróć WYŁĄCZNIE JSON:
+					const prompt = `Extract data from the reviews of the app "${meta[0]?.title}". Return ONLY JSON:
 {
-  "categories": { "<id z: ${catIds}>": <liczba recenzji z tym problemem> },
-  "featuresLoved": [{ "name": "<konkretna funkcja>", "mentions": <ile razy chwalona> }],
-  "featuresHated": [{ "name": "<konkretna funkcja>", "mentions": <ile razy krytykowana> }],
-  "irritations": ["co konkretnie denerwuje użytkowników — po polsku, max 6 pozycji"],
-  "quotes": ["max 5 najbardziej wymownych krótkich cytatów (dosłownych)"]
+  "categories": { "<id from: ${catIds}>": <number of reviews with this problem> },
+  "featuresLoved": [{ "name": "<specific feature>", "mentions": <how many times praised> }],
+  "featuresHated": [{ "name": "<specific feature>", "mentions": <how many times criticized> }],
+  "irritations": ["what specifically annoys users — in English, max 6 items"],
+  "quotes": ["max 5 most telling short quotes (verbatim)"]
 }
 
-RECENZJE:
+REVIEWS:
 ${reviewLines(chunk, chunk.length)}`;
 					try {
 						return JSON.parse(
@@ -351,20 +351,20 @@ ${reviewLines(chunk, chunk.length)}`;
 					.slice(0, 25),
 			);
 
-		const reducePrompt = `Jesteś analitykiem jakości aplikacji mobilnych. Poniżej AGREGAT z analizy ${reviews.length} recenzji apki (przetworzonych w ${extracts.length} partiach).
+		const reducePrompt = `You are a mobile-app quality analyst. Below is the AGGREGATE from an analysis of ${reviews.length} app reviews (processed in ${extracts.length} batches).
 
-APLIKACJA:
+APP:
 ${metaBlock(meta)}
 
-AGREGAT:
-- rzeczywisty sentiment (policzony ze gwiazdek): ${JSON.stringify(byStars)}
-- sumy problemów per kategoria: ${JSON.stringify(catTotals)}
-- chwalone funkcje (nazwa: łączna liczba wzmianek): ${JSON.stringify(top25(loved))}
-- krytykowane funkcje: ${JSON.stringify(top25(hated))}
-- irytacje (surowe, z duplikatami): ${JSON.stringify(irritations.slice(0, 60))}
-- cytaty: ${JSON.stringify(quotes.slice(0, 40))}
+AGGREGATE:
+- actual sentiment (counted from stars): ${JSON.stringify(byStars)}
+- problem totals per category: ${JSON.stringify(catTotals)}
+- praised features (name: total number of mentions): ${JSON.stringify(top25(loved))}
+- criticized features: ${JSON.stringify(top25(hated))}
+- irritations (raw, with duplicates): ${JSON.stringify(irritations.slice(0, 60))}
+- quotes: ${JSON.stringify(quotes.slice(0, 40))}
 
-ZADANIE — zsyntetyzuj finalny raport. Scal duplikaty funkcji/irytacji (różne nazwy tej samej rzeczy zsumuj). Użyj sentimentu z agregatu bez zmian. Zwróć WYŁĄCZNIE JSON:
+TASK — synthesize the final report. Merge duplicate features/irritations (sum different names for the same thing). Use the sentiment from the aggregate unchanged. Return ONLY JSON:
 ${ANALYSIS_JSON_SPEC(catIds)}`;
 		return parseAnalysis(await callModel(apiKey, model, reducePrompt));
 	}
@@ -386,11 +386,11 @@ ${ANALYSIS_JSON_SPEC(catIds)}`;
 		const model = await resolveModel(workspaceId, options.model);
 		const content: MessageContent = [
 			{
-				text: `Jesteś ekspertem ASO od konwersji strony sklepu. Pierwszy obraz to IKONA aplikacji "${meta.title}" (${meta.genre ?? ""}), kolejne to screenshoty ze strony sklepu. Oceń je pod kątem konwersji instalacji. Zwróć WYŁĄCZNIE JSON:
+				text: `You are an ASO expert on store-page conversion. The first image is the ICON of the app "${meta.title}" (${meta.genre ?? ""}), the following ones are screenshots from the store page. Evaluate them in terms of install conversion. Return ONLY JSON:
 {
-  "iconVerdict": "ocena ikony po polsku: czytelność w małym rozmiarze, wyróżnialność na tle kategorii, 2-3 zdania",
-  "screenshotFindings": ["ocena każdego screenshota po kolei: co komunikuje, co poprawić — po polsku"],
-  "conversionTips": ["3-6 konkretnych rekomendacji zwiększających konwersję strony sklepu, od najważniejszej"]
+  "iconVerdict": "icon evaluation in English: legibility at small size, distinctiveness against the category, 2-3 sentences",
+  "screenshotFindings": ["evaluation of each screenshot in order: what it communicates, what to improve — in English"],
+  "conversionTips": ["3-6 specific recommendations to increase store-page conversion, from the most important"]
 }`,
 				type: "text",
 			},
@@ -420,22 +420,22 @@ ${ANALYSIS_JSON_SPEC(catIds)}`;
 	): Promise<{ comparison: CompareAnalysis; model: string }> {
 		const apiKey = await getApiKey(workspaceId);
 		const model = await resolveModel(workspaceId, options.model);
-		const prompt = `Porównaj dwie konkurencyjne aplikacje mobilne na podstawie recenzji użytkowników.
+		const prompt = `Compare two competing mobile apps based on user reviews.
 
-NASZA APKA: "${ourMeta.title}" — rating ${ourMeta.rating?.toFixed(2)}
-RECENZJE NASZEJ (${Math.min(ourReviews.length, MAX_COMPARE_REVIEWS)}):
+OUR APP: "${ourMeta.title}" — rating ${ourMeta.rating?.toFixed(2)}
+OUR REVIEWS (${Math.min(ourReviews.length, MAX_COMPARE_REVIEWS)}):
 ${reviewLines(ourReviews, MAX_COMPARE_REVIEWS)}
 
-KONKURENT: "${compMeta.title}" (${compMeta.developer}) — rating ${compMeta.rating?.toFixed(2)}
-RECENZJE KONKURENTA (${Math.min(compReviews.length, MAX_COMPARE_REVIEWS)}):
+COMPETITOR: "${compMeta.title}" (${compMeta.developer}) — rating ${compMeta.rating?.toFixed(2)}
+COMPETITOR REVIEWS (${Math.min(compReviews.length, MAX_COMPARE_REVIEWS)}):
 ${reviewLines(compReviews, MAX_COMPARE_REVIEWS)}
 
-Zwróć WYŁĄCZNIE JSON (wszystko po polsku):
+Return ONLY JSON (everything in English):
 {
-  "verdict": "2-3 zdania: kto wygrywa i dlaczego",
-  "theyDoBetter": ["co użytkownicy konkurenta chwalą, a nasi na to narzekają / tego brakuje"],
-  "weDoBetter": ["co my robimy lepiej wg recenzji"],
-  "featureGaps": ["konkretne funkcje, które konkurent ma i są chwalone, a u nas nie istnieją lub kuleją"]
+  "verdict": "2-3 sentences: who wins and why",
+  "theyDoBetter": ["what the competitor's users praise that ours complain about / is missing"],
+  "weDoBetter": ["what we do better according to the reviews"],
+  "featureGaps": ["specific features the competitor has and that are praised, but which do not exist or fall short in ours"]
 }`;
 		const parsed = compareSchema(
 			JSON.parse(extractJson(await callModel(apiKey, model, prompt))),

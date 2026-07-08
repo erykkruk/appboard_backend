@@ -107,7 +107,7 @@ describe("Listings diffs", () => {
 			fullDesc: "Full description",
 			title: "Remote Title",
 		});
-		await insertRemote(appIdA, "pl-PL", { title: "Zdalny tytuł" });
+		await insertRemote(appIdA, "pl-PL", { title: "Remote title" });
 
 		const res = await app.handle(
 			authRequest(`${BASE}/apps/${appIdA}/listings/diffs`),
@@ -213,8 +213,8 @@ describe("Listings diffs", () => {
 		await resetListings(appIdA);
 
 		// pl-PL: no diff (draft equals remote)
-		await insertRemote(appIdA, "pl-PL", { title: "Ten sam tytuł" });
-		await insertDraft(appIdA, "pl-PL", { title: "Ten sam tytuł" });
+		await insertRemote(appIdA, "pl-PL", { title: "Same title" });
+		await insertDraft(appIdA, "pl-PL", { title: "Same title" });
 
 		// en-US: has diff
 		await insertRemote(appIdA, "en-US", { title: "English old" });

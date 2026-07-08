@@ -9,6 +9,28 @@ export interface CategoryData {
 	secondaryCategory: string | null;
 }
 
+/**
+ * Result of probing whether a connection's credentials actually have access to
+ * a capability, by test-calling the corresponding store API.
+ * - `granted`: the probe call succeeded.
+ * - `missing`: permission denied (401/403) — the console role was not granted.
+ * - `unsupported`: not verifiable through the API key (e.g. Play Console-only).
+ * - `unknown`: could not be probed (e.g. no app/package to test against).
+ * - `error`: the probe failed for a non-permission reason (network, etc.).
+ */
+export type CapabilityAccessStatus =
+	| "granted"
+	| "missing"
+	| "unsupported"
+	| "unknown"
+	| "error";
+
+export interface CapabilityAccessResult {
+	capability: string;
+	status: CapabilityAccessStatus;
+	detail?: string;
+}
+
 export interface StoreProvider {
 	/**
 	 * Verify the stored credentials against the live store API. On failure the

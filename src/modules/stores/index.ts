@@ -1,8 +1,22 @@
 import Elysia from "elysia";
+import type { StoreType } from "@/config/const";
+import {
+	STORE_CAPABILITY_CATALOG,
+	STORE_SETUP_INFO,
+} from "@/config/store-capabilities";
 import { verifyStoreOwnership } from "@/modules/auth/verify-ownership";
 import { buildError } from "@/utils/errors";
 import { checkRateLimit, rateLimitEnabled } from "@/utils/rate-limit";
-import { connectStoreBody, storeIdParams } from "./stores.schema";
+import {
+	resolveStoredCapabilities,
+	StoreCapabilitiesService,
+} from "./store-capabilities.service";
+import {
+	connectStoreBody,
+	renameStoreBody,
+	storeCapabilitiesBody,
+	storeIdParams,
+} from "./stores.schema";
 import { StoresService } from "./stores.service";
 
 // Connect validates credentials against live store APIs — throttle per
@@ -26,11 +40,12 @@ export const storesController = new Elysia({ prefix: "/stores" })
 					info: "Too many connection attempts. Try again in a minute.",
 				});
 			}
-			const { store, syncedApps } = await StoresService.connect(
+			const { capabilities, store, syncedApps } = await StoresService.connect(
 				workspaceId!,
 				body.name,
 				body.type,
 				body.credentials as Record<string, unknown>,
+				body.capabilities,
 			);
 			const warnings: string[] = [];
 
@@ -47,6 +62,7 @@ export const storesController = new Elysia({ prefix: "/stores" })
 			}
 
 			return {
+				capabilities,
 				store: {
 					id: store.id,
 					name: store.name,
@@ -68,6 +84,10 @@ export const storesController = new Elysia({ prefix: "/stores" })
 			const storesList = await StoresService.list(workspaceId!);
 			return {
 				stores: storesList.map((s) => ({
+					capabilities: resolveStoredCapabilities(
+						s.type as StoreType,
+						s.capabilities,
+					),
 					id: s.id,
 					lastSyncedAt: s.lastSyncedAt,
 					name: s.name,
@@ -78,6 +98,69 @@ export const storesController = new Elysia({ prefix: "/stores" })
 		},
 		{
 			detail: { description: "List connected stores", tags: ["Stores"] },
+		},
+	)
+	.get(
+		"/capability-catalog",
+		() => ({ capabilities: STORE_CAPABILITY_CATALOG, setup: STORE_SETUP_INFO }),
+		{
+			detail: {
+				description:
+					"Catalog of per-connection store capabilities + setup guidance",
+				tags: ["Stores"],
+			},
+		},
+	)
+	.get(
+		"/:storeId/capabilities",
+		async ({ params, workspaceId }) => {
+			await verifyStoreOwnership(params.storeId, workspaceId!);
+			const resolved = await StoreCapabilitiesService.getForStore(
+				params.storeId,
+			);
+			if (!resolved) buildError("notFound", { info: "Store not found" });
+			return resolved;
+		},
+		{
+			detail: {
+				description: "Get a store connection's enabled capabilities",
+				tags: ["Stores"],
+			},
+			params: storeIdParams,
+		},
+	)
+	.patch(
+		"/:storeId/capabilities",
+		async ({ body, params, workspaceId }) => {
+			await verifyStoreOwnership(params.storeId, workspaceId!);
+			return StoreCapabilitiesService.setForStore(
+				params.storeId,
+				workspaceId!,
+				body.capabilities,
+			);
+		},
+		{
+			body: storeCapabilitiesBody,
+			detail: {
+				description: "Update a store connection's enabled capabilities",
+				tags: ["Stores"],
+			},
+			params: storeIdParams,
+		},
+	)
+	.patch(
+		"/:storeId",
+		async ({ body, params, workspaceId }) => {
+			await verifyStoreOwnership(params.storeId, workspaceId!);
+			return StoresService.rename(params.storeId, workspaceId!, body.name);
+		},
+		{
+			body: renameStoreBody,
+			detail: {
+				description: "Rename a store connection",
+				tags: ["Stores"],
+			},
+			params: storeIdParams,
 		},
 	)
 	.delete(
