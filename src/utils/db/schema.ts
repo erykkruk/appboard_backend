@@ -195,6 +195,26 @@ export const apps = pgTable(
 	(t) => [index().on(t.storeId)],
 );
 
+export const errorLogs = pgTable(
+	"error_logs",
+	{
+		code: varchar({ length: 64 }),
+		context: jsonb().$type<Record<string, unknown>>(),
+		createdAt: timestamp().notNull().defaultNow(),
+		id: uuid().defaultRandom().primaryKey(),
+		level: varchar({ length: 16 }).notNull().default("error"),
+		message: text(),
+		method: varchar({ length: 12 }),
+		path: varchar({ length: 512 }),
+		statusCode: integer(),
+		// Deliberately no FK: logs must survive workspace/user deletion and an
+		// insert must never fail on a missing reference.
+		userId: text(),
+		workspaceId: uuid(),
+	},
+	(t) => [index().on(t.createdAt), index().on(t.workspaceId)],
+);
+
 export const settings = pgTable(
 	"settings",
 	{
@@ -725,6 +745,7 @@ export const schema = {
 	apps,
 	appVersions,
 	assets,
+	errorLogs,
 	groupAsoProfiles,
 	inAppPurchases,
 	listingHistory,

@@ -312,10 +312,9 @@ export class ListingsService {
 			.from(listings)
 			.where(and(eq(listings.appId, appId), eq(listings.language, language)));
 
-		if (result.length === 0) {
-			buildError("notFound", { info: "Listing not found" });
-		}
-
+		// No row yet for this language is a normal "not created" state (e.g. a new
+		// locale, or an app whose store listing hasn't been synced) — return an
+		// empty listing the editor can fill in, not a 404 that breaks the page.
 		const remote = result.find((l) => l.source === "remote");
 		const draft = result.find((l) => l.source === "draft");
 
