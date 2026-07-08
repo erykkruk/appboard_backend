@@ -13,6 +13,11 @@ export const storeCapabilitiesBody = t.Object({
 	capabilities: t.Array(t.String()),
 });
 
+export const verifyAccessBody = t.Object({
+	credentials: t.Record(t.String(), t.Unknown()),
+	type: unionEnum(STORE_TYPES),
+});
+
 export const renameStoreBody = t.Object({
 	name: t.String({ maxLength: 255, minLength: 1 }),
 });

@@ -378,4 +378,85 @@ describe("hard vault guard (423) on store actions", () => {
 			VaultService.assertUnlockedForAction(getTestWorkspaceId()),
 		).resolves.toBeUndefined();
 	});
+
+	it("raw verify-access is reachable while the vault is locked", async () => {
+		const res = await app.handle(
+			lockedRequest("http://localhost/api/stores/verify-access", "POST", {
+				credentials: { mock: true, type: "mock" },
+				type: "google_play",
+			}),
+		);
+		// Excluded from the vault guard — probing raw credentials stores nothing.
+		expect(res.status).not.toBe(423);
+		expect(res.status).toBe(200);
+	});
+});
+
+describe("capability access verification", () => {
+	const storeIds: string[] = [];
+
+	afterAll(async () => {
+		if (storeIds.length > 0) await cleanupStores(storeIds);
+	});
+
+	function statusOf(
+		results: Array<{ id: string; status: string }>,
+		id: string,
+	) {
+		return results.find((r) => r.id === id)?.status;
+	}
+
+	it("raw verify-access reports per-capability access for Google Play", async () => {
+		const res = await app.handle(
+			json("http://localhost/api/stores/verify-access", "POST", {
+				credentials: { mock: true, type: "mock" },
+				type: "google_play",
+			}),
+		);
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.storeType).toBe("google_play");
+		expect(statusOf(data.results, "listings")).toBe("granted");
+		expect(statusOf(data.results, "purchases")).toBe("granted");
+		// Play Console-only capabilities cannot be verified via the key.
+		expect(statusOf(data.results, "age_rating")).toBe("unsupported");
+	});
+
+	it("raw verify-access reports per-capability access for App Store", async () => {
+		const res = await app.handle(
+			json("http://localhost/api/stores/verify-access", "POST", {
+				credentials: { mock: true },
+				type: "app_store",
+			}),
+		);
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.storeType).toBe("app_store");
+		expect(statusOf(data.results, "listings")).toBe("granted");
+		expect(statusOf(data.results, "reviews")).toBe("granted");
+		expect(statusOf(data.results, "purchases")).toBe("granted");
+	});
+
+	it("verifies access for an already-connected store", async () => {
+		const [store] = await db
+			.insert(stores)
+			.values({
+				credentials: encrypt(JSON.stringify({ mock: true })),
+				name: "Verify Store",
+				status: "connected",
+				type: "google_play",
+				workspaceId: getTestWorkspaceId(),
+			})
+			.returning();
+		storeIds.push(store.id);
+
+		const res = await app.handle(
+			authRequest(`http://localhost/api/stores/${store.id}/verify-access`, {
+				method: "POST",
+			}),
+		);
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(statusOf(data.results, "listings")).toBe("granted");
+	});
 });

@@ -43,6 +43,12 @@ export const vaultActionGuard = new Elysia({
 		if (!MUTATING_METHODS.has(request.method)) return;
 
 		const { pathname } = new URL(request.url);
+
+		// Probing raw (not-yet-stored) credentials neither reads nor writes the
+		// vault, so it must stay reachable while locked. The stored-store variant
+		// (/stores/:id/verify-access) decrypts credentials and is NOT excluded.
+		if (matchesPathPattern(pathname, "/stores/verify-access")) return;
+
 		const isStoreAction = VAULT_ACTION_ROUTE_PATTERNS.some((pattern) =>
 			matchesPathPattern(pathname, pattern),
 		);

@@ -16,6 +16,7 @@ import {
 	renameStoreBody,
 	storeCapabilitiesBody,
 	storeIdParams,
+	verifyAccessBody,
 } from "./stores.schema";
 import { StoresService } from "./stores.service";
 
@@ -111,6 +112,22 @@ export const storesController = new Elysia({ prefix: "/stores" })
 			},
 		},
 	)
+	.post(
+		"/verify-access",
+		({ body }) =>
+			StoreCapabilitiesService.verifyAccessRaw(
+				body.type,
+				body.credentials as Record<string, unknown>,
+			),
+		{
+			body: verifyAccessBody,
+			detail: {
+				description:
+					"Probe which capabilities a set of credentials has access to (before saving)",
+				tags: ["Stores"],
+			},
+		},
+	)
 	.get(
 		"/:storeId/capabilities",
 		async ({ params, workspaceId }) => {
@@ -143,6 +160,24 @@ export const storesController = new Elysia({ prefix: "/stores" })
 			body: storeCapabilitiesBody,
 			detail: {
 				description: "Update a store connection's enabled capabilities",
+				tags: ["Stores"],
+			},
+			params: storeIdParams,
+		},
+	)
+	.post(
+		"/:storeId/verify-access",
+		async ({ params, workspaceId }) => {
+			await verifyStoreOwnership(params.storeId, workspaceId!);
+			return StoreCapabilitiesService.verifyAccessStored(
+				params.storeId,
+				workspaceId!,
+			);
+		},
+		{
+			detail: {
+				description:
+					"Probe which capabilities a connected store's key has access to",
 				tags: ["Stores"],
 			},
 			params: storeIdParams,

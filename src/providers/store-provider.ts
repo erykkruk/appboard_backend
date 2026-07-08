@@ -160,6 +160,13 @@ export interface StoreProvider {
 	checkMonetizationSupport(
 		appId: string,
 	): Promise<{ reason?: string; supported: boolean }>;
+
+	/**
+	 * Probe which capabilities the credentials actually have access to by
+	 * test-calling the corresponding store APIs. Used to show the user, right
+	 * after they enter a key, what they can and cannot do with it.
+	 */
+	verifyCapabilityAccess?(): Promise<CapabilityAccessResult[]>;
 }
 
 export interface AppData {

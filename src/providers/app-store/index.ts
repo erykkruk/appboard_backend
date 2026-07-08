@@ -1,4 +1,5 @@
 import type { ApiResource } from "node-app-store-connect-api";
+import { probeAccess } from "@/providers/capability-access";
 import {
 	getMockAssets,
 	getMockInAppPurchases,
@@ -11,6 +12,7 @@ import type {
 	AppData,
 	AssetData,
 	AssetMetadata,
+	CapabilityAccessResult,
 	CategoryData,
 	InAppPurchaseCreateData,
 	InAppPurchaseData,
@@ -2549,6 +2551,78 @@ export class AppStoreProvider implements StoreProvider {
 		_appId: string,
 	): Promise<{ reason?: string; supported: boolean }> {
 		return { supported: true };
+	}
+
+	async verifyCapabilityAccess(): Promise<CapabilityAccessResult[]> {
+		// App Store Connect roles are broad (App Manager covers metadata editing),
+		// so app-read access stands in for the metadata capabilities; reviews and
+		// purchases are probed against a representative app.
+		const metadataBacked = [
+			"listings",
+			"assets",
+			"publishing",
+			"age_rating",
+			"categories",
+			"privacy",
+		] as const;
+		const spread = (
+			capabilities: readonly string[],
+			result: { status: CapabilityAccessResult["status"]; detail?: string },
+		): CapabilityAccessResult[] =>
+			capabilities.map((capability) => ({ capability, ...result }));
+
+		if (this.isMock) {
+			return spread([...metadataBacked, "reviews", "purchases"], {
+				status: "granted",
+			});
+		}
+
+		try {
+			const { readAll } = await createAppStoreClient(this.credentials);
+			const appAccess = await probeAccess(() =>
+				readAll("apps", { params: { limit: 1 } }),
+			);
+
+			let appId: string | undefined;
+			try {
+				const { data } = await readAll("apps", { params: { limit: 1 } });
+				appId = (data?.[0] as { id?: string } | undefined)?.id;
+			} catch {
+				/* fall back to the no-app path below */
+			}
+
+			const noApp = {
+				detail:
+					"No app was found to verify against. Access is confirmed once an app is discovered.",
+				status: "unknown" as const,
+			};
+			const reviewsAccess = appId
+				? await probeAccess(() =>
+						readAll(`apps/${appId}/customerReviews`, { params: { limit: 1 } }),
+					)
+				: appAccess.status === "granted"
+					? noApp
+					: appAccess;
+			const purchasesAccess = appId
+				? await probeAccess(() =>
+						readAll(`apps/${appId}/inAppPurchasesV2`, { params: { limit: 1 } }),
+					)
+				: appAccess.status === "granted"
+					? noApp
+					: appAccess;
+
+			return [
+				...spread(metadataBacked, appAccess),
+				{ capability: "reviews", ...reviewsAccess },
+				{ capability: "purchases", ...purchasesAccess },
+			];
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return spread([...metadataBacked, "reviews", "purchases"], {
+				detail: message,
+				status: "error",
+			});
+		}
 	}
 
 	private mapProductTypeToAsc(productType: string): string {

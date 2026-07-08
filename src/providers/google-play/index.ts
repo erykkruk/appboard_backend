@@ -1,3 +1,4 @@
+import { probeAccess } from "@/providers/capability-access";
 import {
 	getMockAssets,
 	getMockInAppPurchases,
@@ -10,6 +11,7 @@ import type {
 	AppData,
 	AssetData,
 	AssetMetadata,
+	CapabilityAccessResult,
 	CategoryData,
 	InAppPurchaseCreateData,
 	InAppPurchaseData,
@@ -1114,6 +1116,84 @@ export class GooglePlayProvider implements StoreProvider {
 			}
 			throw err;
 		}
+	}
+
+	async verifyCapabilityAccess(): Promise<CapabilityAccessResult[]> {
+		// Age rating / categories / data safety are Play Console-only — the API
+		// key cannot change them, so there is nothing to verify.
+		const consoleOnly: CapabilityAccessResult[] = [
+			{ capability: "age_rating", status: "unsupported" },
+			{ capability: "categories", status: "unsupported" },
+			{ capability: "privacy", status: "unsupported" },
+		];
+		const editBacked = ["listings", "assets", "publishing"] as const;
+		const spread = (
+			capabilities: readonly string[],
+			result: { status: CapabilityAccessResult["status"]; detail?: string },
+		): CapabilityAccessResult[] =>
+			capabilities.map((capability) => ({ capability, ...result }));
+
+		if (this.isMock) {
+			return [
+				...spread(
+					["listings", "assets", "reviews", "publishing", "purchases"],
+					{
+						status: "granted",
+					},
+				),
+				...consoleOnly,
+			];
+		}
+
+		let client: GooglePlayClient;
+		try {
+			client = await this.getClient();
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			return [
+				...spread(
+					["listings", "assets", "reviews", "publishing", "purchases"],
+					{
+						detail: message,
+						status: "error",
+					},
+				),
+				...consoleOnly,
+			];
+		}
+
+		const packageName = client.packageNames[0];
+		if (!packageName) {
+			return [
+				...spread(
+					["listings", "assets", "reviews", "publishing", "purchases"],
+					{
+						detail:
+							"No app or package was found to verify against. Access is confirmed once an app is discovered.",
+						status: "unknown",
+					},
+				),
+				...consoleOnly,
+			];
+		}
+
+		const editAccess = await probeAccess(async () => {
+			const editId = await createEdit(client.api, packageName);
+			await deleteEdit(client.api, packageName, editId);
+		});
+		const reviewsAccess = await probeAccess(() =>
+			client.api.reviews.list({ packageName }),
+		);
+		const purchasesAccess = await probeAccess(() =>
+			client.api.monetization.subscriptions.list({ packageName }),
+		);
+
+		return [
+			...spread(editBacked, editAccess),
+			{ capability: "reviews", ...reviewsAccess },
+			{ capability: "purchases", ...purchasesAccess },
+			...consoleOnly,
+		];
 	}
 
 	/** Lazily initializes and returns the Google Play API client */
