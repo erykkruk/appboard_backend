@@ -1,8 +1,17 @@
 import { readFileSync } from "node:fs";
 import { GooglePlayProvider } from "@/providers/google-play";
 
-const KEY_PATH = "./keys/museo-46b90-78fc32bc1b47.json";
-const TARGET_APP = "ai.themuseo.ambassador";
+// Configure via .env (gitignored): point these at your own local Google Play
+// service-account key file and a package name you own.
+const KEY_PATH = process.env.GP_SERVICE_ACCOUNT_KEY_PATH;
+const TARGET_APP = process.env.GP_TEST_PACKAGE_NAME;
+
+if (!KEY_PATH || !TARGET_APP) {
+	console.error(
+		"Set GP_SERVICE_ACCOUNT_KEY_PATH and GP_TEST_PACKAGE_NAME in your .env to run this script.",
+	);
+	process.exit(1);
+}
 
 function loadCredentials() {
 	const raw = JSON.parse(readFileSync(KEY_PATH, "utf-8"));

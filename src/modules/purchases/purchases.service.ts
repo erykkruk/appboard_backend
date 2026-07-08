@@ -1,5 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
 import type {
 	InAppPurchaseCreateData,
@@ -7,7 +8,6 @@ import type {
 	StoreProvider,
 	SubscriptionCreateData,
 } from "@/providers/store-provider";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import {
 	apps,
@@ -53,7 +53,10 @@ export class PurchasesService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		// Sync subscription groups
@@ -1465,7 +1468,10 @@ export class PurchasesService {
 			});
 		}
 
-		const credentials = JSON.parse(decrypt(app.store.credentials));
+		const credentials = decryptCredentials(
+			app.store.credentials,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		return { externalAppId: app.app.externalId, provider };

@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { apps, assets, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -12,7 +12,10 @@ const log = createLogger("assets-service");
 export class AssetsService {
 	static async syncFromStore(appId: string) {
 		const app = await AssetsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		// Derive languages from existing listings (synced from store)
@@ -124,7 +127,10 @@ export class AssetsService {
 		fileName?: string,
 	) {
 		const app = await AssetsService.getAppWithStore(appId);
-		const credentials = JSON.parse(decrypt(app.store.credentials!));
+		const credentials = decryptCredentials(
+			app.store.credentials!,
+			app.store.workspaceId,
+		);
 		const provider = createProvider(app.store.type as StoreType, credentials);
 
 		const result = await provider.uploadAsset(app.externalId, language, file, {
@@ -173,7 +179,10 @@ export class AssetsService {
 		// Remote or uploaded assets — delete from store first
 		if (asset.externalId) {
 			const app = await AssetsService.getAppWithStore(appId);
-			const credentials = JSON.parse(decrypt(app.store.credentials!));
+			const credentials = decryptCredentials(
+				app.store.credentials!,
+				app.store.workspaceId,
+			);
 			const provider = createProvider(app.store.type as StoreType, credentials);
 			await provider.deleteAsset(app.externalId, asset.externalId);
 		}

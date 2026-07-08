@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
+import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
-import { decrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { appAgeRatings, apps, stores } from "@/utils/db/schema";
 import { createLogger } from "@/utils/logger";
@@ -115,7 +115,10 @@ export class AgeRatingService {
 			return;
 		}
 
-		const credentials = JSON.parse(decrypt(store.credentials));
+		const credentials = decryptCredentials(
+			store.credentials,
+			store.workspaceId,
+		);
 		const provider = createProvider(store.type as StoreType, credentials);
 
 		await provider.updateAgeRating(app.externalId, appleQuestionnaire);

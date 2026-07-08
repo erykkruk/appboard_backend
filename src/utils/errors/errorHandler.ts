@@ -1,7 +1,10 @@
 import Elysia from "elysia";
+import config from "@/config";
 import { createLogger } from "@/utils/logger";
 
 const log = createLogger("errorHandler");
+
+const isProd = config.NODE_ENV === "production";
 
 export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 	{ as: "global" },
@@ -23,7 +26,11 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 				set.status = 500;
 				return {
 					code: "SOMETHING_WENT_WRONG",
-					data: { info: error?.message || "Internal server error" },
+					data: {
+						info: isProd
+							? "Internal server error"
+							: error?.message || "Internal server error",
+					},
 				};
 
 			case "UNKNOWN":
@@ -31,7 +38,11 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 				set.status = 500;
 				return {
 					code: "SOMETHING_WENT_WRONG",
-					data: { info: error?.message || "Unknown error" },
+					data: {
+						info: isProd
+							? "Internal server error"
+							: error?.message || "Unknown error",
+					},
 				};
 
 			case "PARSE":
@@ -53,18 +64,28 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 					if (body && typeof body === "object" && "code" in body) {
 						return body;
 					}
-					// External API errors (e.g. googleapis) — propagate message
+					// External/upstream API errors (e.g. googleapis). Don't leak raw
+					// upstream messages to clients in production — they can carry
+					// internal/request context. Full detail is still logged above.
 					log.error(error, "Unhandled error with status code");
 					return {
 						code: "EXTERNAL_ERROR",
-						data: { info: error?.message || `Error (${statusCode})` },
+						data: {
+							info: isProd
+								? "Upstream service error"
+								: error?.message || `Error (${statusCode})`,
+						},
 					};
 				}
 				log.error(error, "Unhandled error");
 				set.status = 500;
 				return {
 					code: "SOMETHING_WENT_WRONG",
-					data: { info: error?.message || "Unknown error" },
+					data: {
+						info: isProd
+							? "Internal server error"
+							: error?.message || "Unknown error",
+					},
 				};
 			}
 		}

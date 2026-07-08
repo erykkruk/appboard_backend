@@ -87,9 +87,35 @@ describe("PublishingService.validateScreenshotFile", () => {
 		expect(result.displayTypeName).toBe("Android phone");
 	});
 
-	test("Google Play display type: wrong-size buffer is invalid", async () => {
+	test("Google Play accepts flexible sizes within GP bounds (1080x1920)", async () => {
+		// GP does not enforce exact presets — each side 320-3840px, aspect <= 2:1.
+		const buffer = await createTestImage(1080, 1920);
+		const file = createFileFromBuffer(buffer, "phone-1080.png");
+
+		const result = await PublishingService.validateScreenshotFile(
+			"phone",
+			file,
+		);
+
+		expect(result.valid).toBe(true);
+		expect(result.providedDimensions).toEqual([1080, 1920]);
+	});
+
+	test("Google Play accepts non-preset sizes like 800x1600 (aspect exactly 2:1)", async () => {
 		const buffer = await createTestImage(800, 1600);
-		const file = createFileFromBuffer(buffer, "phone-wrong.png");
+		const file = createFileFromBuffer(buffer, "phone-800.png");
+
+		const result = await PublishingService.validateScreenshotFile(
+			"phone",
+			file,
+		);
+
+		expect(result.valid).toBe(true);
+	});
+
+	test("Google Play rejects sides below 320px", async () => {
+		const buffer = await createTestImage(300, 600);
+		const file = createFileFromBuffer(buffer, "phone-tiny.png");
 
 		const result = await PublishingService.validateScreenshotFile(
 			"phone",
@@ -97,9 +123,35 @@ describe("PublishingService.validateScreenshotFile", () => {
 		);
 
 		expect(result.valid).toBe(false);
-		expect(result.providedDimensions).toEqual([800, 1600]);
-		expect(result.supportedDimensions.length).toBeGreaterThan(0);
-		expect(result.suggestion).toContain("800x1600");
+		expect(result.providedDimensions).toEqual([300, 600]);
+		expect(result.suggestion).toContain("320");
+		expect(result.suggestion).toContain("300x600");
+	});
+
+	test("Google Play rejects aspect ratio above 2:1", async () => {
+		const buffer = await createTestImage(1000, 2500);
+		const file = createFileFromBuffer(buffer, "phone-tall.png");
+
+		const result = await PublishingService.validateScreenshotFile(
+			"phone",
+			file,
+		);
+
+		expect(result.valid).toBe(false);
+		expect(result.suggestion).toContain("2:1");
+	});
+
+	test("Google Play rejects sides above 3840px", async () => {
+		const buffer = await createTestImage(2200, 4000);
+		const file = createFileFromBuffer(buffer, "phone-huge.png");
+
+		const result = await PublishingService.validateScreenshotFile(
+			"phone",
+			file,
+		);
+
+		expect(result.valid).toBe(false);
+		expect(result.suggestion).toContain("3840");
 	});
 
 	test("Landscape orientation of a preset is accepted", async () => {
@@ -168,6 +220,21 @@ describe("PublishingService.uploadScreenshot dimension guard", () => {
 			expect(response?.data?.supportedDimensions).toContainEqual([1290, 2796]);
 			expect(response?.data?.suggestion).toContain("1290x2796");
 		}
+	});
+
+	test("GP upload accepts 1080x1920 and preserves original dimensions (pass-through)", async () => {
+		const buffer = await createTestImage(1080, 1920);
+		const file = createFileFromBuffer(buffer, "gp-1080.png");
+
+		const result = await PublishingService.uploadScreenshot(
+			gpApp.id,
+			"unused-version-id",
+			"en-US",
+			"phone",
+			file,
+		);
+
+		expect(result!.uploaded).toBe(true);
 	});
 
 	test("explicit cropParams bypass the dimension guard", async () => {

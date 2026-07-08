@@ -449,16 +449,19 @@ export class AppStoreProvider implements StoreProvider {
 		};
 	}
 
-	async validateCredentials(): Promise<boolean> {
-		if (this.isMock) return true;
+	async validateCredentials(): Promise<{ reason?: string; valid: boolean }> {
+		if (this.isMock) return { valid: true };
 		try {
 			const { readAll } = await createAppStoreClient(this.credentials);
 			const { data } = await readAll("apps", { params: { limit: 1 } });
 			log.info({ appCount: data?.length ?? 0 }, "Credentials validated");
-			return true;
+			return { valid: true };
 		} catch (err) {
 			log.error({ err }, "App Store credentials validation failed");
-			return false;
+			return {
+				reason: err instanceof Error ? err.message : String(err),
+				valid: false,
+			};
 		}
 	}
 

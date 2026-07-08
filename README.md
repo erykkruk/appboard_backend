@@ -88,13 +88,11 @@ openssl rand -hex 32
 bun run db:up   # uses docker-compose
 ```
 
-### 4. Run migrations
+### 4. Migrations
 
-```bash
-bun run db:generate
-```
-
-Migrations run automatically on bootstrap.
+Migrations apply automatically when the server boots — a fresh install needs no
+manual step. (After changing the schema, generate a new migration with
+`bun run db:generate`.)
 
 ### 5. Start the server
 
@@ -120,16 +118,16 @@ All configuration is loaded from environment variables and validated with [ArkTy
 | `DB_URL` | ✅ | PostgreSQL connection string |
 | `PORT` | | HTTP port (default `6680`) |
 | `ALLOWED_ORIGINS` | | Comma-separated CORS origins |
-| `ENCRYPTION_KEY` | ✅ | 32-byte hex key for store credential encryption |
+| `ENCRYPTION_KEY` | ✅ | 64-char hex (32 bytes) for AES-256-GCM credential encryption — generate with `openssl rand -hex 32` |
 | `BETTER_AUTH_SECRET` | ✅ | Min. 32 chars, used by Better Auth for session signing |
 | `BETTER_AUTH_URL` | ✅ | Public base URL of the backend |
 | `NODE_ENV` | | `development` or `production` |
+| `SEED_USER_EMAIL` / `SEED_USER_NAME` | | Optional owner to create via `bun run db:seed` |
+| `ENABLE_TEST_AUTH` | | Dev/test only: enables the `X-Test-User-Id` auth bypass. Never honored in production |
 | `OPENROUTER_API_KEY` | | Required for AI features |
 | `OPENROUTER_URL` | | OpenRouter chat completions endpoint |
 | `OPENROUTER_MODEL` | | Default AI model |
-| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | | For sending magic-link / OTP emails. Leave empty in dev for fixed OTP `123456` |
-
-See [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) for a detailed deployment guide.
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASS` / `SMTP_FROM` | | OTP email delivery. Leave empty in **development** for the fixed dev OTP `123456`. **In production the server refuses to boot without SMTP** (so there is no fixed-OTP login in prod). |
 
 ---
 

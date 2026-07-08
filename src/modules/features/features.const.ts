@@ -11,6 +11,7 @@ export type FeatureKey =
 	| "PRIVACY"
 	| "PUBLISHING"
 	| "PURCHASES"
+	| "RESEARCH"
 	| "REVIEWS"
 	| "SCREENSHOTS";
 
@@ -87,6 +88,13 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
 	},
 	{
 		defaultEnabled: true,
+		description:
+			"Market research: review analysis, keyword positions, competitor reports for any store app",
+		key: "RESEARCH",
+		name: "Research",
+	},
+	{
+		defaultEnabled: true,
 		description: "View and respond to app store reviews",
 		key: "REVIEWS",
 		name: "Reviews",
@@ -116,6 +124,7 @@ export const ROUTE_FEATURE_MAP: Array<{
 	{ feature: "SCREENSHOTS", pattern: "/screenshot-scenes" },
 	{ feature: "SCREENSHOTS", pattern: "/assets" },
 	{ feature: "PUBLISHING", pattern: "/publishing" },
+	{ feature: "RESEARCH", pattern: "/research" },
 	{ feature: "REVIEWS", pattern: "/reviews" },
 	{ feature: "MONETIZATION_CHAT", pattern: "/monetization-chat" },
 	{ feature: "AI", pattern: "/ai" },

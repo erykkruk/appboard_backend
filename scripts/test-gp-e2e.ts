@@ -2,11 +2,22 @@
  * End-to-end test: full flow through backend API endpoints with real GP credentials.
  * Tests: connect store → sync apps → fetch listings → save listing → fetch capabilities → fetch assets
  *
+ * Requires the backend running with the test-auth bypass enabled, e.g.:
+ *   ENABLE_TEST_AUTH=true bun run dev
+ * and GP_SERVICE_ACCOUNT_KEY_PATH pointing at your own local key file (.env).
+ *
  * Usage: bun run scripts/test-gp-e2e.ts
  */
 
-const BASE = "http://localhost:6680/api";
-const KEY_PATH = "./keys/museo-46b90-78fc32bc1b47.json";
+const BASE = `${process.env.BACKEND_URL ?? "http://localhost:6680"}/api`;
+const KEY_PATH = process.env.GP_SERVICE_ACCOUNT_KEY_PATH;
+
+if (!KEY_PATH) {
+	console.error(
+		"Set GP_SERVICE_ACCOUNT_KEY_PATH in your .env to point at a local service-account key file.",
+	);
+	process.exit(1);
+}
 
 // Test user header (dev mode auth bypass)
 const TEST_USER = "test-user-001";

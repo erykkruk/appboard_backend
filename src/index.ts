@@ -17,6 +17,7 @@ import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
 import { authGuard } from "@/modules/auth";
 import { apiKeysController } from "@/modules/auth/api-keys.controller";
+import { demoController } from "@/modules/demo";
 import { featuresController } from "@/modules/features";
 import { featureGuard } from "@/modules/features/features.guard";
 import { groupAsoProfileController } from "@/modules/group-aso-profile";
@@ -28,6 +29,7 @@ import {
 } from "@/modules/privacy-declaration";
 import { publishingController } from "@/modules/publishing";
 import { purchasesController } from "@/modules/purchases";
+import { researchController } from "@/modules/research";
 import { reviewsController } from "@/modules/reviews";
 import { screenshotScenesController } from "@/modules/screenshot-scenes";
 import { settingsController } from "@/modules/settings";
@@ -56,6 +58,8 @@ const app = new Elysia()
 	)
 	.use(errorHandler)
 	.all("/api/auth/*", ({ request }) => auth.handler(request))
+	// Public demo sign-in — must stay BEFORE the auth guard.
+	.use(demoController)
 	.use(authGuard)
 	.group("/api", (app) =>
 		app
@@ -84,7 +88,8 @@ const app = new Elysia()
 			.use(groupAsoProfileController)
 			.use(purchasesController)
 			.use(monetizationChatController)
-			.use(historyController),
+			.use(historyController)
+			.use(researchController),
 	)
 	.listen(port);
 

@@ -2,6 +2,7 @@ import Elysia from "elysia";
 import {
 	addMemberBody,
 	createGroupBody,
+	generateListingsBody,
 	groupIdParams,
 	memberParams,
 	reorderGroupsBody,
@@ -9,6 +10,7 @@ import {
 	updateGroupBody,
 } from "./app-groups.schema";
 import { AppGroupsService } from "./app-groups.service";
+import { GroupGenerationService } from "./group-generation.service";
 
 export const appGroupsController = new Elysia({ prefix: "/app-groups" })
 	.get(
@@ -134,6 +136,29 @@ export const appGroupsController = new Elysia({ prefix: "/app-groups" })
 			body: reorderMembersBody,
 			detail: {
 				description: "Reorder apps within a group",
+				tags: ["App Groups"],
+			},
+			params: groupIdParams,
+		},
+	)
+	.post(
+		"/:groupId/generate-listings",
+		async ({ body, params, workspaceId }) => {
+			return GroupGenerationService.generateListings(
+				workspaceId!,
+				params.groupId,
+				{
+					fields: body.fields,
+					sourceLanguage: body.sourceLanguage,
+					translateToOthers: body.translateToOthers,
+				},
+			);
+		},
+		{
+			body: generateListingsBody,
+			detail: {
+				description:
+					"AI-generate listing drafts for every app in the group (Android + iOS) from the shared ASO profile",
 				tags: ["App Groups"],
 			},
 			params: groupIdParams,

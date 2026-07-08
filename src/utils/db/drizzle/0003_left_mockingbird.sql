@@ -63,16 +63,10 @@ CREATE TABLE "workspaces" (
 	"name" varchar(255) NOT NULL
 );
 --> statement-breakpoint
--- Seed: create user + workspace + assign existing data
-INSERT INTO "user" ("id", "email", "email_verified", "name")
-VALUES ('seed-user-001', 'eryk.kruk@codigee.com', true, 'Eryk Kruk');
---> statement-breakpoint
-INSERT INTO "workspaces" ("id", "name")
-VALUES ('a0000000-0000-0000-0000-000000000001', 'Workspace Eryk');
---> statement-breakpoint
-INSERT INTO "workspace_members" ("user_id", "workspace_id", "role")
-VALUES ('seed-user-001', 'a0000000-0000-0000-0000-000000000001', 'owner');
---> statement-breakpoint
+-- Workspace bootstrap (user + workspace) is created per-deployment from the
+-- authenticated user (Better Auth user-create hook) or optionally via
+-- scripts/seed.ts. No personal data is hardcoded in this migration. The
+-- backfill UPDATEs below are no-ops on a fresh database (no rows to reassign).
 ALTER TABLE "settings" DROP CONSTRAINT IF EXISTS "settings_key_unique";
 --> statement-breakpoint
 ALTER TABLE "settings" DROP CONSTRAINT IF EXISTS "settings_key_key";

@@ -536,26 +536,62 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 		"/:appId/publishing/screenshots/copy",
 		async ({ body, params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
-			return PublishingService.copyScreenshots(
-				params.appId,
-				body.versionId,
-				body.sourceLanguage,
-				body.targetLanguage,
-				body.displayType,
-				body.copyLocalizations,
-			);
+
+			// Single target stays the primary contract; targetLanguages lets the
+			// panel fan one upload out to many locales in one request.
+			const targets = body.targetLanguages?.length
+				? [...new Set(body.targetLanguages)]
+				: [body.targetLanguage];
+
+			const results: {
+				copied: number;
+				error?: string;
+				targetLanguage: string;
+			}[] = [];
+			for (const target of targets) {
+				if (!target || target === body.sourceLanguage) continue;
+				try {
+					const result = await PublishingService.copyScreenshots(
+						params.appId,
+						body.versionId,
+						body.sourceLanguage,
+						target,
+						body.displayType,
+						body.copyLocalizations,
+					);
+					results.push({ copied: result.copied, targetLanguage: target });
+				} catch (err) {
+					results.push({
+						copied: 0,
+						error: err instanceof Error ? err.message : String(err),
+						targetLanguage: target,
+					});
+				}
+			}
+
+			const copied = results.reduce((sum, r) => sum + r.copied, 0);
+			// Backward-compatible shape: `copied` total plus per-target results.
+			return { copied, results };
 		},
 		{
 			body: t.Object({
 				copyLocalizations: t.Optional(t.Boolean()),
 				displayType: t.Optional(t.String({ maxLength: 100, minLength: 1 })),
 				sourceLanguage: t.String({ maxLength: 20, minLength: 1 }),
+				// Primary single target (kept required for contract stability);
+				// targetLanguages, when present, supersedes it for multi-locale fan-out.
 				targetLanguage: t.String({ maxLength: 20, minLength: 1 }),
+				targetLanguages: t.Optional(
+					t.Array(t.String({ maxLength: 20, minLength: 1 }), {
+						maxItems: 50,
+						minItems: 1,
+					}),
+				),
 				versionId: t.String({ maxLength: 200, minLength: 1 }),
 			}),
 			detail: {
 				description:
-					"Copy screenshots from one language to another within a version; optionally copy text localizations too",
+					"Copy screenshots from one language to one or many others within a version; optionally copy text localizations too",
 				tags: ["Publishing"],
 			},
 			params: appIdParams,

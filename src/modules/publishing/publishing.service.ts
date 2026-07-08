@@ -9,6 +9,7 @@ import { PrivacyDeclarationService } from "@/modules/privacy-declaration/privacy
 import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
 import { createAppStoreClient } from "@/providers/app-store/client";
+import { isMockCredentials as isAppStoreMockCredentials } from "@/providers/app-store/types";
 import { db } from "@/utils/db";
 import {
 	apps,
@@ -87,8 +88,10 @@ const REQUIRED_SIZES: Record<string, [number, number][]> = {
 		[1290, 2796],
 		[2796, 1290],
 	],
-	// Android devices — use iPhone-compatible sizes as defaults
-	// GP accepts any size; these match iPhone for reuse of assets
+	// Android devices — RECOMMENDED sizes only (used for auto-crop targets and
+	// split/preview). Actual validation for these display types is flexible:
+	// Google Play accepts any size within GP_MIN_SIDE_PX..GP_MAX_SIDE_PX per
+	// side and aspect ratio up to GP_MAX_ASPECT_RATIO (see isWithinGpBounds).
 	phone: [
 		[1284, 2778],
 		[2778, 1284],
@@ -125,6 +128,24 @@ const DISPLAY_TYPE_NAMES: Record<string, string> = {
 	tenInch: 'Android 10" tablet',
 };
 
+// Google Play does not enforce exact screenshot dimensions — any size within
+// these bounds is accepted (each side 320–3840px, aspect ratio up to 2:1).
+// Only Apple display types require exact-match presets.
+const GP_FLEX_DISPLAY_TYPES = new Set(["phone", "sevenInch", "tenInch"]);
+const GP_MIN_SIDE_PX = 320;
+const GP_MAX_SIDE_PX = 3840;
+const GP_MAX_ASPECT_RATIO = 2;
+
+function isWithinGpBounds(width: number, height: number): boolean {
+	const minSide = Math.min(width, height);
+	const maxSide = Math.max(width, height);
+	return (
+		minSide >= GP_MIN_SIDE_PX &&
+		maxSide <= GP_MAX_SIDE_PX &&
+		maxSide / minSide <= GP_MAX_ASPECT_RATIO
+	);
+}
+
 interface DimensionValidation {
 	displayType: string;
 	displayTypeName: string;
@@ -155,6 +176,26 @@ function validateScreenshotDimensions(
 	const displayTypeName = DISPLAY_TYPE_NAMES[displayType] ?? displayType;
 	const matchedSize =
 		supportedDimensions.find(([w, h]) => w === width && h === height) ?? null;
+
+	// Google Play display types: flexible range validation (documented GP rule:
+	// each side 320-3840px, longer side at most 2x the shorter). Exact preset
+	// matches stay valid too — they are this app's established editor/export
+	// targets, so they must never regress to invalid.
+	if (GP_FLEX_DISPLAY_TYPES.has(displayType)) {
+		const valid = matchedSize !== null || isWithinGpBounds(width, height);
+		const suggestion = valid
+			? `${displayTypeName} accepts ${width}x${height}.`
+			: `${displayTypeName} accepts any size from ${GP_MIN_SIDE_PX} to ${GP_MAX_SIDE_PX}px per side with aspect ratio up to ${GP_MAX_ASPECT_RATIO}:1; you provided ${width}x${height}.`;
+		return {
+			displayType,
+			displayTypeName,
+			matchedSize,
+			providedDimensions: [width, height],
+			suggestion,
+			supportedDimensions,
+			valid,
+		};
+	}
 
 	const supportedList = supportedDimensions
 		.map(([w, h]) => `${w}x${h}`)
@@ -202,6 +243,26 @@ async function processScreenshot(
 
 	if (imgW === 0 || imgH === 0) {
 		throw new Error("Could not read image dimensions");
+	}
+
+	// Google Play accepts flexible sizes — when the source is already within
+	// GP bounds and the user did not request a crop, pass pixels through
+	// unchanged (PNG-convert + flatten only) instead of stretching to a preset.
+	if (
+		!cropParams &&
+		!targetSizeOverride &&
+		GP_FLEX_DISPLAY_TYPES.has(displayType) &&
+		isWithinGpBounds(imgW, imgH)
+	) {
+		const passthrough = await sharp(inputBuffer)
+			.flatten({ background: { b: 255, g: 255, r: 255 } })
+			.png({ compressionLevel: 6 })
+			.toBuffer();
+		log.info(
+			{ from: `${imgW}x${imgH}`, to: `${imgW}x${imgH}` },
+			"Processed screenshot (GP pass-through)",
+		);
+		return { buffer: passthrough, height: imgH, width: imgW };
 	}
 
 	// Pick target size
@@ -1796,30 +1857,36 @@ export class PublishingService {
 		return { deleted: true };
 	}
 
+	/**
+	 * Screenshots stored in the local assets table, mapped to the response
+	 * shape of the screenshots endpoint. Used for Google Play (source of
+	 * truth is the DB) and for mock/demo App Store stores that have no live
+	 * App Store Connect connection.
+	 */
+	private static async getDbScreenshots(appId: string) {
+		const dbAssets = await db
+			.select()
+			.from(assets)
+			.where(and(eq(assets.appId, appId), eq(assets.assetType, "screenshot")));
+
+		return dbAssets.map((a) => ({
+			deviceType: a.deviceType ?? "phone",
+			displayType: a.deviceType ?? "phone",
+			externalId: a.externalId ?? a.id,
+			height: a.height ?? null,
+			language: a.language ?? "en-US",
+			screenshotSetId: `gp-${a.deviceType ?? "phone"}-${a.language ?? "en-US"}`,
+			url: a.url ?? "",
+			width: a.width ?? null,
+		}));
+	}
+
 	static async getVersionScreenshots(appId: string, versionId: string) {
 		const app = await PublishingService.getAppWithStore(appId);
 
 		// Google Play: return assets from the assets table as screenshots
 		if (app.store.type !== "app_store") {
-			const gpAssets = await db
-				.select()
-				.from(assets)
-				.where(
-					and(eq(assets.appId, appId), eq(assets.assetType, "screenshot")),
-				);
-
-			const screenshots = gpAssets.map((a) => ({
-				deviceType: a.deviceType ?? "phone",
-				displayType: a.deviceType ?? "phone",
-				externalId: a.externalId ?? a.id,
-				height: a.height ?? null,
-				language: a.language ?? "en-US",
-				screenshotSetId: `gp-${a.deviceType ?? "phone"}-${a.language ?? "en-US"}`,
-				url: a.url ?? "",
-				width: a.width ?? null,
-			}));
-
-			return { screenshots };
+			return { screenshots: await PublishingService.getDbScreenshots(appId) };
 		}
 
 		if (!app.store.credentials) {
@@ -1832,6 +1899,11 @@ export class PublishingService {
 			app.store.credentials,
 			app.store.workspaceId,
 		);
+		// Mock/demo App Store stores have no ASC key — serve seeded DB assets
+		// (same shape as the GP branch) instead of calling the live ASC API.
+		if (isAppStoreMockCredentials(credentials)) {
+			return { screenshots: await PublishingService.getDbScreenshots(appId) };
+		}
 		if (!credentials.keyId)
 			buildError("badRequest", { info: "Missing App Store credentials" });
 

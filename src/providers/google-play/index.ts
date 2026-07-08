@@ -97,8 +97,8 @@ export class GooglePlayProvider implements StoreProvider {
 		log.info("Google Play privacy declaration update not supported via API");
 	}
 
-	async validateCredentials(): Promise<boolean> {
-		if (this.isMock) return true;
+	async validateCredentials(): Promise<{ reason?: string; valid: boolean }> {
+		if (this.isMock) return { valid: true };
 
 		try {
 			const client = await this.getClient();
@@ -115,10 +115,13 @@ export class GooglePlayProvider implements StoreProvider {
 				{ appCount: client.packageNames.length },
 				"Google Play credentials validated successfully",
 			);
-			return true;
+			return { valid: true };
 		} catch (err) {
 			log.error({ err }, "Google Play credentials validation failed");
-			return false;
+			return {
+				reason: err instanceof Error ? err.message : String(err),
+				valid: false,
+			};
 		}
 	}
 

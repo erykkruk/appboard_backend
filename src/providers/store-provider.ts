@@ -10,7 +10,13 @@ export interface CategoryData {
 }
 
 export interface StoreProvider {
-	validateCredentials(): Promise<boolean>;
+	/**
+	 * Verify the stored credentials against the live store API. On failure the
+	 * human-readable reason is returned so it can be surfaced to the user
+	 * (wrong key, missing permission, expired token…) instead of a generic
+	 * "invalid credentials".
+	 */
+	validateCredentials(): Promise<{ reason?: string; valid: boolean }>;
 	fetchApps(): Promise<AppData[]>;
 	fetchListings(appId: string): Promise<ListingData[]>;
 	updateListing(

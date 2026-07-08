@@ -7,7 +7,7 @@
  *
  * Requires .env variables:
  *   GP_SERVICE_ACCOUNT_JSON (base64 or raw JSON of service account)
- *   GP_TEST_PACKAGE_NAME (e.g. ai.themuseo.mobile)
+ *   GP_TEST_PACKAGE_NAME (e.g. com.example.app)
  *
  * To run:
  *   GP_INTEGRATION=1 bun test src/test/real-gp-integration.test.ts

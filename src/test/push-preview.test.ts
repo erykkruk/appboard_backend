@@ -1,7 +1,12 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { publishingController } from "@/modules/publishing";
-import { authGuard, authRequest, authRequestB } from "@/test/setup";
+import {
+	authGuard,
+	authRequest,
+	authRequestB,
+	cleanupStores,
+} from "@/test/setup";
 import { seedTestApp, seedTestStore } from "@/test/test-helpers";
 import { errorHandler } from "@/utils/errors/errorHandler";
 
@@ -12,6 +17,14 @@ describe("GET /api/apps/:appId/publishing/push-preview", () => {
 		.group("/api", (app) => app.use(publishingController));
 
 	const FAKE_UUID = "00000000-0000-0000-0000-000000000000";
+
+	// Track every store this suite seeds so we can remove them (and their
+	// cascade-linked apps) afterwards — otherwise leaked apps pollute the
+	// workspace-wide app list and make other suites' apps[0] assertions flaky.
+	const seededStoreIds: string[] = [];
+	afterAll(async () => {
+		await cleanupStores(seededStoreIds);
+	});
 
 	it("returns 422 for invalid appId", async () => {
 		const res = await app.handle(
@@ -33,6 +46,7 @@ describe("GET /api/apps/:appId/publishing/push-preview", () => {
 
 	it("returns push preview with correct structure for Google Play app", async () => {
 		const store = await seedTestStore();
+		seededStoreIds.push(store.id);
 		const testApp = await seedTestApp(store.id);
 
 		const res = await app.handle(
@@ -64,6 +78,7 @@ describe("GET /api/apps/:appId/publishing/push-preview", () => {
 
 	it("returns ageRating.configured=false when no age rating exists", async () => {
 		const store = await seedTestStore();
+		seededStoreIds.push(store.id);
 		const testApp = await seedTestApp(store.id);
 
 		const res = await app.handle(
@@ -78,6 +93,7 @@ describe("GET /api/apps/:appId/publishing/push-preview", () => {
 
 	it("returns privacy.configured=false when no privacy declaration exists", async () => {
 		const store = await seedTestStore();
+		seededStoreIds.push(store.id);
 		const testApp = await seedTestApp(store.id);
 
 		const res = await app.handle(
@@ -92,6 +108,7 @@ describe("GET /api/apps/:appId/publishing/push-preview", () => {
 
 	it("blocks cross-workspace access", async () => {
 		const store = await seedTestStore();
+		seededStoreIds.push(store.id);
 		const testApp = await seedTestApp(store.id);
 
 		const res = await app.handle(

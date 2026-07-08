@@ -299,7 +299,7 @@ IMPORTANT RULES FOR GROUPS:
 - To DELETE an existing subscription group: use "groupDeletes" with the group UUID or name.
 - To EDIT an existing subscription (price, name, localizations): use "edits" with the subscription's UUID, name, or productId.
 - You can reference existing products by their UUID, name, or productId — the system will resolve them automatically.
-- When the user mentions a product by name (e.g. "Museo Pro" group, "Pro Weekly" subscription), match it to the EXISTING PRODUCTS list above and use the corresponding identifier.
+- When the user mentions a product by name (e.g. a "Premium" group, "Pro Weekly" subscription), match it to the EXISTING PRODUCTS list above and use the corresponding identifier.
 
 Include ONLY the sections that apply (omit empty arrays). Reference existing product UUIDs in "edits", "deletes", "groupEdits", and "groupDeletes".
 Always include the plan block when making a concrete proposal so the user can review and execute it.

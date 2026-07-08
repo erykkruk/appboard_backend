@@ -31,3 +31,23 @@ export const reorderGroupsBody = t.Object({
 export const reorderMembersBody = t.Object({
 	appIds: t.Array(t.String({ format: "uuid" }), { minItems: 1 }),
 });
+
+export const generateListingsBody = t.Object({
+	fields: t.Optional(
+		t.Array(
+			t.Union([
+				t.Literal("title"),
+				t.Literal("subtitle"),
+				t.Literal("shortDescription"),
+				t.Literal("description"),
+				t.Literal("fullDescription"),
+				t.Literal("keywords"),
+				t.Literal("promotionalText"),
+				t.Literal("whatsNew"),
+			]),
+			{ minItems: 1 },
+		),
+	),
+	sourceLanguage: t.Optional(t.String({ maxLength: 20, minLength: 2 })),
+	translateToOthers: t.Optional(t.Boolean()),
+});

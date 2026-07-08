@@ -129,6 +129,16 @@ Workspace-scoped toggles for 12 modules. Reuses the `settings` table with `FEATU
 
 **Registration order** (`src/index.ts`): `featuresController` → `featureGuard` → all other controllers. Guard must run BEFORE protected controllers inside the `/api` group.
 
+## Research Module
+
+Market research for ANY store app (not just connected ones) — port of the standalone aso-tool. `src/modules/research/`, all endpoints `POST /api/research/*` (search, scrape, analyze, keywords, markets, visual, competitors, compare), gated by the `RESEARCH` feature flag.
+
+- **Scraping**: iTunes API via raw fetch (`appstore.client.ts`); Google Play via `google-play-scraper` (`playstore.client.ts`, sort NEWEST = raw `2`).
+- **IMPORTANT — Apple reviews RSS is dead** (returns 0 entries for every app since mid-2026). `appstoreReviews()` tries RSS first, then falls back to parsing `"$kind":"Review"` objects server-rendered into `https://apps.apple.com/{cc}/app/id{id}?see-all=reviews` (~50 reviews). The amp-api requires a token that is no longer embedded in the page/JS — don't waste time hunting for it.
+- **AI** (`research.ai.ts`): OpenRouter with workspace `OPENROUTER_API_KEY` setting (same as ai module); model override via `RESEARCH_MODEL` setting or request body; Polish prompts; responses validated with ArkType; deep mode = map-reduce (chunks of 150, 3 parallel).
+- **Heuristics** (`research.heuristics.ts`): keyword-bucket categorization (EN+PL) of negative reviews — works without an AI key, returned with every scrape.
+- Caps: keywords ≤15, single-pass analysis ≤300 reviews, Play reviews 250/1500 (deep), compare 120/side, visual ≤6 images.
+
 ## History + Diff System
 
 GitHub-style version control for listing fields.
@@ -144,6 +154,7 @@ GitHub-style version control for listing fields.
 - NEVER put business logic in controllers — use service classes
 - NEVER use raw SQL — use Drizzle ORM
 - NEVER store credentials unencrypted — use `encrypt()`/`decrypt()` from `@/utils/crypto`
+- NEVER save store credentials outside the E2EE vault — `encryptCredentials()` requires a configured + unlocked workspace vault (no vault → 428 `VAULT_REQUIRED`); the env-key fallback exists only for READING legacy blobs
 - NEVER use `any` type
 - NEVER skip workspace scoping — every endpoint MUST use `workspaceId` from auth guard
 - NEVER write tests without auth context — always use `authRequest()` or `authRequestB()`
@@ -169,7 +180,7 @@ GitHub-style version control for listing fields.
 
 ## Ports
 
-- Backend: 3001
+- Backend: 6680
 - PostgreSQL: 5441
 
 ## Environment
