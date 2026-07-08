@@ -810,6 +810,21 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 			}),
 		},
 	)
+	.post(
+		"/:appId/publishing/publish-localizations",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return PublishingService.publishAllDirtyLocalizations(params.appId);
+		},
+		{
+			detail: {
+				description:
+					"Push ALL dirty version localizations (every version) to App Store Connect",
+				tags: ["Publishing"],
+			},
+			params: appIdParams,
+		},
+	)
 	.get(
 		"/:appId/publishing/version",
 		async ({ params, workspaceId }) => {

@@ -430,6 +430,15 @@ export class PublishingService {
 			})
 			.filter((c) => c.fields.length > 0);
 
+		// App Store listing content lives in per-version localizations, NOT the
+		// `listings` table — fold dirty version-localization drafts into the same
+		// listing-changes summary so the push flow sees (and can push) them.
+		if (app.store.type === "app_store") {
+			const versionLocChanges =
+				await PublishingService.getDirtyVersionLocalizationChanges(appId);
+			listingChanges.push(...versionLocChanges);
+		}
+
 		// Asset changes
 		const assetChanges = await AssetsService.getDirtyCount(appId);
 
@@ -1608,6 +1617,97 @@ export class PublishingService {
 			...(errors.length > 0 ? { errors } : {}),
 			published,
 		};
+	}
+
+	// Version-localization fields the editor writes and the push sends to ASC.
+	private static readonly VERSION_LOC_FIELDS = [
+		"title",
+		"subtitle",
+		"keywords",
+		"description",
+		"promotionalText",
+		"whatsNew",
+		"marketingUrl",
+		"supportUrl",
+	] as const;
+
+	/**
+	 * Summarize dirty App Store version-localization drafts as listing changes
+	 * (`{ language, fields }`) so the overview/push-preview surfaces them the same
+	 * way as Google Play listing edits.
+	 */
+	static async getDirtyVersionLocalizationChanges(appId: string) {
+		const rows = await db
+			.select()
+			.from(versionLocalizations)
+			.innerJoin(
+				appVersions,
+				eq(versionLocalizations.versionId, appVersions.id),
+			)
+			.where(eq(appVersions.appId, appId));
+
+		const byVersionLang = new Map<string, Record<string, unknown>>();
+		for (const row of rows) {
+			const vl = row.version_localizations;
+			byVersionLang.set(`${vl.versionId}:${vl.language}:${vl.source}`, vl);
+		}
+
+		const changes: { fields: string[]; language: string }[] = [];
+		for (const row of rows) {
+			const vl = row.version_localizations;
+			if (vl.source !== "draft" || !vl.isDirty) continue;
+			const remote = byVersionLang.get(`${vl.versionId}:${vl.language}:remote`);
+			const fields: string[] = [];
+			for (const field of PublishingService.VERSION_LOC_FIELDS) {
+				const draftVal = (vl as Record<string, unknown>)[field] ?? null;
+				const remoteVal = remote ? (remote[field] ?? null) : null;
+				if (draftVal !== remoteVal && draftVal !== null) fields.push(field);
+			}
+			if (fields.length > 0) changes.push({ fields, language: vl.language });
+		}
+		return changes;
+	}
+
+	/**
+	 * Push EVERY dirty version localization across all of the app's versions to
+	 * App Store Connect. Used by the "Push to App Store" flow so a user's version
+	 * edits actually reach ASC (the `listings`-table publish path only covers
+	 * Google Play). Returns the aggregate published count + any errors.
+	 */
+	static async publishAllDirtyLocalizations(appId: string) {
+		const dirtyVersions = await db
+			.selectDistinct({ externalId: appVersions.externalId })
+			.from(versionLocalizations)
+			.innerJoin(
+				appVersions,
+				eq(versionLocalizations.versionId, appVersions.id),
+			)
+			.where(
+				and(
+					eq(appVersions.appId, appId),
+					eq(versionLocalizations.source, "draft"),
+					eq(versionLocalizations.isDirty, true),
+				),
+			);
+
+		if (dirtyVersions.length === 0) return { errors: [], published: 0 };
+
+		let published = 0;
+		const errors: string[] = [];
+		for (const { externalId } of dirtyVersions) {
+			if (!externalId) continue;
+			try {
+				const result = await PublishingService.publishVersionLocalizations(
+					appId,
+					externalId,
+				);
+				published += result.published ?? 0;
+				if (result.errors) errors.push(...result.errors);
+			} catch (err) {
+				errors.push(err instanceof Error ? err.message : String(err));
+			}
+		}
+		return { errors, published };
 	}
 
 	static async addVersionLocalization(
