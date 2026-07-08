@@ -1,5 +1,7 @@
 import { afterAll, beforeAll } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { vaultSession } from "@/modules/vault/vault.session";
+import { encryptWithKey } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import {
 	settings,
@@ -7,6 +9,7 @@ import {
 	user,
 	workspaceMembers,
 	workspaces,
+	workspaceVault,
 } from "@/utils/db/schema";
 
 let app: import("@/index").App;
@@ -75,9 +78,37 @@ beforeAll(async () => {
 		})
 		.onConflictDoNothing();
 
+	// Store credentials require a configured + unlocked workspace vault.
+	// Give both test workspaces a deterministic vault and unlock it in-memory.
+	await ensureTestVault(TEST_WORKSPACE_ID);
+	await ensureTestVault(TEST_WORKSPACE_ID_B);
+
 	const mod = await import("@/index");
 	app = mod.default as unknown as import("@/index").App;
 });
+
+/** Deterministic 32-byte DEK — tests only. */
+export const TEST_VAULT_DEK = Buffer.alloc(32, 7);
+
+async function ensureTestVault(workspaceId: string) {
+	await db
+		.insert(workspaceVault)
+		.values({
+			kdfParams: {
+				algo: "argon2id",
+				iterations: 3,
+				memoryKiB: 65536,
+				parallelism: 1,
+			},
+			kdfSalt: Buffer.from("test-salt").toString("base64"),
+			verifier: encryptWithKey(TEST_VAULT_DEK, "appboard-vault-v1"),
+			workspaceId,
+			wrapNonce: Buffer.from("test-nonce").toString("base64"),
+			wrappedDek: Buffer.from("test-wrapped-dek").toString("base64"),
+		})
+		.onConflictDoNothing();
+	vaultSession.unlock(workspaceId, TEST_VAULT_DEK);
+}
 
 afterAll(() => {
 	app?.stop?.();

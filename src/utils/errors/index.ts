@@ -19,6 +19,7 @@ export const errors = {
 	unauthorized: { code: "UNAUTHORIZED", status: 401 },
 	validationFailed: { code: "VALIDATION", status: 422 },
 	vaultLocked: { code: "VAULT_LOCKED", status: 423 },
+	vaultRequired: { code: "VAULT_REQUIRED", status: 428 },
 } as const satisfies Record<
 	string,
 	{ code: string; data?: ErrorData; status: number }
