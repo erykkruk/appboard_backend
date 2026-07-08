@@ -69,6 +69,16 @@ if (smtpConfigured) {
 }
 
 export const auth = betterAuth({
+	// Merge social logins into an existing account with the same email instead
+	// of creating a duplicate user (which would trigger the workspace-create
+	// hook and orphan the user's existing data). Google and Apple both return
+	// verified emails, so they are safe to trust for automatic linking.
+	account: {
+		accountLinking: {
+			enabled: true,
+			trustedProviders: ["apple", "google"],
+		},
+	},
 	advanced: {
 		disableCSRFCheck: isDev,
 	},
