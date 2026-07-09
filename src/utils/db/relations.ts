@@ -10,6 +10,7 @@ import {
 	appGroups,
 	appPrivacyDeclarations,
 	apps,
+	appTrackingConfig,
 	appVersions,
 	assets,
 	groupAsoProfiles,
@@ -19,6 +20,8 @@ import {
 	purchaseLocalizations,
 	purchasePrices,
 	purchaseReviewInfo,
+	rankSnapshots,
+	researchRuns,
 	reviews,
 	screenshotScenes,
 	session,
@@ -27,6 +30,7 @@ import {
 	subscriptionGroupLocalizations,
 	subscriptionGroupReviewInfo,
 	subscriptionGroups,
+	trackedKeywords,
 	user,
 	versionLocalizations,
 	workspaceMembers,
@@ -62,8 +66,10 @@ export const workspacesRelations = relations(workspaces, ({ many }) => ({
 	apiKeys: many(apiKeys),
 	appGroups: many(appGroups),
 	members: many(workspaceMembers),
+	researchRuns: many(researchRuns),
 	settings: many(settings),
 	stores: many(stores),
+	trackingConfigs: many(appTrackingConfig),
 }));
 
 export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
@@ -124,6 +130,8 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 		fields: [apps.id],
 		references: [appPrivacyDeclarations.appId],
 	}),
+	rankSnapshots: many(rankSnapshots),
+	researchRuns: many(researchRuns),
 	reviews: many(reviews),
 	screenshotScenes: many(screenshotScenes),
 	store: one(stores, {
@@ -131,6 +139,11 @@ export const appsRelations = relations(apps, ({ many, one }) => ({
 		references: [stores.id],
 	}),
 	subscriptionGroups: many(subscriptionGroups),
+	trackedKeywords: many(trackedKeywords),
+	trackingConfig: one(appTrackingConfig, {
+		fields: [apps.id],
+		references: [appTrackingConfig.appId],
+	}),
 	versions: many(appVersions),
 }));
 
@@ -366,6 +379,50 @@ export const aiChatMessagesRelations = relations(aiChatMessages, ({ one }) => ({
 	}),
 	workspace: one(workspaces, {
 		fields: [aiChatMessages.workspaceId],
+		references: [workspaces.id],
+	}),
+}));
+
+// ── Research history & Rank tracking relations ─────────────────────
+
+export const appTrackingConfigRelations = relations(
+	appTrackingConfig,
+	({ one }) => ({
+		app: one(apps, {
+			fields: [appTrackingConfig.appId],
+			references: [apps.id],
+		}),
+		workspace: one(workspaces, {
+			fields: [appTrackingConfig.workspaceId],
+			references: [workspaces.id],
+		}),
+	}),
+);
+
+export const trackedKeywordsRelations = relations(
+	trackedKeywords,
+	({ one }) => ({
+		app: one(apps, {
+			fields: [trackedKeywords.appId],
+			references: [apps.id],
+		}),
+	}),
+);
+
+export const rankSnapshotsRelations = relations(rankSnapshots, ({ one }) => ({
+	app: one(apps, {
+		fields: [rankSnapshots.appId],
+		references: [apps.id],
+	}),
+}));
+
+export const researchRunsRelations = relations(researchRuns, ({ one }) => ({
+	app: one(apps, {
+		fields: [researchRuns.appId],
+		references: [apps.id],
+	}),
+	workspace: one(workspaces, {
+		fields: [researchRuns.workspaceId],
 		references: [workspaces.id],
 	}),
 }));

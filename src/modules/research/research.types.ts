@@ -1,5 +1,10 @@
 export type ResearchStore = "appstore" | "playstore";
 
+/** Map a connected app's platform (`ios` / `android`) to its research store. */
+export function platformToStore(platform: string): ResearchStore {
+	return platform === "ios" ? "appstore" : "playstore";
+}
+
 export interface ResearchAppMeta {
 	store: ResearchStore;
 	id: string;
@@ -114,6 +119,19 @@ export interface HeuristicStats {
 	negative: number;
 	negativeShare: number;
 	buckets: HeuristicBucket[];
+}
+
+/**
+ * Full persisted payload of a saved research run (standalone tool or per-app,
+ * manual or scheduled). Stored as jsonb in the `research_runs` table.
+ */
+export interface ResearchRunReport {
+	meta: ResearchAppMeta;
+	heuristics: HeuristicStats;
+	reviewsCount: number;
+	keywords?: KeywordPosition[];
+	analysis?: ResearchAnalysis;
+	deep?: boolean;
 }
 
 export interface ParsedStoreUrl {

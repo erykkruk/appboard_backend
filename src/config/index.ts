@@ -29,6 +29,12 @@ const configSchema = type({
 	OPENROUTER_MODEL: "string?",
 	OPENROUTER_URL: "string?",
 	PORT: "string?",
+	// Background scheduler (rank tracking + auto-research). Set to "false" to
+	// disable the in-process timer (e.g. when running a second instance that
+	// must not double-run scheduled jobs). Always disabled under the test runner.
+	SCHEDULER_ENABLED: "string?",
+	// IANA timezone the daily 00:00 / 12:00 rank checks are anchored to.
+	SCHEDULER_TZ: "string?",
 	SEED_USER_EMAIL: "string?",
 	SEED_USER_NAME: "string?",
 	SMTP_FROM: "string?",

@@ -10,6 +10,7 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+import type { ResearchRunReport } from "@/modules/research/research.types";
 import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
 
 const timeColumns = {
@@ -732,6 +733,92 @@ export const purchaseReviewInfo = pgTable("purchase_review_info", {
 	useGroupDefault: boolean().notNull().default(true),
 });
 
+// ── Research history & Rank tracking ────────────────────────────────
+
+// Per-app rank-tracking + auto-research configuration. One row per app.
+// All automations default to OFF so nothing runs until the user opts in.
+export const appTrackingConfig = pgTable(
+	"app_tracking_config",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" })
+			.unique(),
+		autoResearchEnabled: boolean().notNull().default(false),
+		// daily | weekly | monthly
+		autoResearchFrequency: varchar({ length: 20 }).notNull().default("weekly"),
+		emailRankDigest: boolean().notNull().default(false),
+		lastAutoResearchAt: timestamp(),
+		lastRankCheckAt: timestamp(),
+		// Where reports are sent; NULL falls back to the workspace owner's email.
+		notifyEmail: varchar({ length: 255 }),
+		rankTrackingEnabled: boolean().notNull().default(false),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.workspaceId)],
+);
+
+// Keywords the user wants to track per app + country. Capped at 20 per
+// (appId, country) in the service.
+export const trackedKeywords = pgTable(
+	"tracked_keywords",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		country: varchar({ length: 2 }).notNull(),
+		keyword: varchar({ length: 255 }).notNull(),
+	},
+	(t) => [unique().on(t.appId, t.country, t.keyword), index().on(t.appId)],
+);
+
+// Time-series of a tracked keyword's search-ranking position. `createdAt` is
+// the capture time; `position` NULL means "not in the top 50".
+export const rankSnapshots = pgTable(
+	"rank_snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		country: varchar({ length: 2 }).notNull(),
+		keyword: varchar({ length: 255 }).notNull(),
+		platform: varchar({ length: 20 }).notNull(),
+		position: integer(),
+	},
+	(t) => [index().on(t.appId, t.keyword, t.country), index().on(t.appId)],
+);
+
+// Persisted research reports. `appId` NULL = a save from the standalone tool;
+// otherwise the run is tied to a connected app.
+export const researchRuns = pgTable(
+	"research_runs",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid().references(() => apps.id, { onDelete: "set null" }),
+		country: varchar({ length: 2 }),
+		externalId: varchar({ length: 255 }),
+		// manual | scheduled
+		kind: varchar({ length: 20 }).notNull().default("manual"),
+		report: jsonb().$type<ResearchRunReport>().notNull(),
+		store: varchar({ length: 20 }),
+		summary: text(),
+		title: varchar({ length: 255 }),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.workspaceId), index().on(t.appId)],
+);
+
 export const schema = {
 	account,
 	aiChatMessages,
@@ -743,6 +830,7 @@ export const schema = {
 	appGroups,
 	appPrivacyDeclarations,
 	apps,
+	appTrackingConfig,
 	appVersions,
 	assets,
 	errorLogs,
@@ -753,6 +841,8 @@ export const schema = {
 	purchaseLocalizations,
 	purchasePrices,
 	purchaseReviewInfo,
+	rankSnapshots,
+	researchRuns,
 	reviews,
 	screenshotScenes,
 	session,
@@ -761,6 +851,7 @@ export const schema = {
 	subscriptionGroupLocalizations,
 	subscriptionGroupReviewInfo,
 	subscriptionGroups,
+	trackedKeywords,
 	user,
 	verification,
 	versionLocalizations,

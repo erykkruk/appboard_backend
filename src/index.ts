@@ -36,6 +36,8 @@ import { settingsController } from "@/modules/settings";
 import { storesController } from "@/modules/stores";
 import { storeCapabilityGuard } from "@/modules/stores/store-capabilities.guard";
 import { bootstrap, systemController } from "@/modules/system";
+import { trackingController } from "@/modules/tracking";
+import { startScheduler } from "@/modules/tracking/scheduler.service";
 import { vaultController } from "@/modules/vault";
 import { vaultActionGuard } from "@/modules/vault/vault.guard";
 import { errorHandler } from "@/utils/errors/errorHandler";
@@ -93,13 +95,15 @@ const app = new Elysia()
 			.use(purchasesController)
 			.use(monetizationChatController)
 			.use(historyController)
-			.use(researchController),
+			.use(researchController)
+			.use(trackingController),
 	)
 	.listen(port);
 
 export type App = typeof app;
 
 await bootstrap();
+startScheduler();
 
 log.info(`AppBoard backend running on http://localhost:${port}`);
 

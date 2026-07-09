@@ -118,6 +118,26 @@ export class ResearchService {
 		return { heuristics: computeHeuristics(reviews), meta, reviews };
 	}
 
+	/**
+	 * Search-ranking position (top 50) of a single app for one keyword in one
+	 * store. Returns null on error or when the app is not in the top results.
+	 * A single seam so callers (rank tracking) can mock store lookups in tests.
+	 */
+	static async positionFor(
+		store: ResearchStore,
+		keyword: string,
+		id: string,
+		country: string,
+	): Promise<number | null> {
+		try {
+			return store === "appstore"
+				? await appstoreSearchPosition(keyword, id, country)
+				: await playstoreSearchPosition(keyword, id, country);
+		} catch {
+			return null;
+		}
+	}
+
 	static async keywordPositions(
 		keywords: string[],
 		country: string,

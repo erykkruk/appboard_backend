@@ -104,3 +104,28 @@ export const compareBody = t.Object({
 	ourMeta: appMeta,
 	ourReviews: t.Array(review),
 });
+
+// A saved research report. `meta` is validated strictly; the derived sections
+// (heuristics/keywords/analysis) are stored verbatim as jsonb, so they are
+// accepted as opaque objects here.
+const researchRunReport = t.Object(
+	{
+		analysis: t.Optional(t.Any()),
+		deep: t.Optional(t.Boolean()),
+		heuristics: t.Any(),
+		keywords: t.Optional(t.Any()),
+		meta: appMeta,
+		reviewsCount: t.Number(),
+	},
+	{ additionalProperties: true },
+);
+
+export const saveRunBody = t.Object({
+	appId: t.Optional(t.String()),
+	country: t.Optional(country),
+	report: researchRunReport,
+	summary: t.Optional(t.String()),
+	title: t.Optional(t.String()),
+});
+
+export const runIdParams = t.Object({ runId: t.String() });

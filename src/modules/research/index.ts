@@ -1,16 +1,21 @@
 import Elysia from "elysia";
+import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchAiService } from "./research.ai";
+import { ResearchRunsService } from "./research.runs.service";
 import {
 	analyzeBody,
 	compareBody,
 	competitorsBody,
 	keywordsBody,
 	marketsBody,
+	runIdParams,
+	saveRunBody,
 	scrapeBody,
 	searchBody,
 	visualBody,
 } from "./research.schema";
 import { ResearchService } from "./research.service";
+import type { ResearchRunReport } from "./research.types";
 
 export const researchController = new Elysia({ prefix: "/research" })
 	.post(
@@ -187,5 +192,68 @@ export const researchController = new Elysia({ prefix: "/research" })
 					"Scrape a competitor and (optionally) build an AI diff report vs our app",
 				tags: ["Research"],
 			},
+		},
+	)
+	.post(
+		"/runs",
+		async ({ body, workspaceId }) => {
+			if (body.appId) {
+				await verifyAppOwnership(body.appId, workspaceId!);
+			}
+			const run = await ResearchRunsService.saveRun(workspaceId!, {
+				appId: body.appId ?? null,
+				country: body.country,
+				report: body.report as unknown as ResearchRunReport,
+				summary: body.summary,
+				title: body.title,
+			});
+			return { run };
+		},
+		{
+			body: saveRunBody,
+			detail: {
+				description: "Save a research report to history",
+				tags: ["Research"],
+			},
+		},
+	)
+	.get(
+		"/runs",
+		async ({ workspaceId }) => {
+			const runs = await ResearchRunsService.listStandaloneRuns(workspaceId!);
+			return { runs };
+		},
+		{
+			detail: {
+				description: "List saved standalone research runs (newest first)",
+				tags: ["Research"],
+			},
+		},
+	)
+	.get(
+		"/runs/:runId",
+		async ({ params, workspaceId }) => {
+			const run = await ResearchRunsService.getRun(workspaceId!, params.runId);
+			return { run };
+		},
+		{
+			detail: {
+				description: "Get a saved research run with its full report",
+				tags: ["Research"],
+			},
+			params: runIdParams,
+		},
+	)
+	.delete(
+		"/runs/:runId",
+		async ({ params, workspaceId }) => {
+			return ResearchRunsService.deleteRun(workspaceId!, params.runId);
+		},
+		{
+			detail: {
+				description: "Delete a saved research run",
+				tags: ["Research"],
+			},
+			params: runIdParams,
 		},
 	);
