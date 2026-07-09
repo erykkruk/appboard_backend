@@ -1,156 +1,110 @@
 # Contributing to AppBoard Backend
 
-First off — thanks for taking the time to contribute! 🎉
+Thanks for your interest in contributing to AppBoard! This is the backend API
+(TypeScript, Bun, Elysia, Drizzle, PostgreSQL) for the source-available,
+self-hostable ASO (App Store Optimization) tool. Contributions of all kinds are
+welcome — bug fixes, features, docs, and tests.
 
-This document describes how to set up a development environment, our code style, and the pull request process.
-
----
+AppBoard is **source-available and free for personal & non-commercial use under
+the [PolyForm Noncommercial License 1.0.0](LICENSE)**. Note that this is **not**
+an OSI-approved open-source license — it restricts commercial use. By
+contributing, you agree that your contributions will be licensed under the same
+PolyForm Noncommercial License 1.0.0.
 
 ## Code of Conduct
 
-This project adheres to the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+This project follows the [Contributor Covenant](CODE_OF_CONDUCT.md). By
+participating, you are expected to uphold it. Please report unacceptable
+behavior to conduct@appboard.dev.
 
----
-
-## Ways to Contribute
-
-- **Report bugs** — open an issue using the bug report template
-- **Request features** — open an issue using the feature request template
-- **Improve docs** — README, inline docs, examples
-- **Fix bugs / implement features** — see below
-
----
-
-## Development Setup
-
-### Prerequisites
+## Prerequisites
 
 - [Bun](https://bun.sh/) `>= 1.3`
-- Docker & Docker Compose (for PostgreSQL)
+- [PostgreSQL](https://www.postgresql.org/) `>= 18` (or use the bundled `docker-compose.yml` via `bun run db:up`)
+- Docker (optional, for the bundled PostgreSQL container)
 
-### Setup
+## Local Setup
 
 ```bash
-git clone https://github.com/erykkruk/appboard-backend.git
-cd appboard-backend
+# 1. Fork and clone the repo, then:
 bun install
+
+# 2. Create your local env file and adjust values as needed
 cp .env.example .env
+# Generate a strong ENCRYPTION_KEY (32-byte hex):
+#   openssl rand -hex 32
+
+# 3. Start PostgreSQL (docker-compose)
 bun run db:up
-bun run db:generate
+
+# 4. Start the dev server (watch mode)
 bun run dev
 ```
 
-The server listens on `http://localhost:6680`.
+The API runs at `http://localhost:6680`. OpenAPI/Swagger docs are at
+`http://localhost:6680/openapi`. Migrations apply automatically on boot.
 
----
-
-## Project Structure
-
-```
-src/
-├── config/         # ArkType-validated env config + auth setup
-├── modules/        # Feature modules (controller + service + tests)
-│   └── {feature}/
-│       ├── index.ts              # Elysia controller
-│       ├── {feature}.service.ts  # Business logic
-│       ├── {feature}.types.ts    # Feature-specific types
-│       └── {feature}.test.ts     # Tests
-├── providers/      # External providers (App Store Connect, Google Play)
-├── utils/          # DB client, errors, crypto, logger
-└── test/           # Cross-module integration tests
-```
-
-### Adding a New Module
-
-1. Create `src/modules/{feature}/` with `index.ts`, `{feature}.service.ts`, `{feature}.types.ts`, `{feature}.test.ts`
-2. Define a service class holding business logic — **pass `workspaceId` to every DB query**
-3. Define an Elysia controller with routes — call `verifyAppOwnership` / `verifyStoreOwnership` where applicable
-4. Register the controller in `src/index.ts` under the `/api` group
-5. Write tests — use `authRequest()` (workspace A) and `authRequestB()` (workspace B) from `src/test/setup.ts`
-6. Include at least one **workspace isolation test** (workspace B must never see workspace A resources)
-
----
-
-## Code Style
-
-- **Linter / formatter:** [Biome](https://biomejs.dev/) — run `bunx biome check --write .` before committing
-- **Naming:**
-  - Files: `kebab-case.ts` or `dot.notation.ts` (e.g. `db.service.ts`)
-  - Classes: `PascalCase`
-  - Functions/variables: `camelCase`
-  - Constants: `SCREAMING_SNAKE_CASE`
-  - DB tables: `snake_case` (handled by Drizzle casing config)
-- **Imports:** use `@/` path alias instead of deep relative imports
-- **No `any`** — use `unknown` + narrowing, or a precise type
-- **No `console.log`** — use `createLogger()` from `@/utils/logger`
-- **No raw `throw new Error`** — use `buildError()` from `@/utils/errors`
-- **No raw SQL** — use Drizzle ORM; for credential storage use `encrypt()`/`decrypt()` from `@/utils/crypto`
-
----
-
-## Testing
-
-All tests run with `bun test`. We use the built-in Bun test runner.
+After changing the Drizzle schema, generate a migration:
 
 ```bash
-bun test                            # all tests
-bun test src/modules/apps           # only apps module
+bun run db:generate
 ```
 
-### Writing Tests
+## Before You Open a PR
 
-- **Always authenticate** via `authRequest()` (workspace A) — never hit endpoints unauthenticated
-- Test **workspace isolation** using `authRequestB()` — verify workspace B cannot access workspace A resources
-- Seed test data with helpers from `src/test/setup.ts`
-- Follow **Arrange → Act → Assert** structure
-- Prefer integration tests (full request lifecycle) over isolated unit tests for controllers
+Run the full local check suite and make sure everything passes:
 
----
+```bash
+bunx biome check --write .   # lint + format
+bunx tsc --noEmit            # type check
+bun test                     # unit + integration tests
+```
+
+- Add or update tests for any behavior you change. Tests must run authenticated
+  (see the workspace-scoping notes in `CLAUDE.md`).
+- Keep changes focused — one logical change per PR.
+
+## Branch Model
+
+- **`develop`** is the integration branch. Base your work on it and open PRs
+  **into `develop`**.
+- **`main`** is the released/deployed branch. Do not target it directly.
+
+```bash
+git checkout develop
+git pull
+git checkout -b feat/my-change
+```
 
 ## Commit Messages
 
 We use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
-<type>(<scope>): <subject>
+feat: add keyword rank tracking endpoint
+fix: correct workspace scoping on listings query
+chore: bump drizzle to 0.45.1
+docs: clarify env setup
 ```
 
 Common types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`, `perf`.
 
-Examples:
-```
-feat(listings): add bulk translation endpoint
-fix(auth): handle expired session cookies
-chore(ci): upgrade Bun to 1.3.8
-```
+## Pull Requests
 
----
+1. Ensure lint, type check, and tests pass locally.
+2. Push your branch and open a PR **targeting `develop`**.
+3. Fill out the PR template (Summary, Changes, Related issue, Testing, Checklist).
+4. Use a Conventional Commits style PR title.
 
-## Pull Request Process
+### Review Expectations
 
-1. **Fork** the repo and create a branch from `main`: `git checkout -b feat/my-feature`
-2. **Make your changes** — keep commits focused and well-described
-3. **Add tests** for any new logic or bug fix — new features without tests will be rejected
-4. **Run the full quality gate** locally before opening a PR:
-   ```bash
-   bunx biome check --write .
-   bunx tsc --noEmit
-   bun test
-   ```
-5. **Update docs** if your change affects public behavior, config, or the API surface
-6. **Open a PR** using the PR template — link any related issue
-7. **Respond to review** — be open to feedback, we aim to be constructive
+- Every PR requires review and approval before it can be merged — direct pushes
+  to `develop`/`main` are not accepted.
+- A maintainer will review for correctness, workspace scoping/security, test
+  coverage, and adherence to the conventions in `CLAUDE.md`.
+- Be responsive to review feedback; keep the discussion constructive.
 
-CI will run lint, type check, and tests. All checks must pass before a PR can be merged.
+## Security
 
----
-
-## Releases
-
-Releases follow [Semantic Versioning](https://semver.org/). The maintainer tags releases and updates `CHANGELOG.md` following [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-
----
-
-## Questions?
-
-Open a [GitHub Discussion](https://github.com/erykkruk/appboard-backend/discussions) or a draft issue. We're happy to help.
+Please do not report security vulnerabilities via public issues. See
+[SECURITY.md](SECURITY.md) for responsible disclosure.

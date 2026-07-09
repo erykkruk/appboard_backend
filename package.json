@@ -2,7 +2,7 @@
 	"name": "appboard-backend",
 	"version": "0.7.1",
 	"description": "Open-source ASO (App Store Optimization) management backend — connect App Store Connect & Google Play, sync metadata, manage listings, screenshots, reviews, and publish via one API.",
-	"license": "MIT",
+	"license": "PolyForm-Noncommercial-1.0.0",
 	"author": "Eryk Kruk",
 	"homepage": "https://github.com/erykkruk/appboard-backend#readme",
 	"repository": {

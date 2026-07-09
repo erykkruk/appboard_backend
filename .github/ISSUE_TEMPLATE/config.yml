@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/erykkruk/appboard_backend/discussions
+    about: Ask questions, share ideas, and discuss AppBoard with the community here.
