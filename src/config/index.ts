@@ -2,6 +2,11 @@ import { ArkErrors, type } from "arktype";
 
 const configSchema = type({
 	"+": "delete",
+	// Bootstrap admin (self-hosting without SMTP): when both are set and the user
+	// doesn't exist yet, an owner account is created on startup so you can log in
+	// with email + password instead of an email OTP.
+	ADMIN_EMAIL: "string?",
+	ADMIN_PASSWORD: "string?",
 	ALLOWED_ORIGINS: "string?",
 	// Sign in with Apple. Native-app bundle id is optional (only needed for
 	// verifying id tokens issued to a native iOS client, not the web flow).

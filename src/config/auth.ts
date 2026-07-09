@@ -24,9 +24,14 @@ const isDev = config.NODE_ENV !== "production";
 // unsafe state (production without SMTP) impossible by refusing to boot.
 const useDevOtp = isDev && !smtpConfigured;
 
+// Self-hosting: production can boot without SMTP, but then email OTP login is
+// off — log in with the bootstrap admin (ADMIN_EMAIL + ADMIN_PASSWORD) instead.
+const adminBootstrap = !!(config.ADMIN_EMAIL && config.ADMIN_PASSWORD);
 if (!isDev && !smtpConfigured) {
-	throw new Error(
-		"SMTP must be configured in production: set SMTP_HOST, SMTP_USER and SMTP_PASS",
+	log.warn(
+		adminBootstrap
+			? "SMTP not configured — email OTP is disabled; use the bootstrap admin (email + password) to log in."
+			: "SMTP not configured — email OTP is disabled. Set SMTP_* for OTP login, or ADMIN_EMAIL + ADMIN_PASSWORD for password login.",
 	);
 }
 
@@ -125,8 +130,17 @@ export const auth = betterAuth({
 				}
 
 				// Production: send real email via SMTP
+				if (!transporter) {
+					log.error(
+						{ email, type },
+						"OTP requested but SMTP is not configured on this server",
+					);
+					throw new Error(
+						"Email login is unavailable on this server — use password login instead.",
+					);
+				}
 				try {
-					await transporter!.sendMail({
+					await transporter.sendMail({
 						from: config.SMTP_FROM || config.SMTP_USER,
 						html: `
 							<div style="font-family: sans-serif; max-width: 400px; margin: 0 auto; padding: 24px;">

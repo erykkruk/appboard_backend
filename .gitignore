@@ -10,10 +10,11 @@ dist/
 # OS
 .DS_Store
 
-# Env — local only. `.env.example` is the committed template.
+# Env — local only. `.env.example` files are committed templates.
 .env
 .env.*
 !.env.example
+!.env.selfhost.example
 
 # Local-only files: present on disk so they load locally, never committed.
 *.local.ts

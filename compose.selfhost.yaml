@@ -1,0 +1,81 @@
+# AppBoard — self-hosted stack (backend + admin panel + PostgreSQL).
+# This is separate from the local-dev docker-compose.yml (which only runs
+# Postgres for `bun run db:up`).
+#
+#   1. cp .env.selfhost.example .env   and fill it in
+#   2. docker compose -f compose.selfhost.yaml up -d
+#   3. open the panel at http://localhost:6600 (put it behind a reverse proxy
+#      for HTTPS and set APP_URL to that public https URL)
+#
+# Login: set ADMIN_EMAIL + ADMIN_PASSWORD to log in with email + password
+# (no SMTP needed), or configure SMTP_* for email OTP instead.
+name: appboard
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-appboard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-appboard}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  backend:
+    image: ghcr.io/erykkruk/appboard-backend:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 6680
+      DB_URL: postgres://${POSTGRES_USER:-appboard}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-appboard}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET (min 32 chars)}
+      BETTER_AUTH_URL: ${APP_URL:?set APP_URL, e.g. https://appboard.example.com}
+      ALLOWED_ORIGINS: ${APP_URL}
+      # Blank = the container generates and persists a 64-hex key on first boot.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+    volumes:
+      - backend-data:/app/data
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:6680/api/system/health').then(()=>process.exit(0)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  web:
+    image: ghcr.io/erykkruk/appboard-web:latest
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 6600
+      HOSTNAME: 0.0.0.0
+      BACKEND_URL: http://backend:6680
+    ports:
+      - "${WEB_PORT:-6600}:6600"
+
+volumes:
+  postgres-data:
+  backend-data:
