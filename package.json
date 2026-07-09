@@ -1,7 +1,7 @@
 {
 	"name": "appboard-backend",
 	"version": "0.6.3",
-	"description": "Open-source ASO (App Store Optimization) management backend \u2014 connect App Store Connect & Google Play, sync metadata, manage listings, screenshots, reviews, and publish via one API.",
+	"description": "Open-source ASO (App Store Optimization) management backend — connect App Store Connect & Google Play, sync metadata, manage listings, screenshots, reviews, and publish via one API.",
 	"license": "MIT",
 	"author": "Eryk Kruk",
 	"homepage": "https://github.com/erykkruk/appboard-backend#readme",
@@ -55,6 +55,7 @@
 		"drizzle-orm": "^0.45.1",
 		"drizzle-typebox": "^0.3.3",
 		"elysia": "1.4.22",
+		"file-type": "^22.0.1",
 		"google-play-scraper": "^10.1.3",
 		"googleapis": "^171.4.0",
 		"jose": "^6.1.3",

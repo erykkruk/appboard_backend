@@ -109,6 +109,18 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 				// Handle buildError() responses (status() throws with a specific shape)
 				// Elysia status() puts HTTP code in .code (number), external APIs use .status/.statusCode
 				const err = error as Record<string, unknown>;
+				// Elysia file validation (t.File) throws InvalidFileType — surface
+				// it as a clear 422 instead of masking it as an upstream error.
+				if (err?.code === "INVALID_FILE_TYPE") {
+					set.status = 422;
+					persist(422, "VALIDATION");
+					return {
+						code: "VALIDATION",
+						data: {
+							info: "Invalid file type — upload an image file (PNG, JPEG or WebP).",
+						},
+					};
+				}
 				const rawCode = err?.status ?? err?.statusCode ?? err?.code;
 				const statusCode = typeof rawCode === "number" ? rawCode : undefined;
 				if (statusCode !== undefined && statusCode >= 400) {
