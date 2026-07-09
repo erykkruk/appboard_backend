@@ -98,6 +98,18 @@ export class StoresService {
 		return updated;
 	}
 
+	/**
+	 * Full re-import: wipe the store's local apps (cascade removes listings,
+	 * drafts, history, assets…) and fetch everything fresh from the account.
+	 * Used after switching store credentials to a different account, where a
+	 * plain sync would only upsert and leave stale apps behind.
+	 */
+	static async resyncApps(storeId: string) {
+		await db.delete(apps).where(eq(apps.storeId, storeId));
+		log.info({ storeId }, "Local apps wiped for full re-import");
+		return StoresService.syncApps(storeId);
+	}
+
 	static async syncApps(storeId: string) {
 		const [store] = await db
 			.select()

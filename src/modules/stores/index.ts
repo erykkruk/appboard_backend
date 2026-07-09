@@ -230,4 +230,19 @@ export const storesController = new Elysia({ prefix: "/stores" })
 			detail: { description: "Force sync apps from store", tags: ["Stores"] },
 			params: storeIdParams,
 		},
+	)
+	.post(
+		"/:storeId/resync",
+		async ({ params, workspaceId }) => {
+			await verifyStoreOwnership(params.storeId, workspaceId!);
+			return StoresService.resyncApps(params.storeId);
+		},
+		{
+			detail: {
+				description:
+					"Full re-import: delete the store's local apps and fetch fresh from the account",
+				tags: ["Stores"],
+			},
+			params: storeIdParams,
+		},
 	);
