@@ -28,7 +28,9 @@ const MAX_REVIEW_CHARS = 500;
 const MAX_COMPARE_REVIEWS = 120;
 const MAX_VISUAL_IMAGES = 6;
 const TEMPERATURE = 0.2;
-const MAX_TOKENS = 6000;
+// Reasoning models (e.g. GLM 5.x) spend output tokens on thinking before the
+// JSON answer — a low cap truncates the JSON mid-array ("Expected ']'").
+const MAX_TOKENS = 24000;
 
 const analysisSchema = type({
 	asoKeywords: type({ keyword: "string", reason: "string" }).array(),
