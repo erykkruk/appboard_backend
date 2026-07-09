@@ -99,6 +99,51 @@ export class StoresService {
 	}
 
 	/**
+	 * Manually register a Google Play package on the connection and sync it.
+	 * Needed for brand-new draft apps: the Reporting API (our auto-discovery)
+	 * does not index apps until they have a first release, but the edits API
+	 * can manage them as soon as the service account has access.
+	 */
+	static async addPackage(storeId: string, packageName: string) {
+		const [store] = await db
+			.select()
+			.from(stores)
+			.where(eq(stores.id, storeId))
+			.limit(1);
+		if (!store) buildError("notFound", { info: "Store not found" });
+		if (store.type !== "google_play") {
+			buildError("badRequest", {
+				info: "Adding apps by package name is only supported for Google Play connections",
+			});
+		}
+		if (!store.credentials) {
+			buildError("storeConnectionFailed", { info: "Store has no credentials" });
+		}
+
+		const credentials = decryptCredentials(
+			store.credentials,
+			store.workspaceId,
+		) as { package_names?: string[] };
+		const existing = credentials.package_names ?? [];
+		if (!existing.includes(packageName)) {
+			credentials.package_names = [...existing, packageName];
+			const encrypted = await encryptCredentials(
+				credentials as Record<string, unknown>,
+				store.workspaceId,
+			);
+			await db
+				.update(stores)
+				.set({ credentials: encrypted })
+				.where(eq(stores.id, storeId));
+			log.info({ packageName, storeId }, "Package added to connection");
+		}
+
+		// syncApps validates access: an inaccessible/unknown package surfaces
+		// as a sync error the panel shows to the user.
+		return StoresService.syncApps(storeId);
+	}
+
+	/**
 	 * Full re-import: wipe the store's local apps (cascade removes listings,
 	 * drafts, history, assets…) and fetch everything fresh from the account.
 	 * Used after switching store credentials to a different account, where a

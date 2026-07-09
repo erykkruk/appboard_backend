@@ -79,3 +79,61 @@ describe("Store full re-import (resync)", () => {
 		expect([403, 404]).toContain(res.status);
 	});
 });
+
+describe("Store manual package add", () => {
+	let pkgStoreId: string;
+
+	beforeAll(async () => {
+		const res = await app
+			.handle(
+				authRequest("http://localhost/api/stores/connect", {
+					body: JSON.stringify({
+						credentials: { mock: true, type: "mock" },
+						name: "Package Add Test Store",
+						type: "google_play",
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				}),
+			)
+			.then((r) => r.json());
+		pkgStoreId = res.store.id;
+	});
+
+	afterAll(async () => {
+		await cleanupStores([pkgStoreId]);
+	});
+
+	it("adds a package to a Google Play connection and syncs", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/stores/${pkgStoreId}/packages`, {
+				body: JSON.stringify({ packageName: "com.manual.draftapp" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(res.status).toBe(200);
+	});
+
+	it("rejects an invalid package name", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/stores/${pkgStoreId}/packages`, {
+				body: JSON.stringify({ packageName: "not a package!" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(res.status).toBe(422);
+	});
+
+	it("denies adding a package to another workspace's store", async () => {
+		const res = await app.handle(
+			authRequestB(`http://localhost/api/stores/${pkgStoreId}/packages`, {
+				body: JSON.stringify({ packageName: "com.other.app" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect([403, 404]).toContain(res.status);
+	});
+});

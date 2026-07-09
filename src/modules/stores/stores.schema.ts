@@ -22,6 +22,13 @@ export const renameStoreBody = t.Object({
 	name: t.String({ maxLength: 255, minLength: 1 }),
 });
 
+export const addPackageBody = t.Object({
+	packageName: t.String({
+		minLength: 3,
+		pattern: "^[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+$",
+	}),
+});
+
 export const storeIdParams = t.Object({
 	storeId: t.String({ format: "uuid" }),
 });

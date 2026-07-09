@@ -69,11 +69,15 @@ async function discoverPackageNames(
 			version: "v1beta1",
 		});
 
-		const { data } = await reporting.apps.search({});
-		const names =
-			data.apps
-				?.map((app) => app.packageName)
-				.filter((name): name is string => !!name) ?? [];
+		const names: string[] = [];
+		let pageToken: string | undefined;
+		do {
+			const { data } = await reporting.apps.search({ pageToken });
+			for (const app of data.apps ?? []) {
+				if (app.packageName) names.push(app.packageName);
+			}
+			pageToken = data.nextPageToken ?? undefined;
+		} while (pageToken);
 
 		log.info(
 			{ count: names.length, packages: names },

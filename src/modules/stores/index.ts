@@ -12,6 +12,7 @@ import {
 	StoreCapabilitiesService,
 } from "./store-capabilities.service";
 import {
+	addPackageBody,
 	connectStoreBody,
 	renameStoreBody,
 	storeCapabilitiesBody,
@@ -228,6 +229,22 @@ export const storesController = new Elysia({ prefix: "/stores" })
 		},
 		{
 			detail: { description: "Force sync apps from store", tags: ["Stores"] },
+			params: storeIdParams,
+		},
+	)
+	.post(
+		"/:storeId/packages",
+		async ({ body, params, workspaceId }) => {
+			await verifyStoreOwnership(params.storeId, workspaceId!);
+			return StoresService.addPackage(params.storeId, body.packageName);
+		},
+		{
+			body: addPackageBody,
+			detail: {
+				description:
+					"Register a Google Play package manually (draft apps invisible to auto-discovery) and sync",
+				tags: ["Stores"],
+			},
 			params: storeIdParams,
 		},
 	)
