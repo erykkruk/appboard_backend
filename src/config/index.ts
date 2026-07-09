@@ -20,10 +20,19 @@ const configSchema = type({
 	// Validated here so a misconfigured key fails fast instead of corrupting
 	// encrypted credentials at first use.
 	ENCRYPTION_KEY: "/^[0-9a-fA-F]{64}$/",
+	// Recipient for the public product-feedback form. Set per-deployment so the
+	// address is never hardcoded in the (public) source.
+	FEEDBACK_EMAIL: "string?",
 	GOOGLE_CLIENT_ID: "string?",
 	GOOGLE_CLIENT_SECRET: "string?",
 	GP_SERVICE_ACCOUNT_KEY_PATH: "string?",
 	GP_TEST_PACKAGE_NAME: "string?",
+	// Listmonk newsletter integration (optional) — feedback submitters are added
+	// as subscribers. All four must be set for it to activate.
+	LISTMONK_LIST_ID: "string?",
+	LISTMONK_TOKEN: "string?",
+	LISTMONK_URL: "string?",
+	LISTMONK_USERNAME: "string?",
 	NODE_ENV: "string?",
 	OPENROUTER_API_KEY: "string?",
 	OPENROUTER_MODEL: "string?",

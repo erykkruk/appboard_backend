@@ -30,11 +30,18 @@ export function isMailerConfigured(): boolean {
 	return smtpConfigured;
 }
 
+export interface MailAttachment {
+	filename: string;
+	content: Buffer;
+}
+
 export interface MailMessage {
 	to: string;
 	subject: string;
 	html: string;
 	text: string;
+	replyTo?: string;
+	attachments?: MailAttachment[];
 }
 
 /**
@@ -48,8 +55,10 @@ export async function sendMail(message: MailMessage): Promise<boolean> {
 	}
 	try {
 		await transporter.sendMail({
+			attachments: message.attachments,
 			from: config.SMTP_FROM || config.SMTP_USER,
 			html: message.html,
+			replyTo: message.replyTo,
 			subject: message.subject,
 			text: message.text,
 			to: message.to,
