@@ -41,6 +41,8 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET (min 32 chars)}
       BETTER_AUTH_URL: ${APP_URL:?set APP_URL, e.g. https://appboard.example.com}
       ALLOWED_ORIGINS: ${APP_URL}
+      # "selfhosted" (default) hides cloud-only features; only our cloud = "cloud".
+      DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-selfhosted}
       # Blank = the container generates and persists a 64-hex key on first boot.
       ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
