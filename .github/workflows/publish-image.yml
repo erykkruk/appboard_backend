@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -15,6 +16,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Read package version
+        id: pkg
+        run: echo "version=$(jq -r .version package.json)" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -37,6 +42,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           tags: |
             ghcr.io/erykkruk/appboard-backend:latest
+            ghcr.io/erykkruk/appboard-backend:${{ steps.pkg.outputs.version }}
             ghcr.io/erykkruk/appboard-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
