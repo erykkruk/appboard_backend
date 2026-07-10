@@ -1,5 +1,9 @@
 export const MAX_KEYWORDS_PER_COUNTRY = 20;
 
+// Country used when auto-importing keywords from the ASO profile, which has
+// no country dimension of its own.
+export const DEFAULT_TRACKING_COUNTRY = "us";
+
 export const AUTO_RESEARCH_FREQUENCIES = [
 	"daily",
 	"weekly",
@@ -27,4 +31,15 @@ export interface LatestPosition {
 	// Positive delta = moved UP (better rank); negative = dropped.
 	delta: number | null;
 	capturedAt: Date;
+}
+
+export interface TrackingSummaryStats {
+	trackedKeywords: number;
+	rankedKeywords: number;
+	avgPosition: number | null;
+	bestPosition: number | null;
+	top10Count: number;
+	improvedCount: number;
+	declinedCount: number;
+	lastCheckedAt: Date | null;
 }

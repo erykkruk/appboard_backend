@@ -34,6 +34,21 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 			params: appIdParams,
 		},
 	)
+	.get(
+		"/:appId/tracking/summary",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return TrackingService.getSummary(params.appId, workspaceId!);
+		},
+		{
+			detail: {
+				description:
+					"Dashboard rank summary: auto-imports ASO-profile keywords, runs a first check when needed, returns aggregate stats + latest positions",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+		},
+	)
 	.patch(
 		"/:appId/tracking/config",
 		async ({ body, params, workspaceId }) => {

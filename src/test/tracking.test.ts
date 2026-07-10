@@ -12,6 +12,8 @@ import {
 	getTestWorkspaceIdB,
 } from "@/test/setup";
 import { seedTestApp, seedTestStore } from "@/test/test-helpers";
+import { db } from "@/utils/db";
+import { appAsoProfiles } from "@/utils/db/schema";
 import { errorHandler } from "@/utils/errors/errorHandler";
 
 const BASE = "http://localhost/api";
@@ -180,10 +182,99 @@ describe("Rank check", () => {
 	});
 });
 
+describe("Tracking summary", () => {
+	it("returns empty stats for an app without profile or keywords", async () => {
+		const seeded = await seedTestApp(storeIds[0]);
+		const res = await app.handle(
+			authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
+		);
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as {
+			positions: unknown[];
+			stats: { trackedKeywords: number; avgPosition: number | null };
+		};
+		expect(body.stats.trackedKeywords).toBe(0);
+		expect(body.stats.avgPosition).toBeNull();
+		expect(body.positions).toEqual([]);
+	});
+
+	it("imports ASO-profile keywords, runs a first check and aggregates stats", async () => {
+		const seeded = await seedTestApp(storeIds[0]);
+		await db.insert(appAsoProfiles).values({
+			appId: seeded.id,
+			longTailKeywords: ["habit streak app"],
+			mustIncludeKeywords: ["Habit Tracker", "daily habits"],
+		});
+
+		const spy = spyOn(ResearchService, "positionFor").mockResolvedValue(5);
+		try {
+			const res = await app.handle(
+				authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
+			);
+			expect(res.status).toBe(200);
+			const body = (await json(res)) as {
+				config: { rankTrackingEnabled: boolean };
+				positions: Array<{ keyword: string; position: number | null }>;
+				stats: {
+					avgPosition: number | null;
+					bestPosition: number | null;
+					rankedKeywords: number;
+					top10Count: number;
+					trackedKeywords: number;
+				};
+			};
+			expect(body.stats.trackedKeywords).toBe(3);
+			expect(body.stats.rankedKeywords).toBe(3);
+			expect(body.stats.avgPosition).toBe(5);
+			expect(body.stats.bestPosition).toBe(5);
+			expect(body.stats.top10Count).toBe(3);
+			expect(body.config.rankTrackingEnabled).toBe(true);
+			const kws = body.positions.map((p) => p.keyword).sort();
+			expect(kws).toEqual([
+				"daily habits",
+				"habit streak app",
+				"habit tracker",
+			]);
+			expect(spy).toHaveBeenCalledTimes(3);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+
+	it("does not re-run the check when positions already exist", async () => {
+		const seeded = await seedTestApp(storeIds[0]);
+		await db.insert(appAsoProfiles).values({
+			appId: seeded.id,
+			mustIncludeKeywords: ["workout log"],
+		});
+
+		const spy = spyOn(ResearchService, "positionFor").mockResolvedValue(9);
+		try {
+			await app.handle(
+				authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
+			);
+			expect(spy).toHaveBeenCalledTimes(1);
+			await app.handle(
+				authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
+			);
+			expect(spy).toHaveBeenCalledTimes(1);
+		} finally {
+			spy.mockRestore();
+		}
+	});
+});
+
 describe("Workspace isolation", () => {
 	it("workspace B cannot read workspace A's tracking", async () => {
 		const res = await app.handle(
 			authRequestB(`${BASE}/apps/${appId}/tracking`),
+		);
+		expect(res.status).toBe(404);
+	});
+
+	it("workspace B cannot read workspace A's tracking summary", async () => {
+		const res = await app.handle(
+			authRequestB(`${BASE}/apps/${appId}/tracking/summary`),
 		);
 		expect(res.status).toBe(404);
 	});

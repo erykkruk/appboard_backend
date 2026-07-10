@@ -38,6 +38,7 @@ import {
 	appGroups,
 	appPrivacyDeclarations,
 	apps,
+	appTrackingConfig,
 	appVersions,
 	assets,
 	groupAsoProfiles,
@@ -46,10 +47,12 @@ import {
 	listings,
 	purchaseLocalizations,
 	purchasePrices,
+	rankSnapshots,
 	reviews,
 	stores,
 	subscriptionGroupLocalizations,
 	subscriptionGroups,
+	trackedKeywords,
 	user,
 	versionLocalizations,
 	workspaceMembers,
@@ -1838,6 +1841,29 @@ export async function seedDemo(
 				: { created: false, groupId: null };
 		await ensureAiKey(workspaceId);
 
+		if (luminaGpId) {
+			await ensureTrackingMocks(
+				luminaGpId,
+				workspaceId,
+				"playstore",
+				LUMINA_RANK_TRAJECTORIES,
+			);
+		}
+		if (ios.luminaIosId) {
+			await ensureTrackingMocks(
+				ios.luminaIosId,
+				workspaceId,
+				"appstore",
+				LUMINA_RANK_TRAJECTORIES,
+			);
+		}
+		await ensureTrackingMocks(
+			pulse.id,
+			workspaceId,
+			"playstore",
+			PULSE_RANK_TRAJECTORIES,
+		);
+
 		return {
 			auraGroupId: auraGroup.groupId,
 			auraId,
@@ -2766,6 +2792,27 @@ export async function seedDemo(
 
 	await ensureAiKey(workspaceId);
 
+	await ensureTrackingMocks(
+		lumina.id,
+		workspaceId,
+		"playstore",
+		LUMINA_RANK_TRAJECTORIES,
+	);
+	if (ios.luminaIosId) {
+		await ensureTrackingMocks(
+			ios.luminaIosId,
+			workspaceId,
+			"appstore",
+			LUMINA_RANK_TRAJECTORIES,
+		);
+	}
+	await ensureTrackingMocks(
+		pulse.id,
+		workspaceId,
+		"playstore",
+		PULSE_RANK_TRAJECTORIES,
+	);
+
 	log.info(
 		{
 			apps: "3× Google Play (Lumina, Aura, Pulse) + 3× App Store (iOS)",
@@ -2793,6 +2840,126 @@ export async function seedDemo(
 		workspaceId,
 	};
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Keyword rank-tracking mocks (dashboard "Keyword Rankings" card)
+// ─────────────────────────────────────────────────────────────────────
+
+interface KeywordTrajectory {
+	keyword: string;
+	// Position on day 0 and on the last day; days in between are interpolated
+	// with a deterministic wobble. `null` start = unranked until `appearsOnDay`.
+	from: number | null;
+	to: number;
+	appearsOnDay?: number;
+}
+
+const RANK_MOCK_DAYS = 14;
+const RANK_MOCK_COUNTRY = "us";
+
+/** Deterministic per-day position along a from→to trajectory. */
+function trajectoryPosition(
+	t: KeywordTrajectory,
+	day: number,
+	seed: number,
+): number | null {
+	if (t.from === null) {
+		if (day < (t.appearsOnDay ?? 0)) return null;
+		const daysVisible = RANK_MOCK_DAYS - (t.appearsOnDay ?? 0);
+		const progress = daysVisible
+			? (day - (t.appearsOnDay ?? 0)) / daysVisible
+			: 1;
+		const start = Math.min(50, t.to + 12);
+		return Math.max(1, Math.round(start + (t.to - start) * progress));
+	}
+	const progress = day / (RANK_MOCK_DAYS - 1);
+	const wobble = Math.round(Math.sin(day * 2.1 + seed) * 1.5);
+	return Math.max(1, Math.round(t.from + (t.to - t.from) * progress + wobble));
+}
+
+/**
+ * Seeds tracked keywords + a two-week snapshot history for one demo app.
+ * Skips entirely when the app already has snapshots (idempotent re-runs).
+ */
+async function ensureTrackingMocks(
+	appId: string,
+	workspaceId: string,
+	platform: "appstore" | "playstore",
+	trajectories: KeywordTrajectory[],
+) {
+	const [existing] = await db
+		.select({ id: rankSnapshots.id })
+		.from(rankSnapshots)
+		.where(eq(rankSnapshots.appId, appId))
+		.limit(1);
+	if (existing) return;
+
+	await db
+		.insert(trackedKeywords)
+		.values(
+			trajectories.map((t) => ({
+				appId,
+				country: RANK_MOCK_COUNTRY,
+				keyword: t.keyword,
+			})),
+		)
+		.onConflictDoNothing();
+
+	const snapshots = [];
+	const latest = new Date(now);
+	latest.setMinutes(0, 0, 0);
+	for (let day = 0; day < RANK_MOCK_DAYS; day++) {
+		const createdAt = new Date(latest);
+		createdAt.setDate(createdAt.getDate() - (RANK_MOCK_DAYS - 1 - day));
+		for (const [i, t] of trajectories.entries()) {
+			snapshots.push({
+				appId,
+				country: RANK_MOCK_COUNTRY,
+				createdAt,
+				keyword: t.keyword,
+				platform,
+				position: trajectoryPosition(t, day, i),
+			});
+		}
+	}
+	await db.insert(rankSnapshots).values(snapshots);
+
+	await db
+		.insert(appTrackingConfig)
+		.values({
+			appId,
+			lastRankCheckAt: latest,
+			rankTrackingEnabled: true,
+			workspaceId,
+		})
+		.onConflictDoNothing();
+	await db
+		.update(appTrackingConfig)
+		.set({ lastRankCheckAt: latest, rankTrackingEnabled: true })
+		.where(eq(appTrackingConfig.appId, appId));
+
+	log.info(
+		{ appId, keywords: trajectories.length, snapshots: snapshots.length },
+		"Seeded rank-tracking mocks",
+	);
+}
+
+const LUMINA_RANK_TRAJECTORIES: KeywordTrajectory[] = [
+	{ from: 21, keyword: "habit tracker", to: 4 },
+	{ from: 34, keyword: "daily habits", to: 9 },
+	{ from: 15, keyword: "streak tracker", to: 6 },
+	{ from: 42, keyword: "habit reminder", to: 18 },
+	{ from: 28, keyword: "goal tracker", to: 31 },
+	{ appearsOnDay: 9, from: null, keyword: "morning routine app", to: 38 },
+];
+
+const PULSE_RANK_TRAJECTORIES: KeywordTrajectory[] = [
+	{ from: 18, keyword: "workout tracker", to: 7 },
+	{ from: 26, keyword: "gym log", to: 12 },
+	{ from: 11, keyword: "fitness planner", to: 15 },
+	{ from: 47, keyword: "strength training app", to: 29 },
+	{ appearsOnDay: 6, from: null, keyword: "home workout", to: 44 },
+];
 
 // Auto-run only when executed directly (so tests can import seedDemo).
 if (import.meta.main) {

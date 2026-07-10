@@ -5,6 +5,7 @@ import { ResearchService } from "@/modules/research/research.service";
 import { platformToStore } from "@/modules/research/research.types";
 import { db } from "@/utils/db";
 import {
+	appAsoProfiles,
 	appTrackingConfig,
 	rankSnapshots,
 	trackedKeywords,
@@ -16,9 +17,11 @@ import { createLogger } from "@/utils/logger";
 import {
 	AUTO_RESEARCH_FREQUENCIES,
 	type AutoResearchFrequency,
+	DEFAULT_TRACKING_COUNTRY,
 	type LatestPosition,
 	MAX_KEYWORDS_PER_COUNTRY,
 	type RankCheckResult,
+	type TrackingSummaryStats,
 } from "./tracking.types";
 
 const log = createLogger("tracking");
@@ -141,6 +144,103 @@ export class TrackingService {
 			.returning({ id: trackedKeywords.id });
 		if (!deleted) buildError("notFound", { info: "Keyword not found" });
 		return { id: deleted.id, success: true };
+	}
+
+	/**
+	 * Import keywords from the app's ASO profile ("Information" tab) into the
+	 * tracked set for the default country. Silently fills up to the per-country
+	 * cap instead of rejecting, so the dashboard can call it on every load.
+	 * Enables rank tracking when it imports anything, so the scheduler picks
+	 * the app up automatically.
+	 */
+	static async syncKeywordsFromProfile(
+		appId: string,
+		workspaceId: string,
+	): Promise<number> {
+		const [profile] = await db
+			.select({
+				longTail: appAsoProfiles.longTailKeywords,
+				mustInclude: appAsoProfiles.mustIncludeKeywords,
+			})
+			.from(appAsoProfiles)
+			.where(eq(appAsoProfiles.appId, appId))
+			.limit(1);
+		if (!profile) return 0;
+
+		const fromProfile = [
+			...new Set(
+				[...(profile.mustInclude ?? []), ...(profile.longTail ?? [])]
+					.map((k) => k.trim().toLowerCase())
+					.filter(Boolean),
+			),
+		];
+		if (!fromProfile.length) return 0;
+
+		const cc = DEFAULT_TRACKING_COUNTRY;
+		const existing = await db
+			.select({ keyword: trackedKeywords.keyword })
+			.from(trackedKeywords)
+			.where(
+				and(eq(trackedKeywords.appId, appId), eq(trackedKeywords.country, cc)),
+			);
+		const existingSet = new Set(existing.map((r) => r.keyword));
+		const room = MAX_KEYWORDS_PER_COUNTRY - existingSet.size;
+		const toAdd = fromProfile
+			.filter((k) => !existingSet.has(k))
+			.slice(0, Math.max(0, room));
+		if (!toAdd.length) return 0;
+
+		await db
+			.insert(trackedKeywords)
+			.values(toAdd.map((keyword) => ({ appId, country: cc, keyword })))
+			.onConflictDoNothing();
+		await TrackingService.getConfig(appId, workspaceId);
+		await db
+			.update(appTrackingConfig)
+			.set({ rankTrackingEnabled: true })
+			.where(eq(appTrackingConfig.appId, appId));
+
+		log.info({ appId, imported: toAdd.length }, "Synced keywords from profile");
+		return toAdd.length;
+	}
+
+	/**
+	 * Dashboard summary: syncs ASO-profile keywords into tracking, runs a first
+	 * rank check when there are keywords but no measurements yet, and returns
+	 * aggregate stats alongside the latest positions.
+	 */
+	static async getSummary(appId: string, workspaceId: string) {
+		await TrackingService.syncKeywordsFromProfile(appId, workspaceId);
+
+		const keywords = await TrackingService.getKeywords(appId);
+		let positions = await TrackingService.getLatestPositions(appId);
+		if (keywords.length && !positions.length) {
+			await TrackingService.runRankCheck(appId, workspaceId, "manual");
+			positions = await TrackingService.getLatestPositions(appId);
+		}
+		const config = await TrackingService.getConfig(appId, workspaceId);
+
+		const ranked = positions.filter((p) => p.position !== null);
+		const stats: TrackingSummaryStats = {
+			avgPosition: ranked.length
+				? Math.round(
+						(ranked.reduce((sum, p) => sum + (p.position as number), 0) /
+							ranked.length) *
+							10,
+					) / 10
+				: null,
+			bestPosition: ranked.length
+				? Math.min(...ranked.map((p) => p.position as number))
+				: null,
+			declinedCount: positions.filter((p) => (p.delta ?? 0) < 0).length,
+			improvedCount: positions.filter((p) => (p.delta ?? 0) > 0).length,
+			lastCheckedAt: config?.lastRankCheckAt ?? null,
+			rankedKeywords: ranked.length,
+			top10Count: ranked.filter((p) => (p.position as number) <= 10).length,
+			trackedKeywords: keywords.length,
+		};
+
+		return { config, positions, stats };
 	}
 
 	/**
