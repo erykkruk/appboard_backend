@@ -1,0 +1,67 @@
+spec:
+  name: appboard
+  services:
+    # Backend REST API — internal only (the panel proxies /api to it).
+    - name: appboard-backend
+      image:
+        registry_type: GHCR
+        registry: erykkruk
+        repository: appboard-backend
+        tag: latest
+      http_port: 6680
+      instance_size_slug: apps-s-1vcpu-1gb
+      instance_count: 1
+      envs:
+        - key: NODE_ENV
+          value: production
+        - key: PORT
+          value: "6680"
+        - key: DB_URL
+          value: ${appboard-db.DATABASE_URL}
+        # Change these two secrets before/after first deploy.
+        - key: BETTER_AUTH_SECRET
+          type: SECRET
+          value: CHANGE_ME_TO_A_LONG_RANDOM_STRING_MIN_32_CHARS
+        - key: BETTER_AUTH_URL
+          value: ${appboard-web.PUBLIC_URL}
+        - key: ALLOWED_ORIGINS
+          value: ${appboard-web.PUBLIC_URL}
+        # Blank on purpose: a 64-hex key is generated and persisted on first boot.
+        - key: ENCRYPTION_KEY
+          value: ""
+        - key: ADMIN_EMAIL
+          value: admin@example.com
+        - key: ADMIN_PASSWORD
+          type: SECRET
+          value: CHANGE_ME
+    # Admin panel — public.
+    - name: appboard-web
+      image:
+        registry_type: GHCR
+        registry: erykkruk
+        repository: appboard-web
+        tag: latest
+      http_port: 6600
+      instance_size_slug: apps-s-1vcpu-1gb
+      instance_count: 1
+      envs:
+        - key: NODE_ENV
+          value: production
+        - key: PORT
+          value: "6600"
+        - key: HOSTNAME
+          value: "0.0.0.0"
+        - key: BACKEND_URL
+          value: ${appboard-backend.PRIVATE_URL}
+  databases:
+    - name: appboard-db
+      engine: PG
+      version: "16"
+      production: false
+  ingress:
+    rules:
+      - match:
+          path:
+            prefix: /
+        component:
+          name: appboard-web

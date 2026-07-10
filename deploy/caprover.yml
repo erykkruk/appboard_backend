@@ -1,0 +1,69 @@
+captainVersion: 4
+services:
+    $$cap_appname-db:
+        image: postgres:18-alpine
+        volumes:
+            - $$cap_appname-db-data:/var/lib/postgresql
+        environment:
+            POSTGRES_USER: appboard
+            POSTGRES_PASSWORD: $$cap_pg_password
+            POSTGRES_DB: appboard
+        caproverExtra:
+            notExposeAsWebApp: 'true'
+    $$cap_appname-backend:
+        image: ghcr.io/erykkruk/appboard-backend:latest
+        volumes:
+            - $$cap_appname-backend-data:/app/data
+        environment:
+            NODE_ENV: production
+            PORT: '6680'
+            DB_URL: postgres://appboard:$$cap_pg_password@srv-captain--$$cap_appname-db:5432/appboard
+            BETTER_AUTH_SECRET: $$cap_auth_secret
+            BETTER_AUTH_URL: https://$$cap_appname.$$cap_root_domain
+            ALLOWED_ORIGINS: https://$$cap_appname.$$cap_root_domain
+            ENCRYPTION_KEY: ''
+            ADMIN_EMAIL: $$cap_admin_email
+            ADMIN_PASSWORD: $$cap_admin_password
+        caproverExtra:
+            notExposeAsWebApp: 'true'
+    $$cap_appname:
+        image: ghcr.io/erykkruk/appboard-web:latest
+        environment:
+            NODE_ENV: production
+            PORT: '6600'
+            HOSTNAME: 0.0.0.0
+            BACKEND_URL: http://srv-captain--$$cap_appname-backend:6680
+        caproverExtra:
+            containerHttpPort: '6600'
+caproverOneClickApp:
+    variables:
+        - id: $$cap_pg_password
+          label: PostgreSQL Password
+          defaultValue: $$cap_gen_random_hex(24)
+          validRegex: /.{8,}/
+        - id: $$cap_auth_secret
+          label: Auth Secret (leave the generated value)
+          defaultValue: $$cap_gen_random_hex(48)
+          validRegex: /.{32,}/
+        - id: $$cap_admin_email
+          label: Admin Email (first login)
+          defaultValue: admin@example.com
+        - id: $$cap_admin_password
+          label: Admin Password (first login)
+          defaultValue: $$cap_gen_random_hex(12)
+    instructions:
+        start: >-
+            AppBoard is an open-source, self-hostable ASO tool: manage App Store &
+            Google Play listings, track keyword rankings over time, organize
+            screenshots and publish metadata from one panel. This deploys the admin
+            panel, the REST API and PostgreSQL. No SMTP is required — you sign in
+            with the admin email + password set below.
+        end: >-
+            AppBoard is deployed! Enable HTTPS in the app's HTTP Settings, then open
+            the app URL and sign in with the Admin Email and Admin Password using
+            "Sign in with a password". The encryption key is generated automatically
+            on first boot.
+    displayName: AppBoard
+    isOfficial: false
+    description: Open-source, self-hostable ASO (App Store Optimization) tool.
+    documentation: https://github.com/erykkruk/appboard_backend

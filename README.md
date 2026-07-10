@@ -61,14 +61,22 @@ No SMTP is required to start: a bootstrap admin is created on first boot from
 ### One-click
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/erykkruk/appboard_backend)
+[![Deploy to DigitalOcean](https://www.deploy.digitalocean.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/erykkruk/appboard_backend/tree/main)
 
 | Platform | Status |
 |----------|--------|
 | **Docker Compose** (any host) | [`compose.selfhost.yaml`](compose.selfhost.yaml) — `docker compose -f compose.selfhost.yaml up -d` |
 | **Render** | Blueprint [`render.yaml`](render.yaml) — button above |
+| **DigitalOcean** App Platform | Spec [`.do/deploy.template.yaml`](.do/deploy.template.yaml) — button above |
 | **Coolify** | Service template — [PR #10885](https://github.com/coollabsio/coolify/pull/10885) |
 | **Dokploy** | Template — [PR #988](https://github.com/Dokploy/templates/pull/988) |
 | **Easypanel** | Template — [PR #1477](https://github.com/easypanel-io/templates/pull/1477) |
+| **Zeabur** | Template [`deploy/zeabur.yaml`](deploy/zeabur.yaml) — `npx zeabur@latest template deploy -f deploy/zeabur.yaml` |
+| **CapRover** | One-click app [`deploy/caprover.yml`](deploy/caprover.yml) — paste into *Apps → One-Click Apps → Template* |
+| **Railway** | Guide [`deploy/railway.md`](deploy/railway.md) |
+
+> All images are multi-arch (`linux/amd64` + `linux/arm64`) and published on every
+> push to `main`, so `:latest` stays current on every platform above.
 
 ### Docker Compose (fastest)
 

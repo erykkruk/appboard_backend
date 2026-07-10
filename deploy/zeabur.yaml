@@ -1,0 +1,102 @@
+apiVersion: zeabur.com/v1
+kind: Template
+metadata:
+  name: AppBoard
+spec:
+  description: Open-source, self-hostable ASO tool — manage App Store & Google Play listings, keyword rank tracking, screenshots and publishing from one panel.
+  icon: https://raw.githubusercontent.com/erykkruk/appboard_web/main/public/appboard-logo.svg
+  tags:
+    - Marketing
+    - Tool
+  variables:
+    - key: PUBLIC_DOMAIN
+      type: DOMAIN
+      name: Panel Domain
+      description: The domain your AppBoard admin panel will be served on.
+  services:
+    - name: postgres
+      template: PREBUILT
+      spec:
+        source:
+          image: postgres:18-alpine
+        ports:
+          - id: database
+            port: 5432
+            type: TCP
+        volumes:
+          - id: data
+            dir: /var/lib/postgresql
+        env:
+          POSTGRES_USER:
+            default: appboard
+            expose: true
+          POSTGRES_PASSWORD:
+            default: ${PASSWORD}
+            expose: true
+          POSTGRES_DB:
+            default: appboard
+            expose: true
+          POSTGRES_HOST:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+
+    - name: backend
+      template: PREBUILT
+      dependencies:
+        - postgres
+      spec:
+        source:
+          image: ghcr.io/erykkruk/appboard-backend:latest
+        ports:
+          - id: api
+            port: 6680
+            type: HTTP
+        volumes:
+          - id: data
+            dir: /app/data
+        env:
+          NODE_ENV:
+            default: production
+          PORT:
+            default: "6680"
+          DB_URL:
+            default: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:5432/${POSTGRES_DB}
+          BETTER_AUTH_SECRET:
+            default: ${PASSWORD}${PASSWORD}
+          BETTER_AUTH_URL:
+            default: https://${PUBLIC_DOMAIN}
+          ALLOWED_ORIGINS:
+            default: https://${PUBLIC_DOMAIN}
+          ENCRYPTION_KEY:
+            default: ""
+          ADMIN_EMAIL:
+            default: admin@example.com
+          ADMIN_PASSWORD:
+            default: ${PASSWORD}
+          BACKEND_HOSTNAME:
+            default: ${CONTAINER_HOSTNAME}
+            expose: true
+            readonly: true
+
+    - name: web
+      template: PREBUILT
+      domainKey: PUBLIC_DOMAIN
+      dependencies:
+        - backend
+      spec:
+        source:
+          image: ghcr.io/erykkruk/appboard-web:latest
+        ports:
+          - id: web
+            port: 6600
+            type: HTTP
+        env:
+          NODE_ENV:
+            default: production
+          PORT:
+            default: "6600"
+          HOSTNAME:
+            default: "0.0.0.0"
+          BACKEND_URL:
+            default: http://${BACKEND_HOSTNAME}:6680
