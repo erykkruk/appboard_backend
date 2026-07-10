@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import config from "@/config";
+import { getDeploymentMode } from "@/config/deployment";
 import { ErrorLogService } from "@/modules/system/error-log.service";
 import { db } from "@/utils/db";
 import { runMigrations } from "@/utils/db/migrate";
@@ -55,6 +56,7 @@ export const systemController = new Elysia({ prefix: "/system" })
 	.get(
 		"/health",
 		() => ({
+			deploymentMode: getDeploymentMode(),
 			status: "ok",
 			uptime: process.uptime(),
 			version,

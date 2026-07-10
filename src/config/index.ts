@@ -18,6 +18,10 @@ const configSchema = type({
 	BETTER_AUTH_SECRET: "string >= 32",
 	BETTER_AUTH_URL: "string?",
 	DB_URL: "/^postgres:\\/\\//",
+	// Deployment edition. "cloud" = our hosted SaaS (shows cloud-only features
+	// like billing); anything else (incl. unset) = self-hosted (those are hidden).
+	// Fail-safe: only an explicit "cloud" unlocks cloud-only features.
+	DEPLOYMENT_MODE: "string?",
 	// Opt-in (dev/test only): enables the X-Test-User-Id auth bypass outside
 	// the test runner. Never honored when NODE_ENV=production.
 	ENABLE_TEST_AUTH: "string?",

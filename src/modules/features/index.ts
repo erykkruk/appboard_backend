@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { getDeploymentMode, isCloud } from "@/config/deployment";
 import { FEATURE_DEFINITIONS } from "./features.const";
 import { FeaturesService } from "./features.service";
 
@@ -7,7 +8,15 @@ export const featuresController = new Elysia({ prefix: "/features" })
 		"",
 		async ({ workspaceId }) => {
 			const features = await FeaturesService.getAll(workspaceId!);
-			return { definitions: FEATURE_DEFINITIONS, features };
+			// Hide cloud-only definitions on self-hosted deployments.
+			const definitions = isCloud()
+				? FEATURE_DEFINITIONS
+				: FEATURE_DEFINITIONS.filter((d) => !d.cloudOnly);
+			return {
+				definitions,
+				deploymentMode: getDeploymentMode(),
+				features,
+			};
 		},
 		{
 			detail: {

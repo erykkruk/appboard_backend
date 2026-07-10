@@ -21,6 +21,12 @@ export interface FeatureDefinition {
 	description: string;
 	defaultEnabled: boolean;
 	dependsOn?: FeatureKey[];
+	/**
+	 * Cloud-only: available only on our hosted SaaS (DEPLOYMENT_MODE=cloud).
+	 * On self-hosted deployments the feature is hidden from the definitions
+	 * list and force-disabled (its routes are blocked by the feature guard).
+	 */
+	cloudOnly?: boolean;
 }
 
 export const FEATURE_DEFINITIONS: FeatureDefinition[] = [

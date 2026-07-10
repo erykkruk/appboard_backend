@@ -1,4 +1,5 @@
 import { and, eq, like } from "drizzle-orm";
+import { isCloud } from "@/config/deployment";
 import { db } from "@/utils/db";
 import { settings } from "@/utils/db/schema";
 import {
@@ -33,6 +34,20 @@ function applyDependencyCascade(
 	return features;
 }
 
+/**
+ * Force cloud-only features off on self-hosted deployments, regardless of any
+ * stored toggle. Mirrors the dependency cascade. No-op on our cloud.
+ */
+function applyDeploymentMode(
+	features: Record<FeatureKey, boolean>,
+): Record<FeatureKey, boolean> {
+	if (isCloud()) return features;
+	for (const def of FEATURE_DEFINITIONS) {
+		if (def.cloudOnly) features[def.key] = false;
+	}
+	return features;
+}
+
 export class FeaturesService {
 	static async getAll(
 		workspaceId: string,
@@ -60,7 +75,7 @@ export class FeaturesService {
 			result[def.key] = value ?? def.defaultEnabled;
 		}
 
-		return applyDependencyCascade(result);
+		return applyDeploymentMode(applyDependencyCascade(result));
 	}
 
 	static async isEnabled(
