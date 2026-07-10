@@ -50,6 +50,36 @@ See the companion [AppBoard Admin Panel](https://github.com/erykkruk/appboard-ad
 
 ---
 
+## Deploy / Self-Host
+
+AppBoard ships as two public images — `ghcr.io/erykkruk/appboard-backend:latest`
+and `ghcr.io/erykkruk/appboard-web:latest` (admin panel) — plus PostgreSQL. The
+panel resolves `BACKEND_URL` at runtime, so **one image works on every platform**.
+No SMTP is required to start: a bootstrap admin is created on first boot from
+`ADMIN_EMAIL` / `ADMIN_PASSWORD` (sign in via "Sign in with a password").
+
+### One-click
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/erykkruk/appboard_backend)
+
+| Platform | Status |
+|----------|--------|
+| **Docker Compose** (any host) | [`compose.selfhost.yaml`](compose.selfhost.yaml) — `docker compose -f compose.selfhost.yaml up -d` |
+| **Render** | Blueprint [`render.yaml`](render.yaml) — button above |
+| **Coolify** | Service template — [PR #10885](https://github.com/coollabsio/coolify/pull/10885) |
+| **Dokploy** | Template — [PR #988](https://github.com/Dokploy/templates/pull/988) |
+| **Easypanel** | Template — [PR #1477](https://github.com/easypanel-io/templates/pull/1477) |
+
+### Docker Compose (fastest)
+
+```bash
+cp .env.selfhost.example .env   # set POSTGRES_PASSWORD, BETTER_AUTH_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, APP_URL
+docker compose -f compose.selfhost.yaml up -d
+# open http://localhost:6600 and sign in with ADMIN_EMAIL + ADMIN_PASSWORD
+```
+
+---
+
 ## Quick Start
 
 ### Prerequisites

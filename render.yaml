@@ -1,0 +1,63 @@
+# AppBoard — Render Blueprint (https://render.com/docs/blueprint-spec)
+# One-click: https://render.com/deploy?repo=https://github.com/erykkruk/appboard_backend
+#
+# After the first deploy, set BETTER_AUTH_URL and ALLOWED_ORIGINS on the
+# "appboard-backend" service to the public URL Render assigned to
+# "appboard-web" (e.g. https://appboard-web.onrender.com), then redeploy.
+# Sign in with ADMIN_EMAIL + the generated ADMIN_PASSWORD via "Sign in with a password".
+databases:
+  - name: appboard-db
+    databaseName: appboard
+    user: appboard
+
+services:
+  # Backend REST API — private service (internal only; the panel proxies /api to it).
+  - type: pserv
+    name: appboard-backend
+    runtime: image
+    image:
+      url: ghcr.io/erykkruk/appboard-backend:latest
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "6680"
+      - key: DB_URL
+        fromDatabase:
+          name: appboard-db
+          property: connectionString
+      - key: BETTER_AUTH_SECRET
+        generateValue: true
+      # Set to the public appboard-web URL after the first deploy, then redeploy.
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      # Blank on purpose: a 64-hex key is generated and persisted on first boot.
+      - key: ENCRYPTION_KEY
+        value: ""
+      - key: ADMIN_EMAIL
+        value: admin@example.com
+      - key: ADMIN_PASSWORD
+        generateValue: true
+    disk:
+      name: appboard-data
+      mountPath: /app/data
+      sizeGB: 1
+
+  # Admin panel — public web service.
+  - type: web
+    name: appboard-web
+    runtime: image
+    image:
+      url: ghcr.io/erykkruk/appboard-web:latest
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "6600"
+      - key: HOSTNAME
+        value: "0.0.0.0"
+      # Render private networking resolves the backend by its service name.
+      - key: BACKEND_URL
+        value: http://appboard-backend:6680
