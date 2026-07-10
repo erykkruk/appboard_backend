@@ -28,6 +28,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import config from "@/config";
 import { auth } from "@/config/auth";
 import { DEMO_ACCOUNT } from "@/modules/demo/demo.const";
+import type { ResearchRunReport } from "@/modules/research/research.types";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { encrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
@@ -48,6 +49,7 @@ import {
 	purchaseLocalizations,
 	purchasePrices,
 	rankSnapshots,
+	researchRuns,
 	reviews,
 	stores,
 	subscriptionGroupLocalizations,
@@ -1863,6 +1865,7 @@ export async function seedDemo(
 			"playstore",
 			PULSE_RANK_TRAJECTORIES,
 		);
+		if (luminaGpId) await ensureResearchMocks(workspaceId, luminaGpId);
 
 		return {
 			auraGroupId: auraGroup.groupId,
@@ -2812,6 +2815,7 @@ export async function seedDemo(
 		"playstore",
 		PULSE_RANK_TRAJECTORIES,
 	);
+	await ensureResearchMocks(workspaceId, lumina.id);
 
 	log.info(
 		{
@@ -2960,6 +2964,674 @@ const PULSE_RANK_TRAJECTORIES: KeywordTrajectory[] = [
 	{ from: 47, keyword: "strength training app", to: 29 },
 	{ appearsOnDay: 6, from: null, keyword: "home workout", to: 44 },
 ];
+
+// ─────────────────────────────────────────────────────────────────────
+// Saved research-run mocks (review analysis + competitor comparisons)
+// ─────────────────────────────────────────────────────────────────────
+
+function daysAgo(days: number): Date {
+	const d = new Date(now);
+	d.setDate(d.getDate() - days);
+	return d;
+}
+
+interface DemoResearchRun {
+	title: string;
+	summary: string;
+	externalId: string;
+	report: ResearchRunReport;
+	createdDaysAgo: number;
+}
+
+const LUMINA_RESEARCH_RUN: DemoResearchRun = {
+	createdDaysAgo: 2,
+	externalId: "com.lumina.habits",
+	report: {
+		analysis: {
+			asoKeywords: [
+				{
+					keyword: "habit tracker",
+					reason: "Highest-volume core term, we already rank #5 and climbing",
+				},
+				{
+					keyword: "streak recovery",
+					reason:
+						"Unique differentiator — no major competitor offers it, low competition",
+				},
+				{
+					keyword: "calm habit app",
+					reason:
+						"Users repeatedly describe Lumina as 'calm' vs gamified rivals",
+				},
+				{
+					keyword: "private habit tracker",
+					reason:
+						"Privacy praise is frequent; competitors sync to cloud by default",
+				},
+			],
+			categories: [
+				{
+					count: 9,
+					id: "powiadomienia",
+					insight:
+						"A few users get duplicate reminders after changing a habit's schedule mid-week.",
+					quotes: [
+						"Got pinged twice for the same habit after I edited it",
+						"Reminders doubled since the update",
+					],
+					severity: "medium",
+				},
+				{
+					count: 6,
+					id: "sync-offline",
+					insight:
+						"Watch widget occasionally shows yesterday's streak until the app is opened.",
+					quotes: [
+						"Widget lags a day behind",
+						"Have to open the app for the widget to refresh",
+					],
+					severity: "medium",
+				},
+				{
+					count: 4,
+					id: "brak-funkcji",
+					insight: "Power users ask for CSV export and a Wear OS app.",
+					quotes: [
+						"Let me export my history please",
+						"No watch app is the only thing missing",
+					],
+					severity: "low",
+				},
+			],
+			featuresHated: [
+				{
+					insight:
+						"Duplicate notifications after editing a scheduled habit — top functional complaint.",
+					mentions: 9,
+					name: "Reminder duplicates",
+				},
+				{
+					insight:
+						"Home-screen widget refresh lag frustrates streak-focused users.",
+					mentions: 6,
+					name: "Widget refresh",
+				},
+				{
+					insight:
+						"No data export; users feel locked in despite loving the app.",
+					mentions: 4,
+					name: "CSV export",
+				},
+			],
+			featuresLoved: [
+				{
+					insight:
+						"Streak recovery ('mercy day') is the most praised feature — users say it keeps them from giving up. No major competitor has it.",
+					mentions: 31,
+					name: "Streak recovery",
+				},
+				{
+					insight:
+						"The calm, pressure-free design is called out as the reason people switched from gamified trackers.",
+					mentions: 24,
+					name: "Calm design",
+				},
+				{
+					insight:
+						"Adaptive reminders that shift with the user's day are seen as 'smart, not naggy'.",
+					mentions: 17,
+					name: "Smart reminders",
+				},
+				{
+					insight:
+						"Local-first privacy ('my data stays on my phone') is a recurring trust signal.",
+					mentions: 12,
+					name: "Privacy",
+				},
+			],
+			metadataTips: [
+				"Lead the short description with streak recovery — it is the #1 loved feature and a unique term",
+				"Add 'calm' and 'no pressure' phrasing to the first description paragraph; it mirrors user language",
+				"Screenshot 2 should show the streak-recovery flow instead of the settings screen",
+			],
+			quickWins: [
+				"Fix duplicate reminders after schedule edits (top complaint, medium effort)",
+				"Force widget refresh on midnight rollover — kills the 'stale streak' complaint",
+				"Reply to the 4 unanswered negative reviews mentioning notifications — dev replies lift rating recovery",
+			],
+			sentiment: { negative: 14, neutral: 17, positive: 69 },
+			summary:
+				"Lumina's reviews are strongly positive (69% positive). Users love exactly what competitors get criticized for lacking: streak recovery (Habitica and Loop users complain about losing streaks with no mercy), a calm non-gamified design (Habitica's #1 complaint is pressure and clutter), and local-first privacy (HabitNow users dislike ads and tracking). The main friction is notification duplicates after editing schedules and a lagging home-screen widget — both fixable and both smaller than any competitor's top issue.",
+			topIrritations: [
+				"Duplicate reminders after editing a habit's schedule",
+				"Widget shows yesterday's streak until the app is opened",
+				"No CSV export of habit history",
+			],
+		},
+		heuristics: {
+			buckets: [
+				{
+					count: 41,
+					id: "pochwaly",
+					label: "Praise (what works)",
+					quotes: [
+						"Streak recovery saved my 90-day run",
+						"Finally a tracker that doesn't shame me",
+					],
+				},
+				{
+					count: 9,
+					id: "powiadomienia",
+					label: "Notifications",
+					quotes: ["Duplicate reminders after editing"],
+				},
+				{
+					count: 6,
+					id: "sync-offline",
+					label: "Sync / Offline",
+					quotes: ["Widget shows yesterday"],
+				},
+				{
+					count: 4,
+					id: "brak-funkcji",
+					label: "Missing features",
+					quotes: ["CSV export please", "Wear OS app when?"],
+				},
+			],
+			byStars: { 1: 3, 2: 5, 3: 9, 4: 18, 5: 45 },
+			negative: 11,
+			negativeShare: 0.14,
+			total: 80,
+		},
+		keywords: [
+			{ keyword: "habit tracker", playstore: 5 },
+			{ keyword: "streak tracker", playstore: 5 },
+			{ keyword: "daily habits", playstore: 9 },
+			{ keyword: "habit reminder", playstore: 17 },
+		],
+		meta: {
+			country: "us",
+			description:
+				"Lumina helps you build lasting habits with gentle reminders, streaks, and a calm daily view.",
+			developer: "Lumina Labs",
+			downloads: "500,000+",
+			free: true,
+			genre: "Productivity",
+			id: "com.lumina.habits",
+			offersIAP: true,
+			rating: 4.6,
+			ratingsCount: 12840,
+			reviewsCount: 3120,
+			store: "playstore",
+			title: "Lumina – Habit Tracker",
+			url: "https://play.google.com/store/apps/details?id=com.lumina.habits",
+			version: "2.4.1",
+		},
+		reviewsCount: 80,
+	},
+	summary:
+		"69% positive. Loved: streak recovery, calm design, smart reminders, privacy. Friction: duplicate reminders after schedule edits, widget refresh lag. Users switching FROM gamified trackers cite pressure and lost streaks as their reason.",
+	title: "Lumina – Habit Tracker (us)",
+};
+
+const COMPETITOR_RESEARCH_RUNS: DemoResearchRun[] = [
+	{
+		createdDaysAgo: 4,
+		externalId: "com.habitrpg.android.habitica",
+		report: {
+			analysis: {
+				asoKeywords: [
+					{
+						keyword: "habit rpg",
+						reason: "Habitica owns the gamified niche — do not compete here",
+					},
+					{
+						keyword: "simple habit tracker",
+						reason:
+							"Their unhappy users search for the opposite of gamification",
+					},
+				],
+				categories: [
+					{
+						count: 22,
+						id: "ux-ui",
+						insight:
+							"Overwhelming gamification: new users bounce off the RPG layer, calling it cluttered and confusing.",
+						quotes: [
+							"I just want to track habits, not manage a video game",
+							"Too much going on, uninstalled after a week",
+						],
+						severity: "high",
+					},
+					{
+						count: 15,
+						id: "crash-bugi",
+						insight:
+							"Losing streaks/characters to sync errors is the most emotionally charged complaint.",
+						quotes: [
+							"Lost my 200-day streak to a sync bug and support shrugged",
+							"My character died because the app didn't register my check-in",
+						],
+						severity: "high",
+					},
+					{
+						count: 11,
+						id: "platnosci",
+						insight:
+							"Subscription nagging and paywalled quality-of-life features frustrate long-time users.",
+						quotes: ["Feels like a F2P game now", "Constant gem upsells"],
+						severity: "medium",
+					},
+				],
+				featuresHated: [
+					{
+						insight:
+							"No mercy mechanism — one missed day punishes the player. Lumina's streak recovery directly answers this.",
+						mentions: 15,
+						name: "Streak loss",
+					},
+					{
+						insight: "RPG layer is the top uninstall reason among non-gamers.",
+						mentions: 22,
+						name: "Forced gamification",
+					},
+					{
+						insight: "Gem/subscription upsells inside core flows.",
+						mentions: 11,
+						name: "Monetization pressure",
+					},
+				],
+				featuresLoved: [
+					{
+						insight: "Party/guild accountability keeps a loyal core engaged.",
+						mentions: 18,
+						name: "Social parties",
+					},
+					{
+						insight: "The RPG theme is exactly right for its niche audience.",
+						mentions: 14,
+						name: "RPG theme",
+					},
+				],
+				metadataTips: [
+					"Their listing leads with gamification — position Lumina as the calm alternative in the same keyword space",
+				],
+				quickWins: [
+					"Target 'simple habit tracker' and 'habit tracker without gamification' — high intent from Habitica churners",
+				],
+				sentiment: { negative: 38, neutral: 20, positive: 42 },
+				summary:
+					"Habitica's unhappy users are Lumina's best acquisition channel: their top complaints are forced gamification (overwhelming for non-gamers), streaks lost to sync bugs with no recovery, and aggressive monetization. Lumina wins on every one of these: calm design, streak recovery, one honest subscription. What Habitica users DO love — social accountability — is Lumina's biggest feature gap.",
+				topIrritations: [
+					"RPG layer forced on users who just want a tracker",
+					"Streaks and characters lost to sync bugs, no recovery",
+					"Gem and subscription upsells inside core flows",
+				],
+			},
+			heuristics: {
+				buckets: [
+					{
+						count: 22,
+						id: "ux-ui",
+						label: "UX / UI",
+						quotes: ["Cluttered", "Overwhelming for beginners"],
+					},
+					{
+						count: 15,
+						id: "crash-bugi",
+						label: "Crashes / Bugs",
+						quotes: ["Sync ate my streak"],
+					},
+					{
+						count: 11,
+						id: "platnosci",
+						label: "Payments / Subscriptions",
+						quotes: ["Gem upsells everywhere"],
+					},
+					{
+						count: 19,
+						id: "pochwaly",
+						label: "Praise (what works)",
+						quotes: ["My party keeps me accountable"],
+					},
+				],
+				byStars: { 1: 14, 2: 10, 3: 12, 4: 16, 5: 28 },
+				negative: 30,
+				negativeShare: 0.38,
+				total: 80,
+			},
+			meta: {
+				country: "us",
+				description:
+					"Treat your life like a game to stay motivated and organized!",
+				developer: "HabitRPG, Inc.",
+				downloads: "1,000,000+",
+				free: true,
+				genre: "Productivity",
+				id: "com.habitrpg.android.habitica",
+				offersIAP: true,
+				rating: 4.1,
+				ratingsCount: 89000,
+				reviewsCount: 31000,
+				store: "playstore",
+				title: "Habitica: Gamify Your Tasks",
+				url: "https://play.google.com/store/apps/details?id=com.habitrpg.android.habitica",
+				version: "4.3.2",
+			},
+			reviewsCount: 80,
+		},
+		summary:
+			"Competitor. 38% negative. They get hit for: forced gamification, streaks lost to bugs (no recovery), gem/subscription pressure. We win on: calm design, streak recovery, honest pricing. They win on: social accountability (our gap).",
+		title: "Competitor: Habitica (us)",
+	},
+	{
+		createdDaysAgo: 4,
+		externalId: "org.isoron.uhabits",
+		report: {
+			analysis: {
+				asoKeywords: [
+					{
+						keyword: "open source habit tracker",
+						reason:
+							"Loop's niche — privacy-minded users overlap with Lumina's audience",
+					},
+				],
+				categories: [
+					{
+						count: 16,
+						id: "ux-ui",
+						insight:
+							"Dated, utilitarian interface; several reviews call it 'a spreadsheet with extra steps'.",
+						quotes: ["Looks like 2015", "Functional but joyless"],
+						severity: "medium",
+					},
+					{
+						count: 12,
+						id: "powiadomienia",
+						insight:
+							"Reminders are rigid — one fixed time per habit, no adaptivity.",
+						quotes: [
+							"Wish reminders adjusted to my schedule",
+							"Alarm-clock energy",
+						],
+						severity: "medium",
+					},
+					{
+						count: 8,
+						id: "brak-funkcji",
+						insight:
+							"No streak flexibility: one missed day breaks the chain, which users say demotivates them.",
+						quotes: ["Missed one day, lost 60 — why bother"],
+						severity: "high",
+					},
+				],
+				featuresHated: [
+					{
+						insight:
+							"Chain breaks with zero mercy — identical pain point to Habitica, answered by Lumina's streak recovery.",
+						mentions: 8,
+						name: "Unforgiving streaks",
+					},
+					{
+						insight: "Fixed-time reminders feel dumb next to adaptive ones.",
+						mentions: 12,
+						name: "Rigid reminders",
+					},
+					{
+						insight: "Charts-first UI reads as cold and dated.",
+						mentions: 16,
+						name: "Dated UI",
+					},
+				],
+				featuresLoved: [
+					{
+						insight: "Free, open source, no ads — unbeatable trust story.",
+						mentions: 21,
+						name: "Open source / free",
+					},
+					{
+						insight: "Detailed habit-strength charts loved by data nerds.",
+						mentions: 13,
+						name: "Analytics",
+					},
+				],
+				metadataTips: [
+					"Loop doesn't do screenshots marketing at all — outshine it visually in search results",
+				],
+				quickWins: [
+					"Emphasize 'beautiful' + 'adaptive reminders' where Loop users complain about rigidity",
+				],
+				sentiment: { negative: 24, neutral: 26, positive: 50 },
+				summary:
+					"Loop Habit Tracker is the respected free/open-source choice, but its users complain about a dated joyless UI, rigid fixed-time reminders and unforgiving streaks. Lumina beats it on design, adaptive reminders and streak recovery while matching the privacy story (local-first). Loop wins on price (free forever) and deep analytics charts.",
+				topIrritations: [
+					"One missed day breaks the whole chain — no mercy",
+					"Reminders fixed to one time of day",
+					"Interface feels dated and cold",
+				],
+			},
+			heuristics: {
+				buckets: [
+					{
+						count: 16,
+						id: "ux-ui",
+						label: "UX / UI",
+						quotes: ["Dated design"],
+					},
+					{
+						count: 12,
+						id: "powiadomienia",
+						label: "Notifications",
+						quotes: ["Fixed-time only"],
+					},
+					{
+						count: 8,
+						id: "brak-funkcji",
+						label: "Missing features",
+						quotes: ["No streak mercy"],
+					},
+					{
+						count: 25,
+						id: "pochwaly",
+						label: "Praise (what works)",
+						quotes: ["Free and open source", "Great charts"],
+					},
+				],
+				byStars: { 1: 6, 2: 8, 3: 14, 4: 22, 5: 30 },
+				negative: 19,
+				negativeShare: 0.24,
+				total: 80,
+			},
+			meta: {
+				country: "us",
+				description:
+					"Loop Habit Tracker helps you create and maintain good habits.",
+				developer: "Álinson Santos Xavier",
+				downloads: "5,000,000+",
+				free: true,
+				genre: "Productivity",
+				id: "org.isoron.uhabits",
+				rating: 4.6,
+				ratingsCount: 121000,
+				reviewsCount: 38000,
+				store: "playstore",
+				title: "Loop Habit Tracker",
+				url: "https://play.google.com/store/apps/details?id=org.isoron.uhabits",
+				version: "2.2.0",
+			},
+			reviewsCount: 80,
+		},
+		summary:
+			"Competitor. 24% negative. They get hit for: dated UI, rigid fixed-time reminders, unforgiving streaks. We win on: design, adaptive reminders, streak recovery. They win on: free forever + open source, deep analytics.",
+		title: "Competitor: Loop Habit Tracker (us)",
+	},
+	{
+		createdDaysAgo: 3,
+		externalId: "com.habitnow",
+		report: {
+			analysis: {
+				asoKeywords: [
+					{
+						keyword: "habit tracker no ads",
+						reason:
+							"HabitNow's ad complaints create search demand for ad-free alternatives",
+					},
+				],
+				categories: [
+					{
+						count: 19,
+						id: "reklamy",
+						insight:
+							"Full-screen ads between check-ins are the dominant complaint in free tier.",
+						quotes: [
+							"An ad after every habit I tick off",
+							"Ads ruin the flow completely",
+						],
+						severity: "high",
+					},
+					{
+						count: 10,
+						id: "ux-ui",
+						insight:
+							"Feature overload: tasks + habits + timers in one app feels bloated to habit-only users.",
+						quotes: ["I only wanted habits, got a todo app with ads"],
+						severity: "medium",
+					},
+					{
+						count: 7,
+						id: "platnosci",
+						insight:
+							"Premium unlock is fine, but users resent being pushed by ad pressure.",
+						quotes: ["Pay to remove the pain they created"],
+						severity: "medium",
+					},
+				],
+				featuresHated: [
+					{
+						insight:
+							"Interstitial ads mid-flow — the single loudest complaint. Lumina has zero ads.",
+						mentions: 19,
+						name: "Full-screen ads",
+					},
+					{
+						insight: "Tries to be a todo app, habit tracker and timer at once.",
+						mentions: 10,
+						name: "Feature bloat",
+					},
+				],
+				featuresLoved: [
+					{
+						insight:
+							"Flexible scheduling (X times per week/month) praised often.",
+						mentions: 16,
+						name: "Flexible schedules",
+					},
+					{
+						insight:
+							"Powerful as a combined tasks+habits tool for power users.",
+						mentions: 11,
+						name: "All-in-one",
+					},
+				],
+				metadataTips: [
+					"Their negative reviews literally contain 'no ads' as a wish — use 'No ads. Ever.' in promotional text",
+				],
+				quickWins: [
+					"Bid/optimize for 'habit tracker without ads' — direct churn intent from HabitNow",
+				],
+				sentiment: { negative: 31, neutral: 22, positive: 47 },
+				summary:
+					"HabitNow converts well on flexible scheduling but bleeds users over aggressive interstitial ads and feature bloat. Lumina's ad-free, habit-focused experience is the direct answer. Their flexible X-times-per-week scheduling is genuinely liked — worth matching in Lumina's roadmap.",
+				topIrritations: [
+					"Full-screen ad after ticking off a habit",
+					"Bloated with tasks/timers when users want habits only",
+					"Premium pushed via ad pressure",
+				],
+			},
+			heuristics: {
+				buckets: [
+					{
+						count: 19,
+						id: "reklamy",
+						label: "Ads / Monetization",
+						quotes: ["Ad after every check-in"],
+					},
+					{ count: 10, id: "ux-ui", label: "UX / UI", quotes: ["Bloated"] },
+					{
+						count: 7,
+						id: "platnosci",
+						label: "Payments / Subscriptions",
+						quotes: ["Pushed to premium"],
+					},
+					{
+						count: 23,
+						id: "pochwaly",
+						label: "Praise (what works)",
+						quotes: ["Love the flexible schedules"],
+					},
+				],
+				byStars: { 1: 9, 2: 9, 3: 15, 4: 21, 5: 26 },
+				negative: 25,
+				negativeShare: 0.31,
+				total: 80,
+			},
+			meta: {
+				country: "us",
+				description: "Daily planner with tasks, habits and routines.",
+				developer: "Habit Now",
+				downloads: "1,000,000+",
+				free: true,
+				genre: "Productivity",
+				id: "com.habitnow",
+				offersIAP: true,
+				rating: 4.4,
+				ratingsCount: 67000,
+				reviewsCount: 21000,
+				store: "playstore",
+				title: "HabitNow Daily Routine Planner",
+				url: "https://play.google.com/store/apps/details?id=com.habitnow",
+				version: "2.1.4",
+			},
+			reviewsCount: 80,
+		},
+		summary:
+			"Competitor. 31% negative. They get hit for: full-screen ads mid-flow, feature bloat, premium pressure. We win on: zero ads, focused habit-only UX. They win on: flexible X-times-per-week scheduling (roadmap candidate).",
+		title: "Competitor: HabitNow (us)",
+	},
+];
+
+/**
+ * Seeds saved research runs: a full review analysis for Lumina plus three
+ * competitor analyses spelling out what users hate there vs love in Lumina.
+ * Skips when the workspace already has any research runs (idempotent).
+ */
+async function ensureResearchMocks(workspaceId: string, luminaGpId: string) {
+	const [existing] = await db
+		.select({ id: researchRuns.id })
+		.from(researchRuns)
+		.where(eq(researchRuns.workspaceId, workspaceId))
+		.limit(1);
+	if (existing) return;
+
+	// Competitor runs are attached to Lumina too, so they appear in the app's
+	// Research → History right next to its own review analysis.
+	const runs = [LUMINA_RESEARCH_RUN, ...COMPETITOR_RESEARCH_RUNS];
+	await db.insert(researchRuns).values(
+		runs.map((r) => ({
+			appId: luminaGpId,
+			country: "us",
+			createdAt: daysAgo(r.createdDaysAgo),
+			externalId: r.externalId,
+			kind: "manual",
+			report: r.report,
+			store: "playstore",
+			summary: r.summary,
+			title: r.title,
+			workspaceId,
+		})),
+	);
+	log.info({ runs: runs.length, workspaceId }, "Seeded research-run mocks");
+}
 
 // Auto-run only when executed directly (so tests can import seedDemo).
 if (import.meta.main) {
