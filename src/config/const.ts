@@ -1,5 +1,58 @@
-export const STORE_TYPES = ["google_play", "app_store"] as const;
+// Primary stores — always available.
+export const PRIMARY_STORE_TYPES = ["google_play", "app_store"] as const;
+
+// Alternative stores — gated behind the MULTI_STORE feature flag (default off).
+// All are Android-platform stores.
+export const ALTERNATIVE_STORE_TYPES = [
+	"huawei_appgallery",
+	"amazon_appstore",
+	"samsung_galaxy",
+	"xiaomi_getapps",
+	"rustore",
+	"onestore",
+] as const;
+
+export const STORE_TYPES = [
+	...PRIMARY_STORE_TYPES,
+	...ALTERNATIVE_STORE_TYPES,
+] as const;
 export type StoreType = (typeof STORE_TYPES)[number];
+
+export type AlternativeStoreType = (typeof ALTERNATIVE_STORE_TYPES)[number];
+
+const ALTERNATIVE_STORE_SET: ReadonlySet<string> = new Set(
+	ALTERNATIVE_STORE_TYPES,
+);
+
+export function isAlternativeStoreType(
+	type: string,
+): type is AlternativeStoreType {
+	return ALTERNATIVE_STORE_SET.has(type);
+}
+
+// Display metadata shared with the panel + mobile (labels, short badges).
+export const STORE_TYPE_LABELS: Record<StoreType, string> = {
+	amazon_appstore: "Amazon Appstore",
+	app_store: "App Store",
+	google_play: "Google Play",
+	huawei_appgallery: "Huawei AppGallery",
+	onestore: "ONE Store",
+	rustore: "RuStore",
+	samsung_galaxy: "Samsung Galaxy Store",
+	xiaomi_getapps: "Xiaomi GetApps",
+};
+
+// Every alternative store is Android-based today.
+export const STORE_TYPE_PLATFORM: Record<StoreType, Platform> = {
+	amazon_appstore: "android",
+	app_store: "ios",
+	google_play: "android",
+	huawei_appgallery: "android",
+	onestore: "android",
+	rustore: "android",
+	samsung_galaxy: "android",
+	xiaomi_getapps: "android",
+};
 
 export const PLATFORMS = ["android", "ios"] as const;
 export type Platform = (typeof PLATFORMS)[number];

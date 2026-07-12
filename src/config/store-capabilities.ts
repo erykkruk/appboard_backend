@@ -299,7 +299,21 @@ export interface StoreSetupInfo {
 	baseNote: string;
 }
 
+// Alternative stores connect with a simple API token today (stub integration),
+// so their setup note is generic and they need no GCP APIs.
+function alternativeStoreSetup(
+	storeType: StoreType,
+	label: string,
+): StoreSetupInfo {
+	return {
+		baseGcpApis: [],
+		baseNote: `Paste an API token from your ${label} developer console to connect it. Full publishing support for ${label} is coming soon.`,
+		storeType,
+	};
+}
+
 export const STORE_SETUP_INFO: Record<StoreType, StoreSetupInfo> = {
+	amazon_appstore: alternativeStoreSetup("amazon_appstore", "Amazon Appstore"),
 	app_store: {
 		baseGcpApis: [],
 		baseNote:
@@ -312,6 +326,17 @@ export const STORE_SETUP_INFO: Record<StoreType, StoreSetupInfo> = {
 			"Create a service account, enable the required Google APIs on its project, then invite the service account email to your Play Console (Users & permissions) and grant it the roles for the capabilities you selected.",
 		storeType: "google_play",
 	},
+	huawei_appgallery: alternativeStoreSetup(
+		"huawei_appgallery",
+		"Huawei AppGallery",
+	),
+	onestore: alternativeStoreSetup("onestore", "ONE Store"),
+	rustore: alternativeStoreSetup("rustore", "RuStore"),
+	samsung_galaxy: alternativeStoreSetup(
+		"samsung_galaxy",
+		"Samsung Galaxy Store",
+	),
+	xiaomi_getapps: alternativeStoreSetup("xiaomi_getapps", "Xiaomi GetApps"),
 };
 
 /** All capability definitions for a store type, in display order. */

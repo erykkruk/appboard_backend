@@ -7,6 +7,7 @@ export type FeatureKey =
 	| "GROUPS"
 	| "HISTORY"
 	| "LISTINGS"
+	| "MULTI_STORE"
 	| "MONETIZATION_CHAT"
 	| "PRIVACY"
 	| "PUBLISHING"
@@ -66,6 +67,13 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
 			"Edit and manage store listings (title, description, keywords)",
 		key: "LISTINGS",
 		name: "Listings",
+	},
+	{
+		defaultEnabled: false,
+		description:
+			"Connect alternative app stores beyond App Store and Google Play (Huawei AppGallery, Amazon Appstore, Samsung Galaxy Store, and more)",
+		key: "MULTI_STORE",
+		name: "Alternative Stores",
 	},
 	{
 		defaultEnabled: true,

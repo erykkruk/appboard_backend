@@ -1,9 +1,10 @@
 import { and, eq } from "drizzle-orm";
-import type { StoreType } from "@/config/const";
+import { isAlternativeStoreType, type StoreType } from "@/config/const";
 import {
 	resolveDefaultCapabilities,
 	validateCapabilitySelection,
 } from "@/config/store-capabilities";
+import { FeaturesService } from "@/modules/features/features.service";
 import {
 	decryptCredentials,
 	encryptCredentials,
@@ -25,6 +26,20 @@ export class StoresService {
 		credentials: Record<string, unknown>,
 		capabilities?: string[],
 	) {
+		// Alternative stores (Huawei AppGallery, Amazon Appstore, …) are gated
+		// behind the MULTI_STORE feature flag, off by default.
+		if (isAlternativeStoreType(type)) {
+			const enabled = await FeaturesService.isEnabled(
+				workspaceId,
+				"MULTI_STORE",
+			);
+			if (!enabled) {
+				buildError("forbidden", {
+					info: "Connecting alternative app stores requires the Alternative Stores feature to be enabled.",
+				});
+			}
+		}
+
 		const provider = createProvider(type, credentials);
 		const validation = await provider.validateCredentials();
 		if (!validation.valid) {

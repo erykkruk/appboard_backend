@@ -58,8 +58,9 @@ describe("Feature flags", () => {
 		expect(Array.isArray(data.definitions)).toBe(true);
 		expect(data.definitions.length).toBe(FEATURE_DEFINITIONS.length);
 
+		// Each feature reports its own default (most are on; MULTI_STORE is off).
 		for (const def of FEATURE_DEFINITIONS) {
-			expect(data.features[def.key]).toBe(true);
+			expect(data.features[def.key]).toBe(def.defaultEnabled);
 		}
 	});
 
