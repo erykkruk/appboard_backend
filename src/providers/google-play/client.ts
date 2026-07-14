@@ -1,5 +1,6 @@
 import type { androidpublisher_v3 } from "googleapis";
 import { google } from "googleapis";
+import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import type { GooglePlayCredentials } from "./types";
 
@@ -191,6 +192,18 @@ export async function commitEdit(
 		}
 
 		if (MUST_SET_CHANGES_NOT_SENT.test(message)) {
+			// Downgrading an explicit "send for review" to a draft would report
+			// success while submitting nothing — the user must know it didn't go out.
+			if (sendForReview) {
+				log.error(
+					{ editId, packageName },
+					"Google refuses to send these changes for review",
+				);
+				throw buildError("badRequest", {
+					info: "Google Play will not accept these changes for review yet — they can only be saved as a draft. Send them for review from the Play Console.",
+				});
+			}
+
 			await api.edits.commit({
 				changesNotSentForReview: true,
 				editId,

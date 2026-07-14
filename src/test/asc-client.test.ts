@@ -79,7 +79,7 @@ describe("App Store Connect fetch", () => {
 		globalThis.fetch = (async (_url: string, options?: RequestInit) => {
 			seen.push(options?.headers as Headers);
 			return jsonResponse(200);
-		}) as typeof fetch;
+		}) as unknown as typeof fetch;
 
 		const ascFetch = createAscFetch(CREDENTIALS);
 		await ascFetch(`${ASC_URL_BASE}/v1/apps`);
@@ -92,7 +92,7 @@ describe("App Store Connect fetch", () => {
 		globalThis.fetch = (async (_url: string, options?: RequestInit) => {
 			seen.push(options?.headers as Headers);
 			return jsonResponse(200);
-		}) as typeof fetch;
+		}) as unknown as typeof fetch;
 
 		const ascFetch = createAscFetch(CREDENTIALS);
 		await ascFetch("https://upload.itunes.apple.com/upload/abc", {
@@ -112,7 +112,7 @@ describe("App Store Connect fetch", () => {
 			const headers = options?.headers as Headers;
 			tokens.push(headers.get("Authorization") ?? "");
 			return jsonResponse(call === 1 ? 401 : 200);
-		}) as typeof fetch;
+		}) as unknown as typeof fetch;
 
 		const ascFetch = createAscFetch(CREDENTIALS);
 		const response = await ascFetch(`${ASC_URL_BASE}/v1/apps`);
@@ -128,7 +128,7 @@ describe("App Store Connect fetch", () => {
 		globalThis.fetch = (async () => {
 			call++;
 			return jsonResponse(401);
-		}) as typeof fetch;
+		}) as unknown as typeof fetch;
 
 		const ascFetch = createAscFetch(CREDENTIALS);
 		const response = await ascFetch(`${ASC_URL_BASE}/v1/apps`);
@@ -144,7 +144,7 @@ describe("App Store Connect fetch", () => {
 			return call === 1
 				? jsonResponse(429, { "retry-after": "0" })
 				: jsonResponse(200);
-		}) as typeof fetch;
+		}) as unknown as typeof fetch;
 
 		const ascFetch = createAscFetch(CREDENTIALS);
 		const response = await ascFetch(`${ASC_URL_BASE}/v1/apps`);
@@ -158,12 +158,63 @@ describe("App Store Connect fetch", () => {
 		globalThis.fetch = (async () => {
 			call++;
 			return jsonResponse(400);
-		}) as typeof fetch;
+		}) as unknown as typeof fetch;
 
 		const ascFetch = createAscFetch(CREDENTIALS);
 		const response = await ascFetch(`${ASC_URL_BASE}/v1/apps`);
 
 		expect(response.status).toBe(400);
 		expect(call).toBe(1);
+	});
+
+	it("never replays a POST after a 5xx — Apple may have applied it", async () => {
+		let call = 0;
+		globalThis.fetch = (async () => {
+			call++;
+			return jsonResponse(503);
+		}) as unknown as typeof fetch;
+
+		const ascFetch = createAscFetch(CREDENTIALS);
+		const response = await ascFetch(`${ASC_URL_BASE}/v1/appScreenshots`, {
+			method: "POST",
+		});
+
+		// Retrying would duplicate the screenshot reservation / review submission.
+		expect(response.status).toBe(503);
+		expect(call).toBe(1);
+	});
+
+	it("does retry a GET after a 5xx", async () => {
+		let call = 0;
+		globalThis.fetch = (async () => {
+			call++;
+			return call === 1
+				? jsonResponse(503, { "retry-after": "0" })
+				: jsonResponse(200);
+		}) as unknown as typeof fetch;
+
+		const ascFetch = createAscFetch(CREDENTIALS);
+		const response = await ascFetch(`${ASC_URL_BASE}/v1/apps`);
+
+		expect(response.status).toBe(200);
+		expect(call).toBe(2);
+	});
+
+	it("retries a POST that was throttled — a 429 never reached the handler", async () => {
+		let call = 0;
+		globalThis.fetch = (async () => {
+			call++;
+			return call === 1
+				? jsonResponse(429, { "retry-after": "0" })
+				: jsonResponse(201);
+		}) as unknown as typeof fetch;
+
+		const ascFetch = createAscFetch(CREDENTIALS);
+		const response = await ascFetch(`${ASC_URL_BASE}/v1/appScreenshots`, {
+			method: "POST",
+		});
+
+		expect(response.status).toBe(201);
+		expect(call).toBe(2);
 	});
 });

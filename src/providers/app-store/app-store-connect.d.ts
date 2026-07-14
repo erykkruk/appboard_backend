@@ -76,6 +76,7 @@ declare module "node-app-store-connect-api" {
 			data: { id: string; type: string },
 			options: UpdateOptions,
 		): Promise<ApiResource>;
+		fetchJson(url: string, options?: Record<string, unknown>): Promise<unknown>;
 		postJson(
 			url: string,
 			data: unknown,

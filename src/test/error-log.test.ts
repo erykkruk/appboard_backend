@@ -25,7 +25,9 @@ describe("scrubSecrets", () => {
 	});
 
 	it("redacts a service-account private_key field", () => {
-		const out = scrubSecrets('{"private_key":"-----BEGIN...secret...END-----"}');
+		const out = scrubSecrets(
+			'{"private_key":"-----BEGIN...secret...END-----"}',
+		);
 		expect(out).not.toContain("secret");
 		expect(out).toContain("[REDACTED]");
 	});

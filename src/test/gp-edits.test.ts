@@ -68,20 +68,34 @@ describe("Google Play commitEdit", () => {
 		expect(calls[1].editId).toBe("edit-1");
 	});
 
-	it("sets the flag when Google demands it", async () => {
+	it("sets the flag when Google demands it on a draft commit", async () => {
 		const { api, calls } = fakeApi({
 			message:
 				"Please set the query parameter changesNotSentForReview to true.",
 			times: 1,
 		});
 
-		await commitEdit(api, "com.example.app", "edit-1", {
-			sendForReview: true,
-		});
+		await commitEdit(api, "com.example.app", "edit-1");
 
 		expect(calls).toHaveLength(2);
-		expect(calls[0].changesNotSentForReview).toBe(false);
 		expect(calls[1].changesNotSentForReview).toBe(true);
+	});
+
+	it("fails loudly rather than downgrading an explicit send-for-review to a draft", async () => {
+		const { api, calls } = fakeApi({
+			message:
+				"Please set the query parameter changesNotSentForReview to true.",
+			times: 1,
+		});
+
+		// Quietly committing as a draft here would report success to the user while
+		// submitting nothing to Google.
+		await expect(
+			commitEdit(api, "com.example.app", "edit-1", { sendForReview: true }),
+		).rejects.toThrow();
+
+		expect(calls).toHaveLength(1);
+		expect(calls[0].changesNotSentForReview).toBe(false);
 	});
 
 	it("never silently sends changes for review on an unrelated failure", async () => {
@@ -90,13 +104,12 @@ describe("Google Play commitEdit", () => {
 			times: 1,
 		});
 
-		expect(commitEdit(api, "com.example.app", "edit-1")).rejects.toThrow(
+		// The old code retried on ANY error without the flag, which pushed the app
+		// into review behind the user's back. One attempt, then surface the error.
+		await expect(commitEdit(api, "com.example.app", "edit-1")).rejects.toThrow(
 			"Internal error",
 		);
 
-		// The old code retried on ANY error without the flag, which pushed the app
-		// into review behind the user's back. One attempt, then surface the error.
-		await Bun.sleep(0);
 		expect(calls).toHaveLength(1);
 		expect(calls[0].changesNotSentForReview).toBe(true);
 	});

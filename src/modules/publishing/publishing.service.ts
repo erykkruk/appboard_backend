@@ -44,9 +44,12 @@ const IN_PROGRESS_SUBMISSION_STATES = [
 	"UNRESOLVED_ISSUES",
 ];
 
-/** Apple takes a while to flip a version to READY_FOR_REVIEW (deliver polls 10×15s). */
-const REVIEW_READY_MAX_ATTEMPTS = 10;
-const REVIEW_READY_POLL_INTERVAL_MS = 15_000;
+/**
+ * Bounded so the submit request cannot hang the panel: 6 × 5s ≈ 30s worst case.
+ * fastlane polls 10×15s, but it runs from a CLI with no HTTP timeout above it.
+ */
+const REVIEW_READY_MAX_ATTEMPTS = 6;
+const REVIEW_READY_POLL_INTERVAL_MS = 5_000;
 
 function suggestNextVersion(versionString: string): string {
 	const parts = versionString.split(".");
@@ -401,7 +404,6 @@ function extractAscError(err: unknown): string {
 
 	return err instanceof Error ? err.message : String(err);
 }
-
 
 const LISTING_FIELDS = [
 	"fullDesc",
@@ -3913,15 +3915,34 @@ export class PublishingService {
 		});
 	}
 
+	/**
+	 * Apple needs a moment to flip the version to READY_FOR_REVIEW after the item
+	 * is attached. This runs inside an HTTP request, so the wait is deliberately
+	 * short — fastlane can afford 10×15s from a CLI, we cannot.
+	 *
+	 * READY_FOR_REVIEW only exists in the `appVersionState` vocabulary. If Apple
+	 * doesn't return that field we cannot observe readiness at all, so we stop
+	 * immediately rather than burning the whole budget waiting for a value that
+	 * can never appear.
+	 */
 	private static async waitForReviewReadiness(
 		read: Awaited<ReturnType<typeof createAppStoreClient>>["read"],
 		versionId: string,
 	): Promise<void> {
 		for (let attempt = 1; attempt <= REVIEW_READY_MAX_ATTEMPTS; attempt++) {
 			const { data } = await read(`appStoreVersions/${versionId}`);
-			const state = versionState(data as unknown as ApiResource);
+			const version = data as unknown as ApiResource;
+			const state = version.attributes?.appVersionState as string | undefined;
 
 			if (state === "READY_FOR_REVIEW") return;
+
+			if (!state) {
+				log.info(
+					{ versionId },
+					"App Store Connect does not report appVersionState; submitting without waiting",
+				);
+				return;
+			}
 
 			if (attempt < REVIEW_READY_MAX_ATTEMPTS) {
 				await sleep(REVIEW_READY_POLL_INTERVAL_MS);

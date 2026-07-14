@@ -15,6 +15,16 @@ const log = createLogger("app-store-upload");
 
 const MAX_ATTEMPTS_PER_PART = 5;
 
+/** ~60s of processing, matching the library's old default. */
+const DELIVERY_POLL_MAX_ATTEMPTS = 60;
+const DELIVERY_POLL_INTERVAL_MS = 1_000;
+const DELIVERY_POLL_MAX_READ_FAILURES = 3;
+
+interface DeliveryState {
+	errors?: Array<{ code?: string; description?: string }>;
+	state?: string;
+}
+
 interface UploadOperation {
 	length: number;
 	method: string;
@@ -41,11 +51,17 @@ interface UploadOperation {
  * The upload URLs are pre-signed and time-limited; per Apple's docs they must
  * NOT carry the JWT.
  */
+export interface UploadPollOptions {
+	intervalMs?: number;
+	maxAttempts?: number;
+}
+
 export async function uploadAndCommitAsset(
 	client: ApiClient,
 	reservation: ApiResourceWithLinks,
 	buffer: Buffer,
 	label = "asset",
+	pollOptions: UploadPollOptions = {},
 ): Promise<{ sourceFileChecksum: string }> {
 	const operations = reservation.attributes?.uploadOperations as
 		| UploadOperation[]
@@ -76,22 +92,80 @@ export async function uploadAndCommitAsset(
 		throw err;
 	}
 
-	const selfUrl =
-		reservation.links?.self ?? `${reservation.type}/${reservation.id}`;
-	try {
-		await client.pollForUploadSuccess(selfUrl, label);
-	} catch (err) {
-		// Apple rejected the delivered bytes (or never finished processing them):
-		// the asset row is useless, so don't leave it behind in the set.
-		await discardReservation(client, reservation, label);
-		throw err;
-	}
+	await waitForDelivery(client, reservation, label, pollOptions);
 
 	return { sourceFileChecksum };
 }
 
 export function md5(buffer: Buffer): string {
 	return createHash("md5").update(buffer).digest("hex");
+}
+
+/**
+ * Waits for Apple to finish processing the delivered bytes.
+ *
+ * Only `FAILED` means the asset is garbage and must be removed. A slow queue or
+ * a hiccup on the read-back does NOT — deleting there would destroy a
+ * successfully uploaded screenshot, which is strictly worse than leaving one
+ * that is still processing. So a timeout is a warning, not an error: the bytes
+ * are committed and Apple will finish on its own.
+ */
+async function waitForDelivery(
+	client: ApiClient,
+	reservation: ApiResourceWithLinks,
+	label: string,
+	{
+		intervalMs = DELIVERY_POLL_INTERVAL_MS,
+		maxAttempts = DELIVERY_POLL_MAX_ATTEMPTS,
+	}: UploadPollOptions,
+): Promise<void> {
+	const selfUrl =
+		reservation.links?.self ?? `${reservation.type}/${reservation.id}`;
+
+	let readFailures = 0;
+
+	for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+		let state: string | undefined;
+
+		try {
+			const asset = (await client.fetchJson(selfUrl)) as
+				| { attributes?: { assetDeliveryState?: DeliveryState } }
+				| undefined;
+			const delivery = asset?.attributes?.assetDeliveryState;
+			state = delivery?.state;
+
+			if (state === "COMPLETE") return;
+
+			if (state === "FAILED") {
+				await discardReservation(client, reservation, label);
+				throw new Error(
+					`${label} was rejected by Apple: ${JSON.stringify(delivery?.errors ?? [])}`,
+				);
+			}
+
+			readFailures = 0;
+		} catch (err) {
+			if (err instanceof Error && err.message.includes("rejected by Apple")) {
+				throw err;
+			}
+
+			readFailures++;
+			if (readFailures >= DELIVERY_POLL_MAX_READ_FAILURES) {
+				log.warn(
+					{ err, id: reservation.id, label },
+					"Could not read asset delivery state; leaving the uploaded asset in place",
+				);
+				return;
+			}
+		}
+
+		await sleep(intervalMs);
+	}
+
+	log.warn(
+		{ id: reservation.id, label },
+		"Asset still processing after the poll window; leaving it in place",
+	);
 }
 
 async function uploadPart(

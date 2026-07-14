@@ -75,6 +75,10 @@ export class ReviewsService {
 				const updateData: Record<string, unknown> = {
 					body: review.body,
 					rating: review.rating,
+					// A user can edit their review, which restarts Google's 7-day reply
+					// window. Freezing reviewDate at first insert made us refuse replies
+					// the store would have accepted.
+					reviewDate: review.reviewDate,
 					syncedAt: new Date(),
 					title: review.title,
 				};

@@ -15,6 +15,22 @@ export const ASC_URL_BASE = "https://api.appstoreconnect.apple.com";
 /** Total attempts per request, including the first one. */
 const MAX_ATTEMPTS = 6;
 
+/**
+ * Verbs that are safe to repeat. A POST is not: Apple may have created the
+ * resource and still answered 503, so replaying it would duplicate a screenshot
+ * reservation or a review submission. Google's client draws the same line.
+ */
+const REPLAYABLE_METHODS = new Set(["GET", "HEAD", "OPTIONS", "PUT", "DELETE"]);
+
+/**
+ * A 429 never reaches the handler, so it is safe to retry for any verb.
+ * A 5xx may mean the write landed, so only replay it for idempotent verbs.
+ */
+function shouldRetry(status: number, isReplayable: boolean): boolean {
+	if (status === 429) return true;
+	return isReplayable && isRetryableStatus(status);
+}
+
 export type AscFetch = (
 	url: string,
 	options?: RequestInit,
@@ -39,6 +55,8 @@ export type AscFetch = (
 export function createAscFetch(credentials: AppStoreApiCredentials): AscFetch {
 	return async function ascFetch(url, options) {
 		const isAscRequest = url.startsWith(ASC_URL_BASE);
+		const method = (options?.method ?? "GET").toUpperCase();
+		const isReplayable = REPLAYABLE_METHODS.has(method);
 		let refreshedToken = false;
 
 		for (let attempt = 1; ; attempt++) {
@@ -57,7 +75,9 @@ export function createAscFetch(credentials: AppStoreApiCredentials): AscFetch {
 			try {
 				response = await fetch(url, requestOptions);
 			} catch (err) {
-				if (attempt >= MAX_ATTEMPTS) throw err;
+				// A POST that never got a response may still have been applied by
+				// Apple, so only replay it when the verb is safe to repeat.
+				if (!isReplayable || attempt >= MAX_ATTEMPTS) throw err;
 				const delay = computeBackoffMs(attempt);
 				log.warn({ attempt, delay, err, url }, "Network error, retrying");
 				await sleep(delay);
@@ -65,6 +85,7 @@ export function createAscFetch(credentials: AppStoreApiCredentials): AscFetch {
 			}
 
 			// A token we believed was fresh was rejected — re-mint once and replay.
+			// Safe for any verb: a 401 means Apple did not act on the request.
 			if (response.status === 401 && isAscRequest && !refreshedToken) {
 				refreshedToken = true;
 				invalidateAscToken(credentials);
@@ -72,15 +93,20 @@ export function createAscFetch(credentials: AppStoreApiCredentials): AscFetch {
 				continue;
 			}
 
-			if (!isRetryableStatus(response.status) || attempt >= MAX_ATTEMPTS) {
+			if (
+				!shouldRetry(response.status, isReplayable) ||
+				attempt >= MAX_ATTEMPTS
+			) {
 				return response;
 			}
 
 			const delay = nextDelayMs(attempt, response.headers.get("retry-after"));
 			log.warn(
-				{ attempt, delay, status: response.status, url },
+				{ attempt, delay, method, status: response.status, url },
 				"App Store Connect request failed, backing off",
 			);
+			// Free the connection before sleeping — an undrained body pins a socket.
+			await response.arrayBuffer().catch(() => undefined);
 			await sleep(delay);
 		}
 	};
