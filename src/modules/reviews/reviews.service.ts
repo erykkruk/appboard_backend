@@ -9,6 +9,45 @@ import { createLogger } from "@/utils/logger";
 
 const log = createLogger("reviews-service");
 
+/**
+ * Store-side limits on developer replies. Hitting them used to surface as an
+ * opaque 400 from Google/Apple after the request had already gone out.
+ */
+const REPLY_MAX_LENGTH: Partial<Record<StoreType, number>> = {
+	app_store: 5_970,
+	google_play: 350,
+};
+
+/** Google Play refuses a reply more than a week after the user's last comment. */
+const PLAY_REPLY_WINDOW_MS = 7 * 24 * 60 * 60 * 1_000;
+
+function assertReplyAllowed(
+	storeType: StoreType,
+	review: { reviewDate: Date | null; replyText: string | null },
+	text: string,
+): void {
+	const trimmed = text.trim();
+	if (!trimmed) {
+		buildError("badRequest", { info: "Reply cannot be empty" });
+	}
+
+	const maxLength = REPLY_MAX_LENGTH[storeType];
+	if (maxLength && trimmed.length > maxLength) {
+		buildError("badRequest", {
+			info: `Reply is ${trimmed.length} characters; ${storeType === "google_play" ? "Google Play" : "the App Store"} allows at most ${maxLength}.`,
+		});
+	}
+
+	if (storeType === "google_play" && review.reviewDate) {
+		const age = Date.now() - review.reviewDate.getTime();
+		if (age > PLAY_REPLY_WINDOW_MS) {
+			buildError("badRequest", {
+				info: "Google Play only accepts replies within 7 days of the review. This review is too old to reply to.",
+			});
+		}
+	}
+}
+
 export class ReviewsService {
 	static async syncFromStore(appId: string) {
 		const app = await ReviewsService.getAppWithStore(appId);
@@ -122,6 +161,9 @@ export class ReviewsService {
 		if (!review) buildError("notFound", { info: "Review not found" });
 
 		const app = await ReviewsService.getAppWithStore(appId);
+
+		assertReplyAllowed(app.store.type as StoreType, review, text);
+
 		const credentials = decryptCredentials(
 			app.store.credentials!,
 			app.store.workspaceId,

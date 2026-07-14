@@ -1,11 +1,14 @@
 declare module "node-app-store-connect-api" {
-	interface ApiOptions {
+	export interface ApiOptions {
 		apiKey: string;
+		/** Blind, delay-free retries inside the library. Set to 0 — we retry in `fetch`. */
+		automaticRetries?: number;
+		fetch?: (url: string, options?: RequestInit) => Promise<Response>;
 		issuerId: string;
 		privateKey: string;
 	}
 
-	interface ApiResource {
+	export interface ApiResource {
 		attributes: Record<string, unknown>;
 		id: string;
 		relationships?: Record<
@@ -20,19 +23,19 @@ declare module "node-app-store-connect-api" {
 		type: string;
 	}
 
-	interface ReadResponse {
+	export interface ReadResponse {
 		data: ApiResource[];
 		included?: Record<string, Record<string, ApiResource>>;
 		links?: Record<string, string>;
 		meta?: Record<string, unknown>;
 	}
 
-	interface ReadAllResponse {
+	export interface ReadAllResponse {
 		data: ApiResource[];
 		included?: Record<string, Record<string, ApiResource>>;
 	}
 
-	interface CreateOptions {
+	export interface CreateOptions {
 		attributes?: Record<string, unknown>;
 		included?: Array<Record<string, unknown>>;
 		relationships?: Record<string, unknown>;
@@ -40,22 +43,25 @@ declare module "node-app-store-connect-api" {
 		version?: number;
 	}
 
-	interface UpdateOptions {
+	export interface UpdateOptions {
 		attributes?: Record<string, unknown>;
 		included?: Array<Record<string, unknown>>;
 		relationships?: Record<string, unknown>;
 		version?: number;
 	}
 
-	interface ApiResourceWithLinks extends ApiResource {
+	export interface ApiResourceWithLinks extends ApiResource {
 		links?: Record<string, string>;
 	}
 
-	interface CreateResponse {
-		data: ApiResourceWithLinks;
-	}
+	/**
+	 * `create()` resolves to the resource itself — the library unwraps the
+	 * JSON:API `{ data }` envelope for us. Typing it as `{ data: ... }` is what
+	 * let a `created.data` dereference (always undefined) ship undetected.
+	 */
+	export type CreateResponse = ApiResourceWithLinks;
 
-	interface ApiClient {
+	export interface ApiClient {
 		create(options: CreateOptions): Promise<CreateResponse>;
 		read(url: string, options?: Record<string, unknown>): Promise<ReadResponse>;
 		readAll(
