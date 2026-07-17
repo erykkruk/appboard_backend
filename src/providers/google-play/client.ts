@@ -1,11 +1,19 @@
 import type { androidpublisher_v3 } from "googleapis";
 import { google } from "googleapis";
+import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import type { GooglePlayCredentials } from "./types";
 
 const log = createLogger("google-play-client");
 
 type AndroidPublisher = androidpublisher_v3.Androidpublisher;
+
+/**
+ * googleapis does not retry by default. Play throttles per-minute and returns
+ * transient 5xx during edit commits, so we let gaxios back off for us.
+ */
+const PLAY_MAX_RETRIES = 5;
+const PLAY_RETRY_BASE_DELAY_MS = 1_000;
 
 export interface GooglePlayClient {
 	api: AndroidPublisher;
@@ -35,6 +43,19 @@ export async function createGooglePlayClient(
 
 	const api = google.androidpublisher({
 		auth,
+		retry: true,
+		retryConfig: {
+			// Only replayable verbs — a retried POST could double-commit an edit
+			// or duplicate an image upload.
+			httpMethodsToRetry: ["GET", "HEAD", "OPTIONS", "PUT", "DELETE"],
+			noResponseRetries: 2,
+			retry: PLAY_MAX_RETRIES,
+			retryDelay: PLAY_RETRY_BASE_DELAY_MS,
+			statusCodesToRetry: [
+				[429, 429],
+				[500, 504],
+			],
+		},
 		version: "v3",
 	});
 
@@ -108,13 +129,35 @@ export async function createEdit(
 }
 
 /**
+ * Google flips the `changesNotSentForReview` requirement depending on the app
+ * and the change type, and tells us which way in the error body. fastlane
+ * (supply `rescue_changes_not_sent_for_review`) keys off these exact messages;
+ * so do we.
+ */
+const MUST_NOT_SET_CHANGES_NOT_SENT =
+	/changesNotSentForReview must not be set/i;
+const MUST_SET_CHANGES_NOT_SENT =
+	/set the query parameter changesNotSentForReview to true/i;
+
+function errorText(err: unknown): string {
+	const gaxios = err as { message?: string; response?: { data?: unknown } };
+	const body = gaxios.response?.data
+		? JSON.stringify(gaxios.response.data)
+		: "";
+	return `${gaxios.message ?? String(err)} ${body}`;
+}
+
+/**
  * Commits an existing edit.
- * By default, changes are NOT sent for review — they stay as a pending
- * update on Google Play until manually sent for review from the Console.
- * Set `sendForReview: true` to submit immediately.
  *
- * If `changesNotSentForReview` fails (e.g. new app without prior review),
- * automatically retries without the flag.
+ * By default changes are NOT sent for review — they stay as a pending update on
+ * Google Play until sent for review explicitly. Pass `sendForReview: true` to
+ * submit immediately.
+ *
+ * A rejected commit does not consume the edit, so the message-driven retries
+ * below reuse the same edit ID (as supply does). We only flip the review
+ * behaviour when Google explicitly demands it — the previous code retried on
+ * *any* error and silently sent the changes for review.
  */
 export async function commitEdit(
 	api: AndroidPublisher,
@@ -122,33 +165,60 @@ export async function commitEdit(
 	editId: string,
 	options?: { sendForReview?: boolean },
 ): Promise<void> {
-	const wantDraft = !(options?.sendForReview ?? false);
+	const sendForReview = options?.sendForReview ?? false;
+	const changesNotSentForReview = !sendForReview;
 
-	if (wantDraft) {
-		try {
+	try {
+		await api.edits.commit({
+			changesNotSentForReview,
+			editId,
+			packageName,
+		});
+		log.info(
+			{ editId, packageName, sentForReview: sendForReview },
+			"Edit committed",
+		);
+		return;
+	} catch (err) {
+		const message = errorText(err);
+
+		if (MUST_NOT_SET_CHANGES_NOT_SENT.test(message)) {
+			await api.edits.commit({ editId, packageName });
+			log.info(
+				{ editId, packageName },
+				"Edit committed without changesNotSentForReview (Google rejected the flag)",
+			);
+			return;
+		}
+
+		if (MUST_SET_CHANGES_NOT_SENT.test(message)) {
+			// Downgrading an explicit "send for review" to a draft would report
+			// success while submitting nothing — the user must know it didn't go out.
+			if (sendForReview) {
+				log.error(
+					{ editId, packageName },
+					"Google refuses to send these changes for review",
+				);
+				throw buildError("badRequest", {
+					info: "Google Play will not accept these changes for review yet — they can only be saved as a draft. Send them for review from the Play Console.",
+				});
+			}
+
 			await api.edits.commit({
 				changesNotSentForReview: true,
 				editId,
 				packageName,
 			});
 			log.info(
-				{ editId, packageName, sentForReview: false },
-				"Edit committed (draft)",
+				{ editId, packageName },
+				"Edit committed as draft (Google required changesNotSentForReview)",
 			);
 			return;
-		} catch (err) {
-			log.warn(
-				{ editId, err: (err as Error).message, packageName },
-				"Draft commit failed, retrying without changesNotSentForReview",
-			);
 		}
-	}
 
-	await api.edits.commit({
-		editId,
-		packageName,
-	});
-	log.info({ editId, packageName, sentForReview: true }, "Edit committed");
+		log.error({ editId, err, packageName }, "Edit commit failed");
+		throw err;
+	}
 }
 
 /**
