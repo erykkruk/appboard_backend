@@ -6,7 +6,7 @@ import {
 	shutdownAnalytics,
 } from "@/utils/analytics";
 
-// These assert the disabled path only — with POSTHOG_KEY set in a developer's
+// These assert the disabled path only - with POSTHOG_KEY set in a developer's
 // local .env the module would build a real client and send events, so the
 // suite skips instead of failing (or worse, polluting the dashboards).
 const enabled = isAnalyticsConfigured();

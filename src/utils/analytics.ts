@@ -8,7 +8,7 @@ const log = createLogger("analytics");
  * Server-side product analytics (PostHog). Optional integration: with no
  * POSTHOG_KEY every call is a no-op, so self-hosted deployments send nothing.
  *
- * Server-side is the only reliable place to count signups — the browser cannot
+ * Server-side is the only reliable place to count signups - the browser cannot
  * tell a first login from a returning one, especially on the social OAuth flow.
  */
 
@@ -20,7 +20,7 @@ const FLUSH_INTERVAL_MS = 5_000;
 // process open for posthog-node's 30s default.
 const SHUTDOWN_TIMEOUT_MS = 2_000;
 
-/** Event names are a contract with the dashboards — never inline them. */
+/** Event names are a contract with the dashboards - never inline them. */
 export const ANALYTICS_EVENTS = {
 	USER_SIGNED_UP: "user_signed_up",
 } as const;
@@ -47,7 +47,7 @@ function getClient(): PostHog | undefined {
 }
 
 /**
- * Best-effort event capture — never throws. Callers include the signup hook, so
+ * Best-effort event capture - never throws. Callers include the signup hook, so
  * a broken or unreachable PostHog must not be able to fail a registration.
  */
 export function captureEvent(

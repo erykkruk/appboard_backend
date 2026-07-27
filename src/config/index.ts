@@ -47,7 +47,7 @@ const configSchema = type({
 	OPENROUTER_MODEL: "string?",
 	OPENROUTER_URL: "string?",
 	PORT: "string?",
-	// Product analytics (PostHog). Optional — unset means no events are sent.
+	// Product analytics (PostHog). Optional - unset means no events are sent.
 	// POSTHOG_KEY is the project's public ingest key, not a personal API key.
 	POSTHOG_HOST: "string?",
 	POSTHOG_KEY: "string?",
