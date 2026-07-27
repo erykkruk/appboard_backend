@@ -1,6 +1,6 @@
 {
 	"name": "appboard-backend",
-	"version": "0.8.0",
+	"version": "0.8.1",
 	"description": "Open-source ASO (App Store Optimization) management backend — connect App Store Connect & Google Play, sync metadata, manage listings, screenshots, reviews, and publish via one API.",
 	"license": "PolyForm-Noncommercial-1.0.0",
 	"author": "Eryk Kruk",
@@ -62,6 +62,7 @@
 		"node-app-store-connect-api": "^5.0.6",
 		"nodemailer": "^8.0.1",
 		"pino": "^10.3.0",
+		"posthog-node": "^5.46.1",
 		"sharp": "^0.34.5"
 	},
 	"devDependencies": {
