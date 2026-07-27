@@ -41,6 +41,7 @@ import { trackingController } from "@/modules/tracking";
 import { startScheduler } from "@/modules/tracking/scheduler.service";
 import { vaultController } from "@/modules/vault";
 import { vaultActionGuard } from "@/modules/vault/vault.guard";
+import { shutdownAnalytics } from "@/utils/analytics";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import { createLogger } from "@/utils/logger";
 
@@ -110,9 +111,10 @@ startScheduler();
 
 log.info(`AppBoard backend running on http://localhost:${port}`);
 
-function shutdown() {
+async function shutdown() {
 	log.info("Shutting down...");
 	app.stop();
+	await shutdownAnalytics();
 	process.exit(0);
 }
 

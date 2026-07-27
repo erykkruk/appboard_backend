@@ -47,6 +47,10 @@ const configSchema = type({
 	OPENROUTER_MODEL: "string?",
 	OPENROUTER_URL: "string?",
 	PORT: "string?",
+	// Product analytics (PostHog). Optional — unset means no events are sent.
+	// POSTHOG_KEY is the project's public ingest key, not a personal API key.
+	POSTHOG_HOST: "string?",
+	POSTHOG_KEY: "string?",
 	// Background scheduler (rank tracking + auto-research). Set to "false" to
 	// disable the in-process timer (e.g. when running a second instance that
 	// must not double-run scheduled jobs). Always disabled under the test runner.

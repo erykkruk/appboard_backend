@@ -3,6 +3,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { emailOTP } from "better-auth/plugins";
 import nodemailer from "nodemailer";
 import config from "@/config";
+import { ANALYTICS_EVENTS, captureEvent } from "@/utils/analytics";
 import { db } from "@/utils/db";
 import { schema } from "@/utils/db/schema";
 import { createLogger } from "@/utils/logger";
@@ -112,6 +113,9 @@ export const auth = betterAuth({
 						{ userId: user.id, workspaceId: workspace.id },
 						"Auto-created workspace for new user",
 					);
+					captureEvent(user.id, ANALYTICS_EVENTS.USER_SIGNED_UP, {
+						workspaceId: workspace.id,
+					});
 				},
 			},
 		},
