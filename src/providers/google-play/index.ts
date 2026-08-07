@@ -1,3 +1,5 @@
+import { Readable } from "node:stream";
+import { fileTypeFromBuffer } from "file-type";
 import { probeAccess } from "@/providers/capability-access";
 import {
 	getMockAssets,
@@ -25,6 +27,7 @@ import type {
 	SubscriptionUpdateData,
 	VersionData,
 } from "@/providers/store-provider";
+import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import {
 	commitEdit,
@@ -44,6 +47,10 @@ import {
 } from "./types";
 
 const log = createLogger("google-play");
+
+/** Play caps `maxResults` at 100. Bound the crawl so a huge backlog can't hang a sync. */
+const PLAY_REVIEWS_PAGE_SIZE = 100;
+const PLAY_REVIEWS_MAX_PAGES = 20;
 
 export class GooglePlayProvider implements StoreProvider {
 	private client: GooglePlayClient | null = null;
@@ -307,31 +314,28 @@ export class GooglePlayProvider implements StoreProvider {
 				},
 			});
 
-			log.info({ appId, language }, "Listing updated in edit (not committed)");
+			// An edit is worthless unless it is committed, and Play allows only one
+			// open edit per package — leaving it dangling (as this used to) blocked
+			// the next publish and leaked edits on every call.
+			await commitEdit(client.api, appId, editId);
+			log.info({ appId, language }, "Listing updated and committed");
 		} catch (err) {
 			await deleteEdit(client.api, appId, editId);
 			throw err;
 		}
 	}
 
+	/**
+	 * No-op for Google Play: `updateListing` commits its own edit, and the real
+	 * multi-language path goes through `batchPublishListings` (one edit for all
+	 * locales). This used to open an empty edit and commit it, which published
+	 * nothing while still burning an edit — and could push the app into review.
+	 */
 	async publishListings(appId: string): Promise<void> {
-		if (this.isMock) {
-			log.info({ appId }, "Mock: listings published");
-			return;
-		}
-
-		// Create an empty edit and commit — only useful if there are
-		// staged changes. With batchPublishListings, this is a no-op.
-		const client = await this.getClient();
-		const editId = await createEdit(client.api, appId);
-
-		try {
-			await commitEdit(client.api, appId, editId);
-			log.info({ appId }, "Listings published via commit");
-		} catch (err) {
-			await deleteEdit(client.api, appId, editId);
-			throw err;
-		}
+		log.info(
+			{ appId },
+			"Google Play listings are committed on update; nothing to publish",
+		);
 	}
 
 	async batchPublishListings(
@@ -472,6 +476,7 @@ export class GooglePlayProvider implements StoreProvider {
 
 		try {
 			const imageType = this.resolveImageType(metadata);
+			const mimeType = await detectPlayImageMimeType(file);
 
 			const { data } = await client.api.edits.images.upload({
 				editId,
@@ -479,7 +484,7 @@ export class GooglePlayProvider implements StoreProvider {
 				language,
 				media: {
 					body: bufferToReadableStream(file),
-					mimeType: "image/png",
+					mimeType,
 				},
 				packageName: appId,
 			});
@@ -577,40 +582,59 @@ export class GooglePlayProvider implements StoreProvider {
 		const reviews: ReviewData[] = [];
 
 		try {
-			const { data } = await client.api.reviews.list({
-				packageName: appId,
-			});
+			// reviews.list is paginated; without walking the token we only ever saw
+			// the first page.
+			let token: string | undefined;
+			let pages = 0;
 
-			for (const review of data.reviews ?? []) {
-				const comment = review.comments?.[0]?.userComment;
-				const replyComment = review.comments?.[0]?.developerComment;
-
-				if (!comment) continue;
-
-				reviews.push({
-					appVersion: comment.appVersionName ?? undefined,
-					authorName: review.authorName ?? "Anonymous",
-					body: comment.text ?? "",
-					device: comment.device ?? undefined,
-					externalId: review.reviewId ?? "",
-					language: comment.reviewerLanguage ?? undefined,
-					osVersion: comment.androidOsVersion
-						? `Android ${comment.androidOsVersion}`
-						: undefined,
-					rating: comment.starRating ?? 0,
-					repliedAt: replyComment?.lastModified?.seconds
-						? new Date(Number(replyComment.lastModified.seconds) * 1000)
-						: undefined,
-					replyText: replyComment?.text ?? undefined,
-					reviewDate: comment.lastModified?.seconds
-						? new Date(Number(comment.lastModified.seconds) * 1000)
-						: new Date(),
-					territory: comment.reviewerLanguage?.split("-")[1] ?? undefined,
+			do {
+				const { data } = await client.api.reviews.list({
+					maxResults: PLAY_REVIEWS_PAGE_SIZE,
+					packageName: appId,
+					token,
 				});
-			}
+
+				for (const review of data.reviews ?? []) {
+					// Google returns the user's review and the developer's reply as
+					// separate entries in `comments` — reading `comments[0]` for both
+					// meant existing replies were never detected.
+					const comment = review.comments?.find(
+						(c) => c.userComment,
+					)?.userComment;
+					const replyComment = review.comments?.find(
+						(c) => c.developerComment,
+					)?.developerComment;
+
+					if (!comment) continue;
+
+					reviews.push({
+						appVersion: comment.appVersionName ?? undefined,
+						authorName: review.authorName ?? "Anonymous",
+						body: comment.text ?? "",
+						device: comment.device ?? undefined,
+						externalId: review.reviewId ?? "",
+						language: comment.reviewerLanguage ?? undefined,
+						osVersion: comment.androidOsVersion
+							? `Android ${comment.androidOsVersion}`
+							: undefined,
+						rating: comment.starRating ?? 0,
+						repliedAt: replyComment?.lastModified?.seconds
+							? new Date(Number(replyComment.lastModified.seconds) * 1000)
+							: undefined,
+						replyText: replyComment?.text ?? undefined,
+						reviewDate: comment.lastModified?.seconds
+							? new Date(Number(comment.lastModified.seconds) * 1000)
+							: new Date(),
+						territory: comment.reviewerLanguage?.split("-")[1] ?? undefined,
+					});
+				}
+
+				token = data.tokenPagination?.nextPageToken ?? undefined;
+				pages++;
+			} while (token && pages < PLAY_REVIEWS_MAX_PAGES);
 
 			log.info(
-				{ appId, count: reviews.length },
+				{ appId, count: reviews.length, pages },
 				"Fetched reviews from Google Play",
 			);
 		} catch (err) {
@@ -1223,9 +1247,25 @@ export class GooglePlayProvider implements StoreProvider {
  * Converts a Buffer to a Readable stream for the googleapis upload API.
  */
 function bufferToReadableStream(buffer: Buffer): NodeJS.ReadableStream {
-	const { Readable } = require("node:stream");
-	const stream = new Readable();
-	stream.push(buffer);
-	stream.push(null);
-	return stream;
+	return Readable.from(buffer);
+}
+
+/** Google Play accepts JPEG and 24-bit PNG for store assets. */
+const PLAY_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png"]);
+
+/**
+ * The mime type used to be hardcoded to `image/png`, so a JPEG was announced to
+ * Google as a PNG. Sniff the real type from the bytes instead of trusting the
+ * extension (or nothing at all).
+ */
+async function detectPlayImageMimeType(file: Buffer): Promise<string> {
+	const detected = await fileTypeFromBuffer(file);
+
+	if (!detected || !PLAY_IMAGE_MIME_TYPES.has(detected.mime)) {
+		throw buildError("badRequest", {
+			info: `Unsupported image format${detected ? ` (${detected.mime})` : ""}. Google Play accepts PNG and JPEG.`,
+		});
+	}
+
+	return detected.mime;
 }

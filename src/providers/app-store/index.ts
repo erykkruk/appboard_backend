@@ -29,10 +29,14 @@ import type {
 	VersionData,
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
+import { uploadAndCommitAsset } from "./asc-upload";
 import { createAppStoreClient } from "./client";
 import { type AppStoreCredentials, isMockCredentials } from "./types";
 
 const log = createLogger("app-store");
+
+/** Apple caps `limit` at 200; the default of 50 quadruples the number of pages. */
+const ASC_MAX_PAGE_SIZE = 200;
 
 const SCREENSHOT_DISPLAY_TYPE_TO_DEVICE: Record<string, string> = {
 	APP_APPLE_TV: "appleTV",
@@ -373,18 +377,38 @@ const ASC_TO_ISO_DURATION: Record<string, string> = Object.fromEntries(
 	Object.entries(ISO_TO_ASC_DURATION).map(([k, v]) => [v, k]),
 );
 
-const EDITABLE_STATES = [
+/**
+ * Version states whose metadata Apple still lets us edit.
+ *
+ * Mirrors fastlane's list (spaceship `App#get_edit_app_store_version`). We used
+ * to accept only the first three, so an app sitting in WAITING_FOR_REVIEW or
+ * METADATA_REJECTED looked like it had no editable version at all.
+ */
+export const EDITABLE_VERSION_STATES = [
 	"PREPARE_FOR_SUBMISSION",
 	"DEVELOPER_REJECTED",
 	"REJECTED",
+	"METADATA_REJECTED",
+	"WAITING_FOR_REVIEW",
+	"INVALID_BINARY",
 ];
 
+/**
+ * `appStoreState` is deprecated (ASC spec 3.3) in favour of `appVersionState`.
+ * Apple still returns both, so prefer the new field and fall back to the old.
+ */
+export function versionState(version: ApiResource): string | undefined {
+	return (version.attributes.appVersionState ??
+		version.attributes.appStoreState) as string | undefined;
+}
+
+export function isEditableVersion(version: ApiResource): boolean {
+	const state = versionState(version);
+	return state !== undefined && EDITABLE_VERSION_STATES.includes(state);
+}
+
 function findEditableVersion(versions: ApiResource[]): ApiResource | null {
-	return (
-		versions.find((v) =>
-			EDITABLE_STATES.includes(v.attributes.appStoreState as string),
-		) ?? null
-	);
+	return versions.find(isEditableVersion) ?? null;
 }
 
 export class AppStoreProvider implements StoreProvider {
@@ -419,8 +443,7 @@ export class AppStoreProvider implements StoreProvider {
 			type: "appStoreVersions",
 		});
 
-		const state =
-			(result.attributes?.appStoreState as string) ?? "PREPARE_FOR_SUBMISSION";
+		const state = versionState(result) ?? "PREPARE_FOR_SUBMISSION";
 
 		log.info({ appId, state, versionString }, "Created new App Store version");
 
@@ -442,10 +465,10 @@ export class AppStoreProvider implements StoreProvider {
 		if (!versions?.length) return null;
 
 		const latest = versions[0] as ApiResource;
-		const state = (latest.attributes.appStoreState as string) ?? "";
+		const state = versionState(latest) ?? "";
 
 		return {
-			isEditable: EDITABLE_STATES.includes(state),
+			isEditable: isEditableVersion(latest),
 			state,
 			versionString: (latest.attributes.versionString as string) ?? "",
 		};
@@ -829,8 +852,8 @@ export class AppStoreProvider implements StoreProvider {
 		}
 
 		try {
-			const { create, readAll, uploadAsset, pollForUploadSuccess } =
-				await createAppStoreClient(this.credentials);
+			const client = await createAppStoreClient(this.credentials);
+			const { create, read, readAll } = client;
 
 			// Get an editable version (must be in PREPARE_FOR_SUBMISSION or similar state)
 			const editableVersion = await this.getEditableVersion(appId);
@@ -872,14 +895,13 @@ export class AppStoreProvider implements StoreProvider {
 			);
 
 			if (!screenshotSet) {
-				const created = await create({
+				screenshotSet = await create({
 					attributes: { screenshotDisplayType: displayType },
 					relationships: {
 						appStoreVersionLocalization: targetLoc,
 					},
 					type: "appScreenshotSets",
 				});
-				screenshotSet = created.data;
 			}
 
 			// Reserve a screenshot slot
@@ -892,18 +914,15 @@ export class AppStoreProvider implements StoreProvider {
 				type: "appScreenshots",
 			});
 
-			// Upload the file binary
-			await uploadAsset(reservation, file);
+			await uploadAndCommitAsset(client, reservation, file, "screenshot");
 
-			// Poll until the upload is processed
-			const selfUrl =
-				reservation.data.links?.self ?? `appScreenshots/${reservation.data.id}`;
-			await pollForUploadSuccess(selfUrl);
+			const screenshotId = reservation.id;
 
-			const screenshotId = reservation.data.id;
-			const imageAsset = reservation.data.attributes?.imageAsset as
-				| Record<string, unknown>
-				| undefined;
+			// imageAsset only exists once Apple has processed the upload, so it has
+			// to be read back — the reservation response never carries it.
+			const { data: uploaded } = await read(`appScreenshots/${screenshotId}`);
+			const imageAsset = (uploaded as unknown as ApiResource | undefined)
+				?.attributes?.imageAsset as Record<string, unknown> | undefined;
 
 			log.info(
 				{ appId, language, screenshotId },
@@ -951,33 +970,40 @@ export class AppStoreProvider implements StoreProvider {
 		if (this.isMock) return getMockReviews(appId, "app_store");
 
 		try {
-			const { read, readAll } = await createAppStoreClient(this.credentials);
+			const { readAll } = await createAppStoreClient(this.credentials);
 
-			const { data: reviewsData } = await readAll(
+			// `include=response` returns the developer replies alongside the reviews.
+			// We used to issue one extra GET per review (N+1), and `limit` was left at
+			// Apple's default of 50, so a busy app cost hundreds of requests.
+			const { data: reviewsData, included } = await readAll(
 				`apps/${appId}/customerReviews`,
+				{
+					params: {
+						include: "response",
+						limit: ASC_MAX_PAGE_SIZE,
+						sort: "-createdDate",
+					},
+				},
 			);
+
+			const responses = included?.customerReviewResponses ?? {};
 
 			const reviews: ReviewData[] = [];
 			for (const raw of (reviewsData ?? []) as ApiResource[]) {
 				const attrs = raw.attributes;
 
-				// Fetch the developer response for this review
-				let replyText: string | undefined;
-				let repliedAt: Date | undefined;
-				try {
-					const { data: responseData } = await read(
-						`customerReviews/${raw.id}/response`,
-					);
-					const response = responseData as ApiResource | undefined;
-					if (response?.attributes?.responseBody) {
-						replyText = response.attributes.responseBody as string;
-						repliedAt = response.attributes.lastModifiedDate
-							? new Date(response.attributes.lastModifiedDate as string)
-							: undefined;
-					}
-				} catch {
-					// Response endpoint may 404 if no response exists
-				}
+				const responseRef = raw.relationships?.response?.data;
+				const response =
+					responseRef && !Array.isArray(responseRef)
+						? responses[responseRef.id]
+						: undefined;
+
+				const replyText = response?.attributes?.responseBody as
+					| string
+					| undefined;
+				const repliedAt = response?.attributes?.lastModifiedDate
+					? new Date(response.attributes.lastModifiedDate as string)
+					: undefined;
 
 				reviews.push({
 					authorName: (attrs.reviewerNickname as string) ?? "Anonymous",
@@ -2488,21 +2514,21 @@ export class AppStoreProvider implements StoreProvider {
 			) as ApiResource | undefined;
 
 			if (availability) {
-				// PATCH existing availability
+				// PATCH existing availability. The attributes/relationships belong in
+				// the SECOND argument — passing them in the first meant the request
+				// went out with no territories and no attributes at all.
 				await update(
+					{ id: availability.id, type: "subscriptionAvailabilities" },
 					{
 						attributes: {
 							availableInNewTerritories: false,
 						},
-						id: availability.id,
 						relationships: {
 							availableTerritories: {
 								data: territoryData,
 							},
 						},
-						type: "subscriptionAvailabilities",
 					},
-					{ id: availability.id },
 				);
 
 				log.info(

@@ -213,9 +213,14 @@ describe("AI module", () => {
 
 describe("extractOpenRouterMessage", () => {
 	it("pulls the message out of an OpenRouter error body", async () => {
-		const { extractOpenRouterMessage } = await import("@/modules/ai/ai.service");
+		const { extractOpenRouterMessage } = await import(
+			"@/modules/ai/ai.service"
+		);
 		const body = JSON.stringify({
-			error: { message: "google/gemini-2.5-flash-preview is not a valid model ID", code: 400 },
+			error: {
+				code: 400,
+				message: "google/gemini-2.5-flash-preview is not a valid model ID",
+			},
 		});
 		expect(extractOpenRouterMessage(body)).toBe(
 			"google/gemini-2.5-flash-preview is not a valid model ID",
@@ -223,7 +228,9 @@ describe("extractOpenRouterMessage", () => {
 	});
 
 	it("falls back to a truncated raw body when not JSON", async () => {
-		const { extractOpenRouterMessage } = await import("@/modules/ai/ai.service");
+		const { extractOpenRouterMessage } = await import(
+			"@/modules/ai/ai.service"
+		);
 		expect(extractOpenRouterMessage("Bad Gateway")).toBe("Bad Gateway");
 	});
-})
+});

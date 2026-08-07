@@ -8,8 +8,15 @@ import { ListingsService } from "@/modules/listings/listings.service";
 import { PrivacyDeclarationService } from "@/modules/privacy-declaration/privacy-declaration.service";
 import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
+import {
+	EDITABLE_VERSION_STATES,
+	isEditableVersion,
+	versionState,
+} from "@/providers/app-store";
+import { uploadAndCommitAsset } from "@/providers/app-store/asc-upload";
 import { createAppStoreClient } from "@/providers/app-store/client";
 import { isMockCredentials as isAppStoreMockCredentials } from "@/providers/app-store/types";
+import { sleep } from "@/utils/backoff";
 import { db } from "@/utils/db";
 import {
 	apps,
@@ -28,11 +35,21 @@ import { createLogger } from "@/utils/logger";
 
 const log = createLogger("publishing-service");
 
-const EDITABLE_STATES = [
-	"PREPARE_FOR_SUBMISSION",
-	"DEVELOPER_REJECTED",
-	"REJECTED",
+const ASC_PLATFORM = "IOS";
+
+/** A review submission in any of these states blocks a new one. */
+const IN_PROGRESS_SUBMISSION_STATES = [
+	"WAITING_FOR_REVIEW",
+	"IN_REVIEW",
+	"UNRESOLVED_ISSUES",
 ];
+
+/**
+ * Bounded so the submit request cannot hang the panel: 6 × 5s ≈ 30s worst case.
+ * fastlane polls 10×15s, but it runs from a CLI with no HTTP timeout above it.
+ */
+const REVIEW_READY_MAX_ATTEMPTS = 6;
+const REVIEW_READY_POLL_INTERVAL_MS = 5_000;
 
 function suggestNextVersion(versionString: string): string {
 	const parts = versionString.split(".");
@@ -339,29 +356,53 @@ async function processScreenshot(
 	return { buffer: processed, height: targetH, width: targetW };
 }
 
-function extractAscError(err: unknown): string {
+interface AscApiError {
+	code?: string;
+	detail?: string;
+	source?: { parameter?: string; pointer?: string };
+	status?: string;
+	title?: string;
+}
+
+/**
+ * The ASC client attaches the parsed error body to `err.data`, so read that
+ * rather than regex-scraping the message string. Apple often omits `detail` and
+ * puts the useful part in `code` (e.g. `ENTITY_ERROR.ATTRIBUTE.REQUIRED`) plus
+ * a `source.pointer` naming the offending field — both were being thrown away.
+ */
+function ascErrors(err: unknown): AscApiError[] {
+	const data = (err as { data?: { errors?: AscApiError[] } }).data;
+	if (data?.errors?.length) return data.errors;
+
 	if (err instanceof Error) {
-		// node-app-store-connect-api wraps ASC errors
-		const msg = err.message;
 		try {
-			// Try to parse JSON error body from the message
-			const jsonMatch = msg.match(/\{[\s\S]*\}/);
+			const jsonMatch = err.message.match(/\{[\s\S]*\}/);
 			if (jsonMatch) {
-				const parsed = JSON.parse(jsonMatch[0]);
-				if (parsed.errors?.length) {
-					return parsed.errors
-						.map(
-							(e: { detail?: string; title?: string }) => e.detail || e.title,
-						)
-						.join("; ");
-				}
+				const parsed = JSON.parse(jsonMatch[0]) as { errors?: AscApiError[] };
+				if (parsed.errors?.length) return parsed.errors;
 			}
 		} catch {
-			// Ignore parse errors
+			// Not a JSON body — fall through to the raw message.
 		}
-		return msg;
 	}
-	return String(err);
+
+	return [];
+}
+
+function extractAscError(err: unknown): string {
+	const errors = ascErrors(err);
+
+	if (errors.length) {
+		return errors
+			.map((e) => {
+				const field = e.source?.pointer ?? e.source?.parameter;
+				const message = e.detail || e.title || e.code || "Unknown error";
+				return field ? `${message} (${field})` : message;
+			})
+			.join("; ");
+	}
+
+	return err instanceof Error ? err.message : String(err);
 }
 
 const LISTING_FIELDS = [
@@ -622,10 +663,10 @@ export class PublishingService {
 			const now = new Date();
 
 			for (const v of ascVersions as ApiResource[]) {
-				const state = (v.attributes.appStoreState as string) ?? "";
+				const state = versionState(v) ?? "";
 				const versionString = (v.attributes.versionString as string) ?? "";
 				const copyright = (v.attributes.copyright as string) ?? "";
-				const isEditable = EDITABLE_STATES.includes(state);
+				const isEditable = isEditableVersion(v);
 
 				// Upsert app_versions
 				const [dbVersion] = await db
@@ -1224,9 +1265,10 @@ export class PublishingService {
 				type: "appStoreReviewAttachments",
 			})) as unknown as ApiResource;
 
-			await client.uploadAsset(attachment, buffer);
-			await client.pollForUploadSuccess(
-				`appStoreReviewAttachments/${attachment.id}`,
+			await uploadAndCommitAsset(
+				client,
+				attachment,
+				buffer,
 				"reviewAttachment",
 			);
 
@@ -2308,12 +2350,11 @@ export class PublishingService {
 				type: "appScreenshots",
 			})) as unknown as ApiResource;
 
-			// 2. Upload binary data
-			await client.uploadAsset(screenshot, processed.buffer);
-
-			// 3. Poll until processed
-			await client.pollForUploadSuccess(
-				`appScreenshots/${screenshot.id}`,
+			// 2. Upload binary data, commit with an MD5 checksum, poll until processed
+			await uploadAndCommitAsset(
+				client,
+				screenshot,
+				processed.buffer,
 				"screenshot",
 			);
 
@@ -2787,9 +2828,10 @@ export class PublishingService {
 				type: "appScreenshots",
 			})) as unknown as ApiResource;
 
-			await client.uploadAsset(screenshot, processed.buffer);
-			await client.pollForUploadSuccess(
-				`appScreenshots/${screenshot.id}`,
+			await uploadAndCommitAsset(
+				client,
+				screenshot,
+				processed.buffer,
 				"screenshot",
 			);
 
@@ -3266,9 +3308,10 @@ export class PublishingService {
 					type: "appScreenshots",
 				})) as unknown as ApiResource;
 
-				await client.uploadAsset(newScreenshot, imageBuffer);
-				await client.pollForUploadSuccess(
-					`appScreenshots/${newScreenshot.id}`,
+				await uploadAndCommitAsset(
+					client,
+					newScreenshot,
+					imageBuffer,
 					"screenshot",
 				);
 
@@ -3507,7 +3550,7 @@ export class PublishingService {
 				.where(
 					and(
 						eq(appVersions.appId, appId),
-						inArray(appVersions.state, EDITABLE_STATES),
+						inArray(appVersions.state, EDITABLE_VERSION_STATES),
 					),
 				);
 
@@ -3762,7 +3805,8 @@ export class PublishingService {
 			app.store.credentials!,
 			app.store.workspaceId,
 		);
-		const { create, readAll } = await createAppStoreClient(credentials);
+		const client = await createAppStoreClient(credentials);
+		const { create, read, readAll, update } = client;
 
 		const { data: versions } = await readAll(
 			`apps/${app.externalId}/appStoreVersions`,
@@ -3771,28 +3815,144 @@ export class PublishingService {
 		if (!versions?.length)
 			buildError("notFound", { info: "No app store version found" });
 
-		const latestVersion = versions[0] as ApiResource;
-		const state = latestVersion.attributes.appStoreState as string;
+		const version = (versions as ApiResource[]).find(isEditableVersion);
 
-		if (!EDITABLE_STATES.includes(state)) {
+		if (!version) {
+			const states = (versions as ApiResource[])
+				.map((v) => versionState(v) ?? "UNKNOWN")
+				.join(", ");
 			buildError("badRequest", {
-				info: `Cannot submit for review: version is in state "${state}". Must be in PREPARE_FOR_SUBMISSION, DEVELOPER_REJECTED, or REJECTED.`,
+				info: `Cannot submit for review: no editable version (found: ${states}). Editable states are ${EDITABLE_VERSION_STATES.join(", ")}.`,
+			});
+			throw new Error("unreachable");
+		}
+
+		// Apple replaced the single-shot appStoreVersionSubmissions POST with a
+		// three-step review submission (fastlane made the same move). The old
+		// endpoint still exists but is legacy and does not support multi-item
+		// submissions.
+		const { data: openSubmissions } = await readAll(
+			`apps/${app.externalId}/reviewSubmissions`,
+			{
+				params: {
+					"filter[platform]": ASC_PLATFORM,
+					"filter[state]": IN_PROGRESS_SUBMISSION_STATES.join(","),
+				},
+			},
+		);
+
+		if ((openSubmissions as ApiResource[])?.length) {
+			buildError("badRequest", {
+				info: "This app already has a review submission in progress. Cancel it in App Store Connect before submitting again.",
 			});
 		}
 
+		const submission = await PublishingService.getOrCreateReviewSubmission(
+			client,
+			app.externalId,
+		);
+
 		await create({
 			relationships: {
-				appStoreVersion: latestVersion,
+				appStoreVersion: version,
+				reviewSubmission: submission,
 			},
-			type: "appStoreVersionSubmissions",
+			type: "reviewSubmissionItems",
 		});
 
+		// Apple needs a moment to move the version to READY_FOR_REVIEW after the
+		// item is attached; submitting before that fails.
+		await PublishingService.waitForReviewReadiness(read, version.id);
+
+		await update(
+			{ id: submission.id, type: "reviewSubmissions" },
+			{ attributes: { submitted: true } },
+		);
+
 		log.info(
-			{ appId, versionId: latestVersion.id },
+			{ appId, submissionId: submission.id, versionId: version.id },
 			"Submitted app for review",
 		);
 
 		return { submitted: true };
+	}
+
+	private static async getOrCreateReviewSubmission(
+		client: Awaited<ReturnType<typeof createAppStoreClient>>,
+		externalId: string,
+	): Promise<ApiResource> {
+		const { create, readAll } = client;
+
+		const { data: ready } = await readAll(
+			`apps/${externalId}/reviewSubmissions`,
+			{
+				params: {
+					"filter[platform]": ASC_PLATFORM,
+					"filter[state]": "READY_FOR_REVIEW",
+				},
+			},
+		);
+
+		const existing = (ready as ApiResource[])?.[0];
+		if (existing) {
+			// A submission staged outside AppBoard may already carry items; adding
+			// ours would submit someone else's changes along with it.
+			const { data: items } = await readAll(
+				`reviewSubmissions/${existing.id}/items`,
+			);
+			if ((items as ApiResource[])?.length) {
+				buildError("badRequest", {
+					info: "App Store Connect already has a review submission with pending items that AppBoard did not create. Review it in App Store Connect first.",
+				});
+			}
+			return existing;
+		}
+
+		return create({
+			attributes: { platform: ASC_PLATFORM },
+			relationships: { app: { data: { id: externalId, type: "apps" } } },
+			type: "reviewSubmissions",
+		});
+	}
+
+	/**
+	 * Apple needs a moment to flip the version to READY_FOR_REVIEW after the item
+	 * is attached. This runs inside an HTTP request, so the wait is deliberately
+	 * short — fastlane can afford 10×15s from a CLI, we cannot.
+	 *
+	 * READY_FOR_REVIEW only exists in the `appVersionState` vocabulary. If Apple
+	 * doesn't return that field we cannot observe readiness at all, so we stop
+	 * immediately rather than burning the whole budget waiting for a value that
+	 * can never appear.
+	 */
+	private static async waitForReviewReadiness(
+		read: Awaited<ReturnType<typeof createAppStoreClient>>["read"],
+		versionId: string,
+	): Promise<void> {
+		for (let attempt = 1; attempt <= REVIEW_READY_MAX_ATTEMPTS; attempt++) {
+			const { data } = await read(`appStoreVersions/${versionId}`);
+			const version = data as unknown as ApiResource;
+			const state = version.attributes?.appVersionState as string | undefined;
+
+			if (state === "READY_FOR_REVIEW") return;
+
+			if (!state) {
+				log.info(
+					{ versionId },
+					"App Store Connect does not report appVersionState; submitting without waiting",
+				);
+				return;
+			}
+
+			if (attempt < REVIEW_READY_MAX_ATTEMPTS) {
+				await sleep(REVIEW_READY_POLL_INTERVAL_MS);
+			}
+		}
+
+		log.warn(
+			{ versionId },
+			"Version never reached READY_FOR_REVIEW; submitting anyway",
+		);
 	}
 
 	private static async getAppWithStore(appId: string) {

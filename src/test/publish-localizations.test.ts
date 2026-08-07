@@ -27,8 +27,9 @@ describe("publishAllDirtyLocalizations", () => {
 		storeIds.push(store.id);
 		const app = await seedTestApp(store.id);
 
-		const changes =
-			await PublishingService.getDirtyVersionLocalizationChanges(app.id);
+		const changes = await PublishingService.getDirtyVersionLocalizationChanges(
+			app.id,
+		);
 
 		expect(changes).toEqual([]);
 	});
