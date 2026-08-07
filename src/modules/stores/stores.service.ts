@@ -10,6 +10,7 @@ import {
 	encryptCredentials,
 } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
+import { validateAlternativeCredentials } from "@/providers/alternative/credentials.schema";
 import type { StoreProvider } from "@/providers/store-provider";
 import { db } from "@/utils/db";
 import { apps, stores } from "@/utils/db/schema";
@@ -38,6 +39,11 @@ export class StoresService {
 					info: "Connecting alternative app stores requires the Alternative Stores feature to be enabled.",
 				});
 			}
+		}
+
+		// Seeded demo connections carry canned data, not real API credentials.
+		if (credentials.mock !== true) {
+			validateAlternativeCredentials(type, credentials);
 		}
 
 		const provider = createProvider(type, credentials);

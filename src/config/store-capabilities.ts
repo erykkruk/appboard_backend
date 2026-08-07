@@ -1,4 +1,4 @@
-import type { StoreType } from "@/config/const";
+import { STORE_TYPE_LABELS, type StoreType } from "@/config/const";
 
 /**
  * Per-connection store capabilities.
@@ -286,9 +286,167 @@ const APP_STORE_CAPABILITIES: StoreCapabilityDefinition[] = [
 	},
 ];
 
+/**
+ * Alternative Android stores. Their developer APIs are far narrower than
+ * App Store Connect / Google Play — most have no reviews, monetization or
+ * age-rating endpoints at all — so the catalog is generated from an explicit
+ * list of what each provider truly implements. Anything not named in the
+ * overrides is `consoleOnly`, matching the methods left unimplemented on
+ * `AlternativeStoreProvider` (which raise a typed error rather than no-op).
+ */
+
+const CAPABILITY_NAMES: Record<StoreCapabilityId, string> = {
+	age_rating: "Age rating",
+	assets: "Screenshots",
+	categories: "Category",
+	listings: "Store listing",
+	privacy: "Privacy declaration",
+	publishing: "Publishing",
+	purchases: "In-app products & subscriptions",
+	reviews: "Reviews",
+};
+
+const CAPABILITY_SUBJECTS: Record<StoreCapabilityId, string> = {
+	age_rating: "The age rating",
+	assets: "Screenshots and graphics",
+	categories: "The app category",
+	listings: "The store listing text",
+	privacy: "The privacy declaration",
+	publishing: "Submitting the app for review",
+	purchases: "In-app products and subscriptions",
+	reviews: "User reviews",
+};
+
+interface AltCapabilityOverride {
+	consoleRoles?: string[];
+	core?: boolean;
+	description: string;
+	gateable?: boolean;
+	wired: boolean;
+}
+
+function buildAlternativeCapabilities(
+	storeType: StoreType,
+	overrides: Partial<Record<StoreCapabilityId, AltCapabilityOverride>>,
+): StoreCapabilityDefinition[] {
+	const label = STORE_TYPE_LABELS[storeType];
+
+	return STORE_CAPABILITY_IDS.map((id) => {
+		const override = overrides[id];
+		const wired = override?.wired ?? false;
+
+		return {
+			consoleOnly: !wired,
+			consoleRoles: override?.consoleRoles ?? [],
+			core: override?.core ?? false,
+			dependsOn: id === "publishing" && wired ? ["listings" as const] : [],
+			description:
+				override?.description ??
+				`${CAPABILITY_SUBJECTS[id]} is managed in the ${label} developer console — it cannot be changed through the API.`,
+			gateable: override?.gateable ?? false,
+			gcpApis: [],
+			id,
+			name: CAPABILITY_NAMES[id],
+			storeType,
+			wired,
+		};
+	});
+}
+
+const HUAWEI_API_CLIENT_ROLE = "App administrator (AGC API client)";
+
+const HUAWEI_CAPABILITIES = buildAlternativeCapabilities("huawei_appgallery", {
+	assets: {
+		description:
+			"Screenshots already attached to a listing are read and shown here. AppGallery Connect has no API to attach a new image to a listing, so uploads are done in the console.",
+		wired: false,
+	},
+	listings: {
+		consoleRoles: [HUAWEI_API_CLIENT_ROLE],
+		core: true,
+		description:
+			"Edit the per-language listing — app name, short description (brief info), full description and new features.",
+		wired: true,
+	},
+	publishing: {
+		consoleRoles: [HUAWEI_API_CLIENT_ROLE],
+		description: "Submit the app for review and release it to AppGallery.",
+		gateable: true,
+		wired: true,
+	},
+});
+
+const SAMSUNG_API_ROLE = "Seller Portal API service account (publishing scope)";
+
+const SAMSUNG_CAPABILITIES = buildAlternativeCapabilities("samsung_galaxy", {
+	assets: {
+		consoleRoles: [SAMSUNG_API_ROLE],
+		core: true,
+		description: "Read and upload screenshots for each listing language.",
+		wired: true,
+	},
+	listings: {
+		consoleRoles: [SAMSUNG_API_ROLE],
+		core: true,
+		description:
+			"Edit the per-language listing — app title, description and what's new.",
+		wired: true,
+	},
+	publishing: {
+		consoleRoles: [SAMSUNG_API_ROLE],
+		description: "Submit the app for review in Galaxy Store.",
+		gateable: true,
+		wired: true,
+	},
+});
+
+const AMAZON_SECURITY_PROFILE_ROLE =
+	"Security profile allow-listed for the App Submission API";
+
+const AMAZON_CAPABILITIES = buildAlternativeCapabilities("amazon_appstore", {
+	assets: {
+		consoleRoles: [AMAZON_SECURITY_PROFILE_ROLE],
+		core: true,
+		description: "Read, upload and delete screenshots per listing language.",
+		wired: true,
+	},
+	listings: {
+		consoleRoles: [AMAZON_SECURITY_PROFILE_ROLE],
+		core: true,
+		description:
+			"Edit the per-language listing — title, short and full description, keywords and recent changes.",
+		wired: true,
+	},
+	publishing: {
+		consoleRoles: [AMAZON_SECURITY_PROFILE_ROLE],
+		description:
+			"Commit the open edit, which submits the app to Amazon for review.",
+		gateable: true,
+		wired: true,
+	},
+});
+
+// RuStore publishes a new immutable draft per release rather than editing a
+// listing in place, and does not document those endpoints in enough detail to
+// wire honestly — only the app list is read through the API today.
+const RUSTORE_CAPABILITIES = buildAlternativeCapabilities("rustore", {});
+
+// ONE Store's public "v7 API" is the In-App Purchase server API; there is no
+// app-submission API, so nothing beyond credential validation is possible.
+const ONESTORE_CAPABILITIES = buildAlternativeCapabilities("onestore", {});
+
+// Xiaomi documents only an APK push endpoint — no listing metadata API.
+const XIAOMI_CAPABILITIES = buildAlternativeCapabilities("xiaomi_getapps", {});
+
 export const STORE_CAPABILITY_CATALOG: StoreCapabilityDefinition[] = [
 	...GOOGLE_PLAY_CAPABILITIES,
 	...APP_STORE_CAPABILITIES,
+	...HUAWEI_CAPABILITIES,
+	...SAMSUNG_CAPABILITIES,
+	...AMAZON_CAPABILITIES,
+	...RUSTORE_CAPABILITIES,
+	...ONESTORE_CAPABILITIES,
+	...XIAOMI_CAPABILITIES,
 ];
 
 export interface StoreSetupInfo {
@@ -299,21 +457,22 @@ export interface StoreSetupInfo {
 	baseNote: string;
 }
 
-// Alternative stores connect with a simple API token today (stub integration),
-// so their setup note is generic and they need no GCP APIs.
+/**
+ * Alternative stores need no GCP APIs; each carries the concrete steps for
+ * creating an API client in its own developer console.
+ */
 function alternativeStoreSetup(
 	storeType: StoreType,
-	label: string,
+	baseNote: string,
 ): StoreSetupInfo {
-	return {
-		baseGcpApis: [],
-		baseNote: `Paste an API token from your ${label} developer console to connect it. Full publishing support for ${label} is coming soon.`,
-		storeType,
-	};
+	return { baseGcpApis: [], baseNote, storeType };
 }
 
 export const STORE_SETUP_INFO: Record<StoreType, StoreSetupInfo> = {
-	amazon_appstore: alternativeStoreSetup("amazon_appstore", "Amazon Appstore"),
+	amazon_appstore: alternativeStoreSetup(
+		"amazon_appstore",
+		"In the Amazon Developer Console open Settings → Security Profiles, create (or pick) a security profile and copy its Client ID and Client Secret. Ask Amazon to allow-list the profile for the App Submission API, then add the package names of the apps you want to manage — Amazon has no endpoint that lists your apps.",
+	),
 	app_store: {
 		baseGcpApis: [],
 		baseNote:
@@ -328,15 +487,24 @@ export const STORE_SETUP_INFO: Record<StoreType, StoreSetupInfo> = {
 	},
 	huawei_appgallery: alternativeStoreSetup(
 		"huawei_appgallery",
-		"Huawei AppGallery",
+		"In AppGallery Connect open Users and permissions → API key → Connect API, create an API client and copy its Client ID and Client Secret. Grant the client the App administrator role for your apps, then add the package names you want to manage — AppGallery has no endpoint that lists your apps.",
 	),
-	onestore: alternativeStoreSetup("onestore", "ONE Store"),
-	rustore: alternativeStoreSetup("rustore", "RuStore"),
+	onestore: alternativeStoreSetup(
+		"onestore",
+		"In ONE Store Developer Center open your app → In-App → Credentials and copy the Client ID and Client Secret. ONE Store publishes no app-submission API, so AppBoard can only verify the credentials — listings, screenshots and releases are managed in Developer Center.",
+	),
+	rustore: alternativeStoreSetup(
+		"rustore",
+		"In RuStore Console open the API keys section, create a key and copy its Key ID together with the downloaded private key (PEM). AppBoard uses it to read your app list; RuStore publishes each release as a new immutable draft, so listing edits and releases stay in RuStore Console.",
+	),
 	samsung_galaxy: alternativeStoreSetup(
 		"samsung_galaxy",
-		"Samsung Galaxy Store",
+		"In Samsung Seller Portal open Assistance → API Service, create a service account with the publishing scope, then copy its Service Account ID and the downloaded private key (PEM).",
 	),
-	xiaomi_getapps: alternativeStoreSetup("xiaomi_getapps", "Xiaomi GetApps"),
+	xiaomi_getapps: alternativeStoreSetup(
+		"xiaomi_getapps",
+		"In the Xiaomi Developer Console create an API key for your developer account and copy the account email together with the downloaded private key (PEM). Xiaomi documents only an APK push endpoint, so listings and screenshots are managed in the console.",
+	),
 };
 
 /** All capability definitions for a store type, in display order. */
