@@ -139,6 +139,24 @@ Market research for ANY store app (not just connected ones) — port of the stan
 - **Heuristics** (`research.heuristics.ts`): keyword-bucket categorization (EN+PL) of negative reviews — works without an AI key, returned with every scrape.
 - Caps: keywords ≤15, single-pass analysis ≤300 reviews, Play reviews 250/1500 (deep), compare 120/side, visual ≤6 images.
 
+## Alternative Stores (MULTI_STORE)
+
+Six Android stores behind the `MULTI_STORE` feature flag, each with a real provider under `src/providers/<store>/`. All extend `AlternativeStoreProvider` (`src/providers/alternative/base.ts`), which raises a typed 400 for every capability a store's API cannot do — **never a silent no-op**. A provider overrides only what it truly implements, so `src/config/store-capabilities.ts` stays honest (`wired` vs `consoleOnly`).
+
+| Store | Wired through the API | Notes |
+|-------|----------------------|-------|
+| Huawei AppGallery | listings (read/write), submit, screenshot **read** | No app-list endpoint — resolves apps from `packageNames` on the connection. Errors arrive as HTTP 200 + `ret.code != 0`. Screenshot upload has no documented bind step, so it is console-only. |
+| Samsung Galaxy Store | listings, screenshots (read/upload), submit | RS256 JWT (≤20 min) → `accessToken` that never expires (re-minted daily). `contentUpdate` replaces the whole screenshot array, so existing images are re-sent with `reuseYn: "Y"`. |
+| Amazon Appstore | listings (incl. keywords), screenshots, submit | Everything happens inside an "edit"; every mutation needs `If-Match` with the resource ETag. **412 = app in review**, not a stale tag. No app-list endpoint — uses `packageNames`. |
+| RuStore | auth + app list only | Token = base64 `SHA512withRSA` over `keyId + timestamp` (no delimiter), sent as the `Public-Token` header. Publishing is create-a-new-immutable-draft and undocumented → console-only. |
+| ONE Store | credential validation only | Its public "v7 API" is the IAP server API; **no app-submission API exists**. |
+| Xiaomi GetApps | credential validation only (local PEM parse) | Only an APK push endpoint is documented; no listing metadata API. |
+
+**Credential contract** (exact JSON field names the panel sends to `POST /stores/connect`, validated with ArkType in `src/providers/alternative/credentials.schema.ts`):
+`huawei_appgallery` + `amazon_appstore` + `onestore` → `{ clientId, clientSecret }` · `samsung_galaxy` → `{ serviceAccountId, privateKey }` · `rustore` → `{ keyId, privateKey }` · `xiaomi_getapps` → `{ email, privateKey }`. Huawei and Amazon also accept optional `packageNames: string[]`.
+
+Credentials go through the E2EE vault exactly like the primary stores. `credentials.mock === true` still routes to `MockStoreProvider` for the demo seed.
+
 ## History + Diff System
 
 GitHub-style version control for listing fields.
