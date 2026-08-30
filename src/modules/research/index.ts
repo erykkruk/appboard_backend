@@ -7,6 +7,7 @@ import {
 	analyzeBody,
 	compareBody,
 	competitorsBody,
+	keywordScoresBody,
 	keywordsBody,
 	marketsBody,
 	runIdParams,
@@ -89,6 +90,25 @@ export const researchController = new Elysia({ prefix: "/research" })
 			detail: {
 				description:
 					"Check real search ranking (top 50) of keywords in both stores",
+				tags: ["Research"],
+			},
+		},
+	)
+	.post(
+		"/keyword-scores",
+		async ({ body }) => {
+			const scores = await ResearchService.keywordScores(
+				body.keywords,
+				body.country,
+				body.appstoreId,
+			);
+			return { scores };
+		},
+		{
+			body: keywordScoresBody,
+			detail: {
+				description:
+					"Score keywords for ASO: popularity, difficulty (with breakdown and ranking tiers), opportunity, classification and download estimates",
 				tags: ["Research"],
 			},
 		},

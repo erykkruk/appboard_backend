@@ -2,11 +2,19 @@ import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import {
 	appstoreCompetitors,
+	appstoreKeywordSearch,
 	appstoreMeta,
 	appstoreReviews,
 	appstoreSearch,
 	appstoreSearchPosition,
 } from "./appstore.client";
+import {
+	calcOpportunity,
+	calculateDifficulty,
+	classifyKeyword,
+	estimateDownloads,
+	estimatePopularity,
+} from "./keyword-scoring";
 import {
 	playstoreMeta,
 	playstoreReviewStats,
@@ -19,6 +27,7 @@ import { computeHeuristics } from "./research.heuristics";
 import {
 	type HeuristicStats,
 	type KeywordPosition,
+	type KeywordScore,
 	type MarketSnapshot,
 	type ParsedStoreUrl,
 	parseStoreUrl,
@@ -36,6 +45,10 @@ const SEARCH_PER_STORE_BOTH = 6;
 const SEARCH_PER_STORE_SINGLE = 12;
 const MAX_KEYWORDS = 15;
 const NEGATIVE_MAX_STARS = 3;
+const MAX_SCORED_KEYWORDS = 10;
+const SCORING_SEARCH_LIMIT = 25;
+const SCORING_COMPETITORS_RETURNED = 10;
+const SCORING_CALL_DELAY_MS = 300;
 
 export type SearchScope = "both" | "appstore" | "playstore";
 
@@ -165,6 +178,75 @@ export class ResearchService {
 			positions.push({ appstore: apple, keyword, playstore: play });
 		}
 		return positions;
+	}
+
+	/**
+	 * Score keywords for ASO targeting: popularity estimate, difficulty with
+	 * breakdown + ranking tiers, opportunity, classification and download
+	 * estimates - all derived from one App Store search per keyword.
+	 * Failures are reported per keyword so a batch survives partial outages.
+	 */
+	static async keywordScores(
+		keywords: string[],
+		country: string,
+		appstoreId?: string,
+	): Promise<KeywordScore[]> {
+		const unique = [
+			...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)),
+		].slice(0, MAX_SCORED_KEYWORDS);
+
+		const scores: KeywordScore[] = [];
+		for (const keyword of unique) {
+			// Modest spacing between iTunes calls to stay clear of rate limits.
+			if (scores.length > 0) {
+				await new Promise((r) => setTimeout(r, SCORING_CALL_DELAY_MS));
+			}
+			try {
+				const competitors = await appstoreKeywordSearch(
+					keyword,
+					country,
+					SCORING_SEARCH_LIMIT,
+				);
+				const popularity = estimatePopularity(competitors, keyword);
+				const difficulty = calculateDifficulty(competitors, keyword);
+				const appRank = appstoreId
+					? await appstoreSearchPosition(keyword, appstoreId, country).catch(
+							() => null,
+						)
+					: undefined;
+				scores.push({
+					appRank,
+					breakdown: difficulty.breakdown,
+					classification: classifyKeyword(popularity, difficulty.score),
+					competitors: competitors.slice(0, SCORING_COMPETITORS_RETURNED),
+					country,
+					difficulty: difficulty.score,
+					difficultyLabel: difficulty.label,
+					downloads: estimateDownloads(popularity, country),
+					keyword,
+					opportunity: calcOpportunity(popularity, difficulty.score),
+					popularity,
+					tiers: difficulty.tiers,
+				});
+			} catch (err) {
+				log.warn({ country, err, keyword }, "Keyword scoring failed");
+				scores.push({
+					breakdown: calculateDifficulty([], keyword).breakdown,
+					classification: "unknown",
+					competitors: [],
+					country,
+					difficulty: 0,
+					difficultyLabel: "no-data",
+					downloads: estimateDownloads(null, country),
+					error: err instanceof Error ? err.message : "Unknown error",
+					keyword,
+					opportunity: 0,
+					popularity: null,
+					tiers: calculateDifficulty([], keyword).tiers,
+				});
+			}
+		}
+		return scores;
 	}
 
 	static async markets(

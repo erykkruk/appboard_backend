@@ -77,6 +77,15 @@ export const keywordsBody = t.Object({
 	playstoreId: t.Optional(t.String()),
 });
 
+export const keywordScoresBody = t.Object({
+	appstoreId: t.Optional(t.String()),
+	country: country,
+	keywords: t.Array(t.String({ minLength: 1 }), {
+		maxItems: 10,
+		minItems: 1,
+	}),
+});
+
 export const marketsBody = t.Object({
 	id: t.String({ minLength: 1 }),
 	markets: t.Optional(t.Array(country)),

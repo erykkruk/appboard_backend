@@ -1,10 +1,14 @@
 # AppBoard CLI
 
-A small command-line tool for uploading a folder of screenshots to the AppBoard
-API — the web-based equivalent of ButterKit's Fastlane-folder upload, built for
-**CI pipelines**. Every image is validated against its display type's accepted
-dimensions **before** upload, so a wrong-sized asset fails fast with a clear
-message (expected vs. provided dimensions) instead of being silently distorted.
+A small command-line tool for the AppBoard API with two commands:
+
+- `upload` - upload a folder of screenshots, the web-based equivalent of
+  ButterKit's Fastlane-folder upload, built for **CI pipelines**. Every image is
+  validated against its display type's accepted dimensions **before** upload, so
+  a wrong-sized asset fails fast with a clear message (expected vs. provided
+  dimensions) instead of being silently distorted.
+- `keywords` - score App Store keywords (popularity, difficulty, opportunity,
+  classification, download estimates) straight in the terminal.
 
 It reuses the same typed client and authentication as the [MCP server](../mcp/README.md):
 the API key comes from `APPBOARD_API_KEY` and the base URL from `APPBOARD_API_URL`.
@@ -82,6 +86,40 @@ appboard upload --app <appId> --lang <locale> --platform <apple|gp> \
 3. If valid, uploads via the screenshots upload endpoint.
 4. Prints a per-file `✓` / `✗` summary.
 5. Exits `0` only if **all** files succeeded; otherwise `1`.
+
+## The `keywords` command
+
+```
+appboard keywords --country <cc> [--track-id <id>] [--json] \
+  [--api-url <url>] <keyword>[, <keyword>...]
+```
+
+| Option         | Required | Description                                                       |
+| -------------- | -------- | ----------------------------------------------------------------- |
+| `<keyword>...` | yes      | Up to 10 keywords, comma-separated or as separate arguments       |
+| `--country`    | yes      | Two-letter App Store country code, e.g. `us`, `pl`                |
+| `--track-id`   | no       | App Store track id of your app - the table adds its rank per keyword |
+| `--json`       | no       | Print the full JSON response (breakdown, tiers, all 20 positions) |
+| `--api-url`    | no       | Backend base URL; overrides `APPBOARD_API_URL`                    |
+
+Example:
+
+```bash
+appboard keywords --country us --track-id 324684580 "fitness tracker, habit tracker"
+```
+
+```
+Keyword scores (US, downloads/day at #1 as low-high):
+
+KEYWORD                  POP  DIFF  LABEL      OPP  CLASS             DL/DAY #1     RANK
+fitness tracker          72   68    hard       41   high-competition  69-276        #12
+habit tracker            58   45    moderate   55   good-target       14-57         -
+```
+
+The scoring endpoint is `POST /api/research/keyword-scores` (RESEARCH feature
+flag). Popularity is calibrated to Apple's 1-100 scale; difficulty corrects for
+Apple's search backfill and detects brand keywords. Exits `0` only when every
+keyword scored; a partial failure (per-keyword `error`) exits `1`.
 
 ## Valid display types
 
