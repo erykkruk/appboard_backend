@@ -3,7 +3,7 @@ import sharp from "sharp";
 import { PublishingService } from "@/modules/publishing/publishing.service";
 
 function createFileFromBuffer(buffer: Buffer, fileName = "test.png"): File {
-	return new File([buffer], fileName, { type: "image/png" });
+	return new File([new Uint8Array(buffer)], fileName, { type: "image/png" });
 }
 
 async function createTestImage(

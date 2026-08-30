@@ -47,7 +47,7 @@ describe("multi-store store types", () => {
 		expect(PRIMARY_STORE_TYPES).toEqual(["google_play", "app_store"]);
 		expect(STORE_TYPES).toContain("huawei_appgallery");
 		expect(STORE_TYPES).toContain("amazon_appstore");
-		expect(STORE_TYPES.length).toBe(
+		expect(STORE_TYPES.length as number).toBe(
 			PRIMARY_STORE_TYPES.length + ALTERNATIVE_STORE_TYPES.length,
 		);
 	});
@@ -95,7 +95,9 @@ describe("alternative store capabilities are honest", () => {
 				.filter((definition) => definition.wired)
 				.map((definition) => definition.id);
 
-			expect(wired.sort()).toEqual([...WIRED_CAPABILITIES[type]].sort());
+			expect(wired.sort() as string[]).toEqual(
+				([...WIRED_CAPABILITIES[type]] as string[]).sort(),
+			);
 		}
 	});
 

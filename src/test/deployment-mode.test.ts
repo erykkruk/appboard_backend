@@ -55,7 +55,9 @@ describe("Deployment mode (cloud vs self-hosted)", () => {
 		def.cloudOnly = true;
 		try {
 			config.DEPLOYMENT_MODE = "selfhosted";
-			const shRes = await app.handle(authRequest("http://localhost/api/features"));
+			const shRes = await app.handle(
+				authRequest("http://localhost/api/features"),
+			);
 			const sh = (await shRes.json()) as {
 				definitions: FeatureDefinition[];
 				features: Record<string, boolean>;
@@ -64,7 +66,9 @@ describe("Deployment mode (cloud vs self-hosted)", () => {
 			expect(sh.features.REVIEWS).toBe(false);
 
 			config.DEPLOYMENT_MODE = "cloud";
-			const clRes = await app.handle(authRequest("http://localhost/api/features"));
+			const clRes = await app.handle(
+				authRequest("http://localhost/api/features"),
+			);
 			const cl = (await clRes.json()) as {
 				definitions: FeatureDefinition[];
 				features: Record<string, boolean>;

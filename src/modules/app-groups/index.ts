@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import {
 	addMemberBody,
 	createGroupBody,
@@ -13,6 +14,7 @@ import { AppGroupsService } from "./app-groups.service";
 import { GroupGenerationService } from "./group-generation.service";
 
 export const appGroupsController = new Elysia({ prefix: "/app-groups" })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ workspaceId }) => {

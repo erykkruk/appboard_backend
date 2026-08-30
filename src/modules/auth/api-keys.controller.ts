@@ -2,6 +2,7 @@ import { Elysia } from "elysia";
 import { buildError } from "@/utils/errors";
 import { apiKeyIdParams, createApiKeyBody } from "./api-keys.schema";
 import { ApiKeysService } from "./api-keys.service";
+import { authGuard } from "./index";
 
 /**
  * Key management requires a real user session. An API key must never be able to
@@ -18,6 +19,7 @@ function requireSession(userId: string | null): string {
 }
 
 export const apiKeysController = new Elysia({ prefix: "/auth/api-keys" })
+	.use(authGuard)
 	.post(
 		"/",
 		({ body, userId, workspaceId }) => {

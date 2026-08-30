@@ -1,11 +1,12 @@
 import Elysia from "elysia";
 import { AIService } from "@/modules/ai/ai.service";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ageRatingParams, upsertAgeRatingBody } from "./age-rating.schema";
 import { AgeRatingService } from "./age-rating.service";
 import { AGE_RATING_PRESETS } from "./age-rating.templates";
 
-export const ageRatingPresetsController = new Elysia().get(
+export const ageRatingPresetsController = new Elysia().use(authGuard).get(
 	"/age-rating-presets",
 	() => {
 		return { presets: AGE_RATING_PRESETS };
@@ -21,6 +22,7 @@ export const ageRatingPresetsController = new Elysia().get(
 export const ageRatingController = new Elysia({
 	prefix: "/apps/:appId/age-rating",
 })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ params, workspaceId }) => {

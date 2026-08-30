@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 import { ASC_TERRITORIES } from "@/config/const";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	monetizationChatBody,
@@ -11,6 +12,7 @@ import { MonetizationChatService } from "./monetization-chat.service";
 export const monetizationChatController = new Elysia({
 	prefix: "/ai",
 })
+	.use(authGuard)
 	.get(
 		"/territories",
 		() => {

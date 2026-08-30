@@ -106,7 +106,9 @@ async function testGooglePlay() {
 		gplay.reviews({
 			appId: "com.spotify.music",
 			num: 5,
-			sort: gplay.sort.NEWEST,
+			// google-play-scraper's index.d.ts exposes sort/category/collection as
+			// enum value unions, so member access does not typecheck - use raw values.
+			sort: 2, // gplay.sort.NEWEST
 		}),
 	);
 	if (reviewsResult) {
@@ -129,10 +131,10 @@ async function testGooglePlay() {
 	logSubSection("5. gplay.list() - Top apps in MUSIC_AND_AUDIO");
 	const topApps = await runWithCatch("gplay.list", () =>
 		gplay.list({
-			category: gplay.category.MUSIC_AND_AUDIO,
-			collection: gplay.collection.TOP_FREE,
+			category: "MUSIC_AND_AUDIO", // gplay.category.MUSIC_AND_AUDIO
+			collection: "TOP_FREE", // gplay.collection.TOP_FREE
 			num: 10,
-		}),
+		} as unknown as Parameters<typeof gplay.list>[0]),
 	);
 	if (topApps) {
 		console.log(`  Total: ${topApps.length}`);

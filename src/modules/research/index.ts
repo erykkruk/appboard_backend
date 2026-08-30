@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchAiService } from "./research.ai";
 import { ResearchRunsService } from "./research.runs.service";
@@ -19,6 +20,7 @@ import { ResearchService } from "./research.service";
 import type { ResearchRunReport } from "./research.types";
 
 export const researchController = new Elysia({ prefix: "/research" })
+	.use(authGuard)
 	.post(
 		"/search",
 		async ({ body }) => {

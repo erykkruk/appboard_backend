@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	exportQuery,
@@ -11,6 +12,7 @@ import {
 import { ListingsService } from "./listings.service";
 
 export const listingsController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/:appId/listings/template",
 		async ({ params, query, set, workspaceId }) => {

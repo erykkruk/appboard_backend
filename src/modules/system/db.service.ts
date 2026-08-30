@@ -12,8 +12,16 @@ export class DBService {
 		const offset = (page - 1) * pageSize;
 
 		const [data, countResult] = await Promise.all([
-			db.select().from(table).where(where).limit(pageSize).offset(offset),
-			db.select({ count: sql<number>`count(*)::int` }).from(table).where(where),
+			db
+				.select()
+				.from(table as PgTable)
+				.where(where)
+				.limit(pageSize)
+				.offset(offset),
+			db
+				.select({ count: sql<number>`count(*)::int` })
+				.from(table as PgTable)
+				.where(where),
 		]);
 
 		return {

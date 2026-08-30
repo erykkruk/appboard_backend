@@ -62,7 +62,15 @@ function isPaymentsProfileError(err: unknown): boolean {
 	return msg.includes("payments profile");
 }
 
-describe.skipIf(!SHOULD_RUN)(
+// bun:test's describe typings accept (label, fn) only, but bun itself
+// accepts a timeout options object as the third argument - keep it typed.
+const describeIntegration = describe.skipIf(!SHOULD_RUN) as unknown as (
+	label: string,
+	fn: () => void,
+	options?: { timeout: number },
+) => void;
+
+describeIntegration(
 	"Real Google Play API Integration",
 	() => {
 		const config = getCredentials();
@@ -104,8 +112,8 @@ describe.skipIf(!SHOULD_RUN)(
 		// ── Validate credentials ──────────────────────────────────────
 
 		it("should validate credentials", async () => {
-			const valid = await provider.validateCredentials();
-			expect(valid).toBe(true);
+			const result = await provider.validateCredentials();
+			expect(result.valid).toBe(true);
 		});
 
 		// ── Fetch existing data ───────────────────────────────────────

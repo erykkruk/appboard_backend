@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	draftReplyBody,
@@ -15,6 +16,7 @@ import {
 import { AIService } from "./ai.service";
 
 export const aiController = new Elysia({ prefix: "/ai" })
+	.use(authGuard)
 	.post(
 		"/generate-listing-field",
 		async ({ body, workspaceId }) => {

@@ -84,7 +84,8 @@ beforeAll(async () => {
 	await ensureTestVault(TEST_WORKSPACE_ID_B);
 
 	const mod = await import("@/index");
-	app = mod.default as unknown as import("@/index").App;
+	app = (mod as { default?: import("@/index").App })
+		.default as import("@/index").App;
 });
 
 /** Deterministic 32-byte DEK — tests only. */

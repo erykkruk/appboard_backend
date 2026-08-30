@@ -1,9 +1,11 @@
 import Elysia, { t } from "elysia";
 import { getDeploymentMode, isCloud } from "@/config/deployment";
+import { authGuard } from "@/modules/auth";
 import { FEATURE_DEFINITIONS } from "./features.const";
 import { FeaturesService } from "./features.service";
 
 export const featuresController = new Elysia({ prefix: "/features" })
+	.use(authGuard)
 	.get(
 		"",
 		async ({ workspaceId }) => {

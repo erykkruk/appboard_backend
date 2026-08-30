@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	replyBody,
@@ -9,6 +10,7 @@ import {
 import { ReviewsService } from "./reviews.service";
 
 export const reviewsController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/:appId/reviews",
 		async ({ params, query, workspaceId }) => {

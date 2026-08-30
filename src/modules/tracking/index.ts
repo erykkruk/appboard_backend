@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import {
@@ -13,6 +14,7 @@ import {
 import { TrackingService } from "./tracking.service";
 
 export const trackingController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	// ── Rank tracking ────────────────────────────────────────────────
 	.get(
 		"/:appId/tracking",

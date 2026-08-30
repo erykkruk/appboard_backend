@@ -10,7 +10,7 @@
  */
 
 const BASE = `${process.env.BACKEND_URL ?? "http://localhost:6680"}/api`;
-const KEY_PATH = process.env.GP_SERVICE_ACCOUNT_KEY_PATH;
+const KEY_PATH = process.env.GP_SERVICE_ACCOUNT_KEY_PATH ?? "";
 
 if (!KEY_PATH) {
 	console.error(

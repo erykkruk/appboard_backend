@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { AppAiPromptsService } from "./app-ai-prompts.service";
 
@@ -19,6 +20,7 @@ const promptBody = t.Object({
 export const appAiPromptsController = new Elysia({
 	prefix: "/apps/:appId/ai-prompts",
 })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ params, workspaceId }) => {

@@ -1551,9 +1551,8 @@ export class AppStoreProvider implements StoreProvider {
 									const { data: pt } = await read(
 										`subscriptionPricePoints/${rp.pricePointId}`,
 									);
-									const cp = (pt as ApiResource)?.attributes?.customerPrice as
-										| string
-										| undefined;
+									const cp = (pt as unknown as ApiResource)?.attributes
+										?.customerPrice as string | undefined;
 									return {
 										currency: "USD",
 										externalId: rp.externalId,

@@ -97,10 +97,10 @@ describe("Tracked keywords", () => {
 			}),
 		);
 		expect(res.status).toBe(200);
-		const body = (await json(res)) as { keywords: Array<{ keyword: string }> };
-		const usKeywords = body.keywords.filter(
-			(k) => (k as { country: string }).country === "us",
-		);
+		const body = (await json(res)) as {
+			keywords: Array<{ keyword: string; country: string }>;
+		};
+		const usKeywords = body.keywords.filter((k) => k.country === "us");
 		expect(usKeywords.map((k) => k.keyword).sort()).toEqual([
 			"task manager",
 			"todo",

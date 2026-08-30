@@ -1051,7 +1051,7 @@ export class PublishingService {
 				return { reviewDetail: null };
 			}
 
-			const detail = reviewDetail as ApiResource;
+			const detail = reviewDetail as unknown as ApiResource;
 			const attrs = detail.attributes;
 
 			// Fetch attachments
@@ -1174,7 +1174,7 @@ export class PublishingService {
 					`appStoreVersions/${versionId}/appStoreReviewDetail`,
 				);
 				if (existing) {
-					reviewDetailId = (existing as ApiResource).id;
+					reviewDetailId = (existing as unknown as ApiResource).id;
 				}
 			} catch {
 				// No existing detail
@@ -1239,7 +1239,7 @@ export class PublishingService {
 					info: "Review detail not found. Save review information first.",
 				});
 			}
-			reviewDetailId = (existing as ApiResource).id;
+			reviewDetailId = (existing as unknown as ApiResource).id;
 		} catch (err) {
 			if (err && typeof err === "object" && "status" in err) throw err;
 			const detail = extractAscError(err);
@@ -1497,7 +1497,7 @@ export class PublishingService {
 			credentials = decryptCredentials(
 				app.store.credentials,
 				app.store.workspaceId,
-			);
+			) as Record<string, string>;
 		} catch {
 			buildError("badRequest", { info: "Invalid App Store credentials" });
 		}
@@ -1551,7 +1551,8 @@ export class PublishingService {
 							`appStoreVersionLocalizations/${draft.externalId}`,
 						);
 						const locale =
-							((versionLoc as ApiResource)?.attributes?.locale as string) ?? "";
+							((versionLoc as unknown as ApiResource)?.attributes
+								?.locale as string) ?? "";
 
 						if (locale) {
 							const { data: appInfos } = await client.readAll(
@@ -1744,7 +1745,7 @@ export class PublishingService {
 					externalId,
 				);
 				published += result.published ?? 0;
-				if (result.errors) errors.push(...result.errors);
+				if ("errors" in result && result.errors) errors.push(...result.errors);
 			} catch (err) {
 				errors.push(err instanceof Error ? err.message : String(err));
 			}
@@ -1821,6 +1822,7 @@ export class PublishingService {
 		versionId: string,
 		locale: string,
 		sourceLocale: string,
+		workspaceId: string,
 	) {
 		// 1. Create the locale in ASC
 		await PublishingService.addVersionLocalization(appId, versionId, locale);
@@ -1892,6 +1894,7 @@ export class PublishingService {
 		try {
 			const { AIService } = await import("@/modules/ai/ai.service");
 			const result = await AIService.translateLocalization(
+				workspaceId,
 				appId,
 				appInfo?.name ?? "Unknown App",
 				appInfo?.platform ?? "ios",
@@ -2607,7 +2610,7 @@ export class PublishingService {
 		targetHeight?: number,
 		cropParams?: { x: number; y: number; width: number; height: number },
 	) {
-		let rawBuffer = Buffer.from(await file.arrayBuffer());
+		let rawBuffer: Buffer = Buffer.from(await file.arrayBuffer());
 
 		// If crop params provided, extract the crop region first
 		if (cropParams) {

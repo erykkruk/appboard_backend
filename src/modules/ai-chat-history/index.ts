@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { AiChatHistoryService } from "./ai-chat-history.service";
 
@@ -17,6 +18,7 @@ const addMessageBody = t.Object({
 export const aiChatHistoryController = new Elysia({
 	prefix: "/ai/chat-history",
 })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ query, workspaceId }) => {

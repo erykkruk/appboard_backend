@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { buildError } from "@/utils/errors";
 import { matchesPathPattern, ROUTE_FEATURE_MAP } from "./features.const";
 import { FeaturesService } from "./features.service";
@@ -7,15 +8,9 @@ const FEATURES_ENDPOINT_SEGMENT = "/api/features";
 
 export const featureGuard = new Elysia({
 	name: "feature-guard",
-}).onBeforeHandle(
-	{ as: "scoped" },
-	async ({
-		request,
-		workspaceId,
-	}: {
-		request: Request;
-		workspaceId: string | null;
-	}) => {
+})
+	.use(authGuard)
+	.onBeforeHandle({ as: "scoped" }, async ({ request, workspaceId }) => {
 		if (!workspaceId) return;
 
 		const { pathname } = new URL(request.url);
@@ -39,5 +34,4 @@ export const featureGuard = new Elysia({
 				info: `Feature ${match.feature} is disabled`,
 			});
 		}
-	},
-);
+	});

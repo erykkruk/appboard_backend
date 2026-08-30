@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	privacyDeclarationParams,
@@ -7,7 +8,7 @@ import {
 import { PrivacyDeclarationService } from "./privacy-declaration.service";
 import { getTemplatesByPlatform } from "./privacy-declaration.templates";
 
-export const privacyTemplatesController = new Elysia().get(
+export const privacyTemplatesController = new Elysia().use(authGuard).get(
 	"/privacy-templates",
 	({ query }) => {
 		return { templates: getTemplatesByPlatform(query.platform) };
@@ -26,6 +27,7 @@ export const privacyTemplatesController = new Elysia().get(
 export const privacyDeclarationController = new Elysia({
 	prefix: "/apps/:appId/privacy-declaration",
 })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ params, workspaceId }) => {

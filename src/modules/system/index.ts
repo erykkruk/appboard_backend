@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 import config from "@/config";
 import { getDeploymentMode } from "@/config/deployment";
+import { authGuard } from "@/modules/auth";
 import { ErrorLogService } from "@/modules/system/error-log.service";
 import { db } from "@/utils/db";
 import { runMigrations } from "@/utils/db/migrate";
@@ -53,6 +54,7 @@ async function ensureBootstrapAdmin() {
 }
 
 export const systemController = new Elysia({ prefix: "/system" })
+	.use(authGuard)
 	.get(
 		"/health",
 		() => ({

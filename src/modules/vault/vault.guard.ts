@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { matchesPathPattern } from "@/modules/features/features.const";
 import { VaultService } from "./vault.service";
 
@@ -30,15 +31,9 @@ const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  */
 export const vaultActionGuard = new Elysia({
 	name: "vault-action-guard",
-}).onBeforeHandle(
-	{ as: "scoped" },
-	async ({
-		request,
-		workspaceId,
-	}: {
-		request: Request;
-		workspaceId: string | null;
-	}) => {
+})
+	.use(authGuard)
+	.onBeforeHandle({ as: "scoped" }, async ({ request, workspaceId }) => {
 		if (!workspaceId) return;
 		if (!MUTATING_METHODS.has(request.method)) return;
 
@@ -55,5 +50,4 @@ export const vaultActionGuard = new Elysia({
 		if (!isStoreAction) return;
 
 		await VaultService.assertUnlockedForAction(workspaceId);
-	},
-);
+	});

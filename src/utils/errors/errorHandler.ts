@@ -47,7 +47,7 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 		// Persist any >= 400 (except NOT_FOUND/PARSE noise) to our DB so failures
 		// are visible without SSH. Fire-and-forget + secret-scrubbed in the service.
 		const persist = (statusCode: number, errCode: string) => {
-			if (NON_PERSISTED_CODES.has(code) || statusCode < 400) return;
+			if (NON_PERSISTED_CODES.has(String(code)) || statusCode < 400) return;
 			ErrorLogService.record({
 				code: errCode,
 				context: { elysiaCode: code },
@@ -94,7 +94,7 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 					data: {
 						info: isProd
 							? "Internal server error"
-							: error?.message || "Unknown error",
+							: (error as Error | undefined)?.message || "Unknown error",
 					},
 				};
 
@@ -143,7 +143,8 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 						data: {
 							info: isProd
 								? "Upstream service error"
-								: error?.message || `Error (${statusCode})`,
+								: (error as Error | undefined)?.message ||
+									`Error (${statusCode})`,
 						},
 					};
 				}
@@ -155,7 +156,7 @@ export const errorHandler = new Elysia({ name: "errorHandler" }).onError(
 					data: {
 						info: isProd
 							? "Internal server error"
-							: error?.message || "Unknown error",
+							: (error as Error | undefined)?.message || "Unknown error",
 					},
 				};
 			}

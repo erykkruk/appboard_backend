@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	assetIdParams,
@@ -10,6 +11,7 @@ import {
 import { AssetsService } from "./assets.service";
 
 export const assetsController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/:appId/assets",
 		async ({ params, query, workspaceId }) => {

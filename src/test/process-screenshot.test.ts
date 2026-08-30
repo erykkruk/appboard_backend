@@ -6,7 +6,7 @@ import { PublishingService } from "@/modules/publishing/publishing.service";
  * Helper to create a File object from a Buffer
  */
 function createFileFromBuffer(buffer: Buffer, fileName = "test.png"): File {
-	return new File([buffer], fileName, { type: "image/png" });
+	return new File([new Uint8Array(buffer)], fileName, { type: "image/png" });
 }
 
 /**
