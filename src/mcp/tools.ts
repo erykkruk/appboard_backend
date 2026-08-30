@@ -316,6 +316,41 @@ export const tools: RegisteredTool[] = [
 		name: "reviews_reply",
 	}),
 	defineTool({
+		description:
+			"Score up to 10 App Store keywords for ASO targeting: search " +
+			"popularity (1-100, calibrated to Apple's scale), competition " +
+			"difficulty with a sub-score breakdown and Top 5/10/20 ranking " +
+			"tiers, opportunity score, targeting classification (sweet-spot, " +
+			"hidden-gem, ...) and estimated daily downloads per ranking " +
+			"position. Requires the RESEARCH feature to be enabled.",
+		handler: (client, input) =>
+			client.api.research["keyword-scores"]
+				.post({
+					country: input.country,
+					keywords: input.keywords,
+					...(input.appstoreId ? { appstoreId: input.appstoreId } : {}),
+				})
+				.then(unwrap),
+		inputSchema: {
+			appstoreId: z
+				.string()
+				.optional()
+				.describe(
+					"App Store track id of your own app - adds its search rank per keyword",
+				),
+			country: z
+				.string()
+				.length(2)
+				.describe("Two-letter App Store country code, e.g. us, pl"),
+			keywords: z
+				.array(z.string().min(1))
+				.min(1)
+				.max(10)
+				.describe("Keywords to score (max 10 per call)"),
+		},
+		name: "research_keyword_scores",
+	}),
+	defineTool({
 		description: "List all in-app purchases for an app.",
 		handler: (client, input) =>
 			client.api.apps({ appId: input.appId }).purchases.get().then(unwrap),

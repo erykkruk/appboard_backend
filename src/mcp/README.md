@@ -3,7 +3,8 @@
 An [MCP](https://modelcontextprotocol.io) server that exposes the AppBoard ASO
 REST API as tools, so AI agents (Claude Code, Cursor, Codex) can drive App Store
 Optimization operations: list apps, edit and translate listings, generate ASO
-content, manage reviews and purchases, and publish to the stores.
+content, score keywords (popularity / difficulty / opportunity), manage reviews
+and purchases, and publish to the stores.
 
 It speaks **STDIO** transport and talks to a running AppBoard backend over HTTP,
 authenticating with a per-workspace API key.
@@ -81,6 +82,7 @@ bun run mcp:server
 | `ai_generate_listing_field`      | Generate / rephrase a single listing field                      |
 | `reviews_list`                   | List reviews (filter by rating, language, reply, store)         |
 | `reviews_reply`                  | Reply to a review                                               |
+| `research_keyword_scores`        | Score keywords: popularity, difficulty + tiers, opportunity, classification, download estimates |
 | `purchases_list`                 | List in-app purchases for an app                                |
 | `publishing_validate_screenshot` | Validate a screenshot's dimensions for a display type           |
 | `publishing_publish`             | Publish pending changes to the store (optionally submit for review) |
