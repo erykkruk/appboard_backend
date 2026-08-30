@@ -173,7 +173,7 @@ GitHub-style version control for listing fields.
 - NEVER put business logic in controllers — use service classes
 - NEVER use raw SQL — use Drizzle ORM
 - NEVER store credentials unencrypted — use `encrypt()`/`decrypt()` from `@/utils/crypto`
-- NEVER save store credentials outside the E2EE vault — `encryptCredentials()` requires a configured + unlocked workspace vault (no vault → 428 `VAULT_REQUIRED`); the env-key fallback exists only for READING legacy blobs
+- E2EE vault is OPT-IN per workspace (since 2026-08-30): no vault → credentials are encrypted with the server env key (default); vault configured but locked → 423 `VAULT_LOCKED`; vault unlocked → DEK-wrapped `vault:` blobs. `POST /api/vault/disable` (requires unlocked vault) re-encrypts credentials back to the env key and removes the vault. Never store credentials in plaintext
 - NEVER use `any` type
 - NEVER skip workspace scoping — every endpoint MUST use `workspaceId` from auth guard
 - NEVER write tests without auth context — always use `authRequest()` or `authRequestB()`

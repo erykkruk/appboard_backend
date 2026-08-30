@@ -64,6 +64,13 @@ export const vaultController = new Elysia({ prefix: "/vault" })
 			tags: ["Vault"],
 		},
 	})
+	.post("/disable", ({ workspaceId }) => VaultService.disable(workspaceId!), {
+		detail: {
+			description:
+				"Disable passphrase encryption; credentials are re-encrypted with the server key (vault must be unlocked)",
+			tags: ["Vault"],
+		},
+	})
 	.post("/reset", ({ workspaceId }) => VaultService.reset(workspaceId!), {
 		detail: {
 			description: "Wipe the vault + encrypted credentials (unrecoverable)",

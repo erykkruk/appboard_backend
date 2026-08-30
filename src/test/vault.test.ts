@@ -180,9 +180,9 @@ describe("Vault (E2EE credential encryption)", () => {
 		expect(data.exists).toBe(false);
 	});
 
-	it("refuses to save store credentials without a vault (428)", async () => {
-		// After reset there is no vault — connecting a store must be rejected
-		// instead of silently falling back to server env-key encryption.
+	it("saves store credentials without a vault using the server env key", async () => {
+		// After reset there is no vault — passphrase encryption is opt-in, so
+		// connecting a store falls back to server env-key encryption.
 		const res = await app.handle(
 			vaultReq("POST", "/api/stores/connect", {
 				credentials: { mock: true, type: "mock" },
@@ -190,9 +190,14 @@ describe("Vault (E2EE credential encryption)", () => {
 				type: "google_play",
 			}),
 		);
-		expect(res.status).toBe(428);
-		const body = (await res.json()) as { code: string };
-		expect(body.code).toBe("VAULT_REQUIRED");
+		expect(res.status).toBe(200);
+
+		const [row] = await db
+			.select({ credentials: stores.credentials })
+			.from(stores)
+			.where(eq(stores.name, "No Vault Store"));
+		expect(row.credentials).toBeTruthy();
+		expect(row.credentials?.startsWith(VAULT_PREFIX)).toBe(false);
 	});
 
 	it("isolates vaults across workspaces (B cannot read A's params)", async () => {
@@ -209,5 +214,40 @@ describe("Vault (E2EE credential encryption)", () => {
 		const params = (await res.json()) as { kdfSalt: string };
 		expect(params.kdfSalt).toBe(Buffer.from("test-salt").toString("base64"));
 		expect(params.kdfSalt).not.toBe(setupBody.kdfSalt);
+	});
+
+	it("refuses to disable a locked vault (423)", async () => {
+		await app.handle(vaultReq("POST", "/api/vault/lock"));
+		const res = await app.handle(vaultReq("POST", "/api/vault/disable"));
+		expect(res.status).toBe(423);
+	});
+
+	it("disables the vault and re-encrypts credentials with the env key", async () => {
+		await app.handle(
+			vaultReq("POST", "/api/vault/unlock", { dek: dek.toString("base64") }),
+		);
+		const { data, status } = await json(
+			await app.handle(vaultReq("POST", "/api/vault/disable")),
+		);
+		expect(status).toBe(200);
+		expect(data.disabled).toBe(true);
+		expect(data.migrated).toBe(1);
+
+		const [row] = await db
+			.select({ credentials: stores.credentials })
+			.from(stores)
+			.where(eq(stores.name, "No Vault Store"));
+		expect(row.credentials).toBeTruthy();
+		expect(row.credentials?.startsWith(VAULT_PREFIX)).toBe(false);
+
+		const statusRes = await json(
+			await app.handle(vaultReq("GET", "/api/vault/status")),
+		);
+		expect(statusRes.data).toEqual({ exists: false, unlocked: false });
+	});
+
+	it("refuses to disable when no vault exists (404)", async () => {
+		const res = await app.handle(vaultReq("POST", "/api/vault/disable"));
+		expect(res.status).toBe(404);
 	});
 });
