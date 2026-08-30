@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
-import { run, runUpload } from "@/cli";
+import { run, runKeywords, runUpload } from "@/cli";
 
 /** Build a tiny PNG buffer of the given dimensions for upload/validation tests. */
 async function createPng(width: number, height: number): Promise<Buffer> {
@@ -322,6 +322,95 @@ describe("CLI upload flow", () => {
 				r.url.includes("screenshots/upload"),
 			);
 			expect(uploadCall?.body?.get("versionId")).toBe("ver-editable");
+		} finally {
+			stub.restore();
+		}
+	});
+});
+
+describe("CLI keywords flow", () => {
+	const originalKey = process.env.APPBOARD_API_KEY;
+
+	beforeEach(() => {
+		process.env.APPBOARD_API_KEY = "ab_testkey";
+	});
+
+	afterEach(() => {
+		if (originalKey === undefined) delete process.env.APPBOARD_API_KEY;
+		else process.env.APPBOARD_API_KEY = originalKey;
+	});
+
+	const SCORE = {
+		breakdown: {},
+		classification: "sweet-spot",
+		competitors: [],
+		country: "us",
+		difficulty: 30,
+		difficultyLabel: "easy",
+		downloads: {
+			dailySearches: 4600,
+			positions: [{ high: 276, low: 69, position: 1, ttr: 30 }],
+			tiers: {
+				top5: { high: 100, low: 25 },
+				top6to10: { high: 10, low: 2 },
+				top11to20: { high: 1, low: 0.2 },
+			},
+		},
+		keyword: "fitness",
+		opportunity: 70,
+		popularity: 70,
+		tiers: {},
+	};
+
+	test("missing --country exits 1", async () => {
+		const code = await runKeywords(["fitness"]);
+		expect(code).toBe(1);
+	});
+
+	test("invalid --country exits 1", async () => {
+		const code = await runKeywords(["--country", "usa", "fitness"]);
+		expect(code).toBe(1);
+	});
+
+	test("no keywords exits 1", async () => {
+		const code = await runKeywords(["--country", "us"]);
+		expect(code).toBe(1);
+	});
+
+	test("more than 10 keywords exits 1", async () => {
+		const many = Array.from({ length: 11 }, (_, i) => `kw${i}`);
+		const code = await runKeywords(["--country", "us", many.join(",")]);
+		expect(code).toBe(1);
+	});
+
+	test("happy path: posts to keyword-scores with bearer header, exits 0", async () => {
+		const stub = stubFetch({ "research/keyword-scores": { scores: [SCORE] } });
+		try {
+			const code = await runKeywords(["--country", "us", "fitness"]);
+			expect(code).toBe(0);
+			const call = stub.requests.find((r) =>
+				r.url.includes("research/keyword-scores"),
+			);
+			expect(call).toBeDefined();
+			expect(call?.method.toUpperCase()).toBe("POST");
+			expect(call?.authorization).toBe("Bearer ab_testkey");
+		} finally {
+			stub.restore();
+		}
+	});
+
+	test("a failed keyword in the batch exits 1", async () => {
+		const stub = stubFetch({
+			"research/keyword-scores": {
+				scores: [
+					SCORE,
+					{ ...SCORE, error: "iTunes API HTTP 503", keyword: "x" },
+				],
+			},
+		});
+		try {
+			const code = await runKeywords(["--country", "us", "fitness, x"]);
+			expect(code).toBe(1);
 		} finally {
 			stub.restore();
 		}

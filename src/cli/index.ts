@@ -3,13 +3,18 @@ import { extname, join } from "node:path";
 import { parseArgs } from "node:util";
 import type { AppBoardClient } from "@/mcp/client";
 import { createClient, loadClientConfig } from "@/mcp/client";
+import type { KeywordScore } from "@/modules/research/research.types";
 
 /**
- * Standalone CLI for uploading a folder of screenshots to the AppBoard API —
- * the web-based equivalent of ButterKit's Fastlane-folder upload, intended for
- * CI pipelines. Each image is validated against the display type's accepted
- * dimensions before upload, so a wrong-sized asset fails fast with an
- * actionable message instead of being silently distorted.
+ * Standalone CLI for the AppBoard API, intended for CI pipelines and terminal
+ * research:
+ *
+ * - `upload` - upload a folder of screenshots (the web-based equivalent of
+ *   ButterKit's Fastlane-folder upload). Each image is validated against the
+ *   display type's accepted dimensions before upload, so a wrong-sized asset
+ *   fails fast with an actionable message instead of being silently distorted.
+ * - `keywords` - score App Store keywords (popularity, difficulty, opportunity,
+ *   classification, download estimates) straight in the console.
  *
  * Authentication reuses the MCP client (`@/mcp/client`): the API key comes from
  * APPBOARD_API_KEY and the base URL from APPBOARD_API_URL (or `--api-url`).
@@ -24,22 +29,34 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 	".png": "image/png",
 };
 
-const USAGE = `appboard — upload screenshots to the AppBoard API
+const USAGE = `appboard — AppBoard API command line
 
 Usage:
   appboard upload --app <appId> --lang <locale> --platform <apple|gp> \\
     --display-type <type> [--version <versionId>] [--api-url <url>] <dir>
+  appboard keywords --country <cc> [--track-id <id>] [--json] \\
+    [--api-url <url>] <keyword>[, <keyword>...]
 
-Arguments:
+upload arguments:
   <dir>                  Directory containing screenshots (.png/.jpg/.jpeg)
 
-Options:
+upload options:
   --app <appId>          App UUID (required)
   --lang <locale>        Listing locale, e.g. en-US (required)
   --platform <apple|gp>  Target platform: apple (App Store) or gp (Google Play) (required)
   --display-type <type>  Display type the screenshots target (required, see below)
   --version <versionId>  Version to upload into. Defaults to the first editable
                          version (Apple) or "default" (Google Play)
+
+keywords arguments:
+  <keyword>[, ...]       Up to 10 keywords, comma-separated or as separate args
+
+keywords options:
+  --country <cc>         Two-letter App Store country, e.g. us, pl (required)
+  --track-id <id>        App Store track id — also reports your app's rank
+  --json                 Print the full JSON response instead of the table
+
+Shared options:
   --api-url <url>        Backend base URL. Overrides APPBOARD_API_URL
   -h, --help             Show this help
 
@@ -348,9 +365,187 @@ export async function runUpload(argv: string[]): Promise<ExitCode> {
 	return failed === 0 ? 0 : 1;
 }
 
+// ── keywords command ──────────────────────────────────────────────────────
+
+const MAX_CLI_KEYWORDS = 10;
+const TWO_LETTER_COUNTRY = /^[a-z]{2}$/i;
+
+interface KeywordsArgs {
+	apiUrl?: string;
+	country: string;
+	json: boolean;
+	keywords: string[];
+	trackId?: string;
+}
+
 /**
- * Top-level dispatcher. Returns an exit code; only the `upload` command exists
- * today. `--help`/`-h` and an unknown/missing command print usage.
+ * Parse and validate the `keywords` command arguments. Keywords may be given
+ * comma-separated in one argument, as separate positionals, or both.
+ */
+function parseKeywordsArgs(argv: string[]): KeywordsArgs {
+	const { positionals, values } = parseArgs({
+		allowPositionals: true,
+		args: argv,
+		options: {
+			"api-url": { type: "string" },
+			country: { type: "string" },
+			json: { type: "boolean" },
+			"track-id": { type: "string" },
+		},
+	});
+
+	const country = values.country;
+	if (!country) {
+		throw new CliError("Missing required argument: --country");
+	}
+	if (!TWO_LETTER_COUNTRY.test(country)) {
+		throw new CliError(
+			`Invalid --country "${country}". Expected a two-letter code, e.g. us.`,
+		);
+	}
+
+	const keywords = [
+		...new Set(
+			positionals
+				.flatMap((p) => p.split(","))
+				.map((k) => k.trim().toLowerCase())
+				.filter(Boolean),
+		),
+	];
+	if (keywords.length === 0) {
+		throw new CliError("Provide at least one keyword.");
+	}
+	if (keywords.length > MAX_CLI_KEYWORDS) {
+		throw new CliError(
+			`Too many keywords (${keywords.length}). The limit is ${MAX_CLI_KEYWORDS} per run.`,
+		);
+	}
+
+	return {
+		apiUrl: values["api-url"],
+		country: country.toLowerCase(),
+		json: values.json ?? false,
+		keywords,
+		trackId: values["track-id"],
+	};
+}
+
+/** Pad or truncate a cell to a fixed width (left-aligned). */
+function cell(value: string, width: number): string {
+	const text =
+		value.length > width
+			? `${value.slice(0, Math.max(width - 2, 1))}..`
+			: value;
+	return text.padEnd(width);
+}
+
+/** Compact low-high range, e.g. "12-48" or "0.4-1.7". */
+function range(low: number, high: number): string {
+	const fmt = (v: number) =>
+		v >= 10 ? String(Math.round(v)) : String(Math.round(v * 10) / 10);
+	return `${fmt(low)}-${fmt(high)}`;
+}
+
+/** Render one scored keyword as a table row. */
+function keywordRow(score: KeywordScore, withRank: boolean): string {
+	if (score.error) {
+		return `${cell(score.keyword, 24)} error: ${score.error}`;
+	}
+	const top1 = score.downloads.positions[0];
+	const columns = [
+		cell(score.keyword, 24),
+		cell(score.popularity === null ? "-" : String(score.popularity), 4),
+		cell(String(score.difficulty), 5),
+		cell(score.difficultyLabel, 10),
+		cell(String(score.opportunity), 4),
+		cell(score.classification, 17),
+		cell(top1 ? range(top1.low, top1.high) : "-", 13),
+	];
+	if (withRank) {
+		columns.push(cell(score.appRank ? `#${score.appRank}` : "-", 5));
+	}
+	return columns.join(" ").trimEnd();
+}
+
+/**
+ * Run the `keywords` command: score keywords through the backend and print a
+ * compact table (or the raw JSON with --json). Returns an exit code.
+ */
+export async function runKeywords(argv: string[]): Promise<ExitCode> {
+	let args: KeywordsArgs;
+	try {
+		args = parseKeywordsArgs(argv);
+	} catch (err) {
+		process.stderr.write(`${(err as Error).message}\n\n${USAGE}`);
+		return 1;
+	}
+
+	let config: ReturnType<typeof loadClientConfig>;
+	try {
+		config = loadClientConfig(
+			args.apiUrl
+				? { ...process.env, APPBOARD_API_URL: args.apiUrl }
+				: process.env,
+		);
+	} catch (err) {
+		process.stderr.write(`${(err as Error).message}\n`);
+		return 1;
+	}
+
+	const client = createClient(config);
+	const { data, error } = await client.api.research["keyword-scores"].post({
+		appstoreId: args.trackId,
+		country: args.country,
+		keywords: args.keywords,
+	});
+
+	if (error || !data) {
+		const value = error?.value;
+		const detail =
+			typeof value === "string" ? value : JSON.stringify(value ?? {});
+		process.stderr.write(
+			`Keyword scoring failed (status ${error?.status ?? "?"}): ${detail}\n`,
+		);
+		return 1;
+	}
+
+	const scores = data.scores as KeywordScore[];
+
+	if (args.json) {
+		process.stdout.write(`${JSON.stringify(scores, null, 2)}\n`);
+		return scores.some((s) => s.error) ? 1 : 0;
+	}
+
+	const withRank = Boolean(args.trackId);
+	process.stdout.write(
+		`Keyword scores (${args.country.toUpperCase()}, downloads/day at #1 as low-high):\n\n`,
+	);
+	const header = [
+		cell("KEYWORD", 24),
+		cell("POP", 4),
+		cell("DIFF", 5),
+		cell("LABEL", 10),
+		cell("OPP", 4),
+		cell("CLASS", 17),
+		cell("DL/DAY #1", 13),
+	];
+	if (withRank) header.push(cell("RANK", 5));
+	process.stdout.write(`${header.join(" ").trimEnd()}\n`);
+	for (const score of scores) {
+		process.stdout.write(`${keywordRow(score, withRank)}\n`);
+	}
+
+	const failed = scores.filter((s) => s.error).length;
+	if (failed > 0) {
+		process.stdout.write(`\n${failed} keyword(s) failed to score.\n`);
+		return 1;
+	}
+	return 0;
+}
+
+/**
+ * Top-level dispatcher. Returns an exit code. `--help`/`-h` and an
+ * unknown/missing command print usage.
  */
 export async function run(argv: string[]): Promise<ExitCode> {
 	const [command, ...rest] = argv;
@@ -362,6 +557,10 @@ export async function run(argv: string[]): Promise<ExitCode> {
 
 	if (command === "upload") {
 		return runUpload(rest);
+	}
+
+	if (command === "keywords") {
+		return runKeywords(rest);
 	}
 
 	process.stderr.write(

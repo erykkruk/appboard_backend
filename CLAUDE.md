@@ -138,6 +138,7 @@ Market research for ANY store app (not just connected ones) — port of the stan
 - **AI** (`research.ai.ts`): OpenRouter with workspace `OPENROUTER_API_KEY` setting (same as ai module); model override via `RESEARCH_MODEL` setting or request body; Polish prompts; responses validated with ArkType; deep mode = map-reduce (chunks of 150, 3 parallel).
 - **Heuristics** (`research.heuristics.ts`): keyword-bucket categorization (EN+PL) of negative reviews — works without an AI key, returned with every scrape.
 - Caps: keywords ≤15, single-pass analysis ≤300 reviews, Play reviews 250/1500 (deep), compare 120/side, visual ≤6 images.
+- **Keyword scoring** (`POST /api/research/keyword-scores`, ≤10 keywords, App Store only): popularity estimate (1-100, regression calibrated against Apple's official searchPopularity1to100 - weights in `keyword-scoring.ts` are calibrated constants, NEVER hand-tune), difficulty (7 weighted sub-scores + backfill/weak-leader/small-result corrections + brand-keyword detection + Top 5/10/20 tiers with monotonicity), opportunity + classification (`sweet-spot`/`hidden-gem`/... kebab ids, frontend renders labels), download estimates (searches x TTR power-law x CVR range, per-country market multipliers). All pure math over one iTunes search per keyword (25 competitors); methodology reimplemented from RespectASO (AGPL) - logic rewritten in TS, do not copy their code verbatim.
 
 ## Alternative Stores (MULTI_STORE)
 
