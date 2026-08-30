@@ -183,14 +183,13 @@ function titleEvidence(
 	const financeContext =
 		(genre ?? "").toLowerCase().includes("finance") ||
 		[...titleTokens].some((t) => FINANCE_CONTEXT_TOKENS.has(t));
+	// A finance-intent keyword with no finance context carries no evidence at
+	// all: strong matches are demoted first, then the remaining overlap is
+	// zeroed (matching the reference implementation's sequential guards).
 	if (financeIntent && !financeContext) {
-		if (exactPhrase || allWords) {
-			exactPhrase = false;
-			allWords = false;
-			overlap = Math.min(overlap, 0.5);
-		} else {
-			overlap = 0;
-		}
+		exactPhrase = false;
+		allWords = false;
+		overlap = 0;
 	}
 
 	let strongScore = 0;
@@ -786,7 +785,7 @@ function computeTiers(
 		// tiers can never contradict the overall assessment.
 		const sub = computeRawDifficulty(tierApps, keyword, now, fullN);
 		let tierScore = sub.raw;
-		if (fullN >= 2) {
+		if (keyword.trim() && fullN >= 2) {
 			tierScore = applyBackfillCorrections(
 				tierScore,
 				overallLeaderReviews,
@@ -963,7 +962,9 @@ const POP_TO_SEARCHES: readonly Band[] = [
 	[100, 300_000],
 ];
 
-const OPPORTUNITY_VOLUME_NORM = Math.log10(1 + 32_000);
+// Normalizes volume so that the curve's maximum (pop 100 = 300K daily
+// searches) maps to volume 1.0.
+const OPPORTUNITY_VOLUME_NORM = Math.log10(1 + 300_000);
 
 function popToSearches(popularity: number): number {
 	if (popularity <= 0) return 0;
@@ -1068,12 +1069,14 @@ const MARKET_SIZE: Record<string, number> = {
 	fi: 0.03,
 	fr: 0.22,
 	gb: 0.3,
+	gh: 0.02,
 	id: 0.05,
 	ie: 0.03,
 	il: 0.04,
 	in: 0.15,
 	it: 0.12,
 	jp: 0.35,
+	ke: 0.02,
 	kr: 0.2,
 	mx: 0.1,
 	my: 0.04,
@@ -1082,6 +1085,7 @@ const MARKET_SIZE: Record<string, number> = {
 	no: 0.04,
 	nz: 0.03,
 	ph: 0.04,
+	pk: 0.02,
 	pl: 0.05,
 	pt: 0.03,
 	ru: 0.12,
@@ -1091,6 +1095,8 @@ const MARKET_SIZE: Record<string, number> = {
 	th: 0.05,
 	tr: 0.05,
 	tw: 0.08,
+	tz: 0.02,
+	ug: 0.02,
 	us: 1.0,
 	za: 0.03,
 };
