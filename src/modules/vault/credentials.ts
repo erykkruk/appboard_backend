@@ -1,5 +1,10 @@
 import { eq } from "drizzle-orm";
-import { decrypt, decryptWithKey, encryptWithKey } from "@/utils/crypto";
+import {
+	decrypt,
+	decryptWithKey,
+	encrypt,
+	encryptWithKey,
+} from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { workspaceVault } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -36,15 +41,16 @@ export function decryptCredentials(
 /**
  * Encrypt a credential blob for storage.
  *
- * Store credentials are ALWAYS wrapped with the workspace vault DEK (derived
- * from the user's passphrase) — never with the server env key — so a server
- * admin with DB + env access cannot read them.
+ * Passphrase (E2EE vault) encryption is OPT-IN per workspace. When the vault
+ * is enabled, credentials are wrapped with the workspace DEK so a server
+ * admin with DB + env access cannot read them; without a vault they fall back
+ * to server env-key encryption (the default).
  *
  * - Vault unlocked (DEK in memory) → encrypt with the DEK.
  * - Vault configured but locked → 423 (unlock first).
- * - No vault configured → 428 (set up the vault first). Legacy env-key blobs
- *   remain readable via decryptCredentials and are re-wrapped on vault
- *   setup/unlock by migrateCredentialsToVault.
+ * - No vault configured → encrypt with the server env key. Env-key blobs are
+ *   re-wrapped under the DEK on vault setup/unlock by
+ *   migrateCredentialsToVault, and back to the env key on vault disable.
  */
 export async function encryptCredentials(
 	creds: Record<string, unknown>,
@@ -66,7 +72,5 @@ export async function encryptCredentials(
 		});
 	}
 
-	buildError("vaultRequired", {
-		info: "Credentials vault not configured. Set up your vault (Settings → Vault) before connecting a store.",
-	});
+	return encrypt(JSON.stringify(creds));
 }

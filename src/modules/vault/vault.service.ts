@@ -1,5 +1,10 @@
 import { eq } from "drizzle-orm";
-import { decrypt, decryptWithKey, encryptWithKey } from "@/utils/crypto";
+import {
+	decrypt,
+	decryptWithKey,
+	encrypt,
+	encryptWithKey,
+} from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { stores, workspaceVault } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -59,9 +64,8 @@ export const VaultService = {
 	 *
 	 * - Unlocked → proceed.
 	 * - Configured but locked → 423 (unlock first).
-	 * - Not configured → proceed and let the credential layer decide (connect
-	 *   raises 428 VAULT_REQUIRED via `encryptCredentials`; read-only actions on
-	 *   apps that never stored credentials are unaffected).
+	 * - Not configured → proceed (credentials fall back to the server env key;
+	 *   passphrase encryption is opt-in per workspace).
 	 */
 	async assertUnlockedForAction(workspaceId: string): Promise<void> {
 		if (vaultSession.isUnlocked(workspaceId)) return;
@@ -97,6 +101,53 @@ export const VaultService = {
 			})
 			.where(eq(workspaceVault.workspaceId, workspaceId));
 		return { changed: true };
+	},
+
+	/**
+	 * Disable passphrase encryption WITHOUT losing credentials: re-encrypt every
+	 * vault-wrapped blob back to the server env key, then remove the vault.
+	 * Requires an unlocked vault (the DEK is needed to decrypt the blobs).
+	 */
+	async disable(workspaceId: string) {
+		const [vault] = await db
+			.select({ id: workspaceVault.id })
+			.from(workspaceVault)
+			.where(eq(workspaceVault.workspaceId, workspaceId))
+			.limit(1);
+		if (!vault) buildError("notFound", { info: "No vault configured" });
+
+		const dek = vaultSession.getDek(workspaceId);
+		if (!dek) {
+			buildError("vaultLocked", {
+				info: "Unlock the vault with your passphrase before disabling it, so credentials can be re-encrypted.",
+			});
+		}
+
+		const rows = await db
+			.select({ credentials: stores.credentials, id: stores.id })
+			.from(stores)
+			.where(eq(stores.workspaceId, workspaceId));
+
+		let migrated = 0;
+		for (const row of rows) {
+			if (!row.credentials?.startsWith(VAULT_PREFIX)) continue;
+			const plain = decryptWithKey(
+				dek,
+				row.credentials.slice(VAULT_PREFIX.length),
+			);
+			await db
+				.update(stores)
+				.set({ credentials: encrypt(plain) })
+				.where(eq(stores.id, row.id));
+			migrated++;
+		}
+
+		await db
+			.delete(workspaceVault)
+			.where(eq(workspaceVault.workspaceId, workspaceId));
+		vaultSession.lock(workspaceId);
+		log.info({ migrated, workspaceId }, "Vault disabled - credentials kept");
+		return { disabled: true, migrated };
 	},
 
 	/** Public KDF material so the browser can derive the KEK and unwrap the DEK. */
