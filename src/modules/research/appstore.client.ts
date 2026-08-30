@@ -1,5 +1,6 @@
 import { buildError } from "@/utils/errors";
 import type {
+	KeywordCompetitor,
 	ResearchAppMeta,
 	ResearchReview,
 	SearchSuggestion,
@@ -28,6 +29,7 @@ interface ItunesLookupResult {
 	version?: string;
 	trackViewUrl: string;
 	genres?: string[];
+	primaryGenreName?: string;
 	contentAdvisoryRating?: string;
 	formattedPrice?: string;
 	price?: number;
@@ -93,6 +95,34 @@ export async function appstoreSearch(
 			rating: r.averageUserRating,
 			store: "appstore" as const,
 			title: r.trackName,
+			url: r.trackViewUrl,
+		}),
+	);
+}
+
+/**
+ * Keyword search returning the full competitor fields needed for keyword
+ * scoring (review counts, seller, release date, genre) in ranking order.
+ */
+export async function appstoreKeywordSearch(
+	keyword: string,
+	country: string,
+	limit: number,
+): Promise<KeywordCompetitor[]> {
+	const data = await itunesFetch(
+		`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=${limit}`,
+	);
+	return ((data.results as ItunesLookupResult[] | undefined) ?? []).map(
+		(r) => ({
+			developer: r.sellerName,
+			genre: r.primaryGenreName ?? (r.genres ?? [])[0],
+			icon: r.artworkUrl60 ?? r.artworkUrl100,
+			price: r.formattedPrice,
+			rating: r.averageUserRating,
+			ratingsCount: r.userRatingCount,
+			released: r.releaseDate,
+			title: r.trackName,
+			trackId: String(r.trackId),
 			url: r.trackViewUrl,
 		}),
 	);
