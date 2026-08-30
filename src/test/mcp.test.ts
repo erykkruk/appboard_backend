@@ -15,6 +15,7 @@ const EXPECTED_TOOLS = [
 	"ai_generate_listing_field",
 	"reviews_list",
 	"reviews_reply",
+	"research_keyword_scores",
 	"purchases_list",
 	"publishing_validate_screenshot",
 	"publishing_publish",
@@ -55,6 +56,34 @@ describe("MCP tool registry", () => {
 			expect(tool).toBeDefined();
 			expect(Object.keys(tool!.inputSchema)).toContain("appId");
 		}
+	});
+
+	it("research_keyword_scores validates country and keyword limits", () => {
+		const tool = getTool("research_keyword_scores");
+		expect(tool).toBeDefined();
+		const schema = z.object(tool!.inputSchema);
+		expect(
+			schema.safeParse({ country: "us", keywords: ["fitness"] }).success,
+		).toBe(true);
+		expect(
+			schema.safeParse({
+				appstoreId: "324684580",
+				country: "pl",
+				keywords: ["fitness", "yoga"],
+			}).success,
+		).toBe(true);
+		expect(schema.safeParse({ country: "usa", keywords: ["a"] }).success).toBe(
+			false,
+		);
+		expect(schema.safeParse({ country: "us", keywords: [] }).success).toBe(
+			false,
+		);
+		expect(
+			schema.safeParse({
+				country: "us",
+				keywords: Array.from({ length: 11 }, (_, i) => `kw${i}`),
+			}).success,
+		).toBe(false);
 	});
 
 	it("getTool returns undefined for unknown tools", () => {

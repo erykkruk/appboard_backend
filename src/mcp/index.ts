@@ -4,7 +4,7 @@ import { createClient, loadClientConfig } from "./client";
 import { tools } from "./tools";
 
 const SERVER_NAME = "appboard-mcp";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 
 /**
  * Build the MCP server and register every AppBoard tool. Each tool's handler
