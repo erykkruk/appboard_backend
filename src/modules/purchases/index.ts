@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	appIdParams,
@@ -22,6 +23,7 @@ import {
 import { PurchasesService } from "./purchases.service";
 
 export const purchasesController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/:appId/purchases/capabilities",
 		async ({ params, workspaceId }) => {

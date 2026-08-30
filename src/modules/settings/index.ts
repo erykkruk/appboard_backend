@@ -18,6 +18,7 @@ import {
 	type PurchasePromptField,
 	type PurchasePromptMode,
 } from "@/modules/ai/monetization.prompts";
+import { authGuard } from "@/modules/auth";
 import {
 	setSettingBody,
 	settingKeyParams,
@@ -35,6 +36,7 @@ const promptBody = t.Object({
 });
 
 export const settingsController = new Elysia({ prefix: "/settings" })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ workspaceId }) => {

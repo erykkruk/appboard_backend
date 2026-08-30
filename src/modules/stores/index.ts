@@ -4,6 +4,7 @@ import {
 	STORE_CAPABILITY_CATALOG,
 	STORE_SETUP_INFO,
 } from "@/config/store-capabilities";
+import { authGuard } from "@/modules/auth";
 import { verifyStoreOwnership } from "@/modules/auth/verify-ownership";
 import { buildError } from "@/utils/errors";
 import { checkRateLimit, rateLimitEnabled } from "@/utils/rate-limit";
@@ -27,6 +28,7 @@ const CONNECT_MAX_ATTEMPTS = 10;
 const CONNECT_WINDOW_MS = 60_000;
 
 export const storesController = new Elysia({ prefix: "/stores" })
+	.use(authGuard)
 	.post(
 		"/connect",
 		async ({ body, workspaceId }) => {

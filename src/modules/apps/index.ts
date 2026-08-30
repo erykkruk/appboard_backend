@@ -1,10 +1,12 @@
 import Elysia from "elysia";
 import { getCapabilities } from "@/config/capabilities";
 import type { Platform } from "@/config/const";
+import { authGuard } from "@/modules/auth";
 import { appIdParams, appsQuery } from "./apps.schema";
 import { AppsService } from "./apps.service";
 
 export const appsController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ query, workspaceId }) => {

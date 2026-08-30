@@ -1,4 +1,5 @@
 import Elysia, { t } from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { PublishingService } from "./publishing.service";
@@ -46,6 +47,7 @@ async function withScreenshotCopy<T extends Record<string, unknown>>(
 }
 
 export const publishingController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/:appId/publishing/overview",
 		async ({ params, workspaceId }) => {
@@ -213,6 +215,7 @@ export const publishingController = new Elysia({ prefix: "/apps" })
 					params.versionId,
 					body.locale,
 					body.sourceLocale,
+					workspaceId!,
 				);
 
 			return withScreenshotCopy(

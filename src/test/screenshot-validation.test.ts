@@ -26,7 +26,7 @@ async function createTestImage(width: number, height: number): Promise<Buffer> {
 }
 
 function createFileFromBuffer(buffer: Buffer, fileName = "test.png"): File {
-	return new File([buffer], fileName, { type: "image/png" });
+	return new File([new Uint8Array(buffer)], fileName, { type: "image/png" });
 }
 
 const app = new Elysia()
@@ -262,7 +262,11 @@ describe("POST /api/apps/:appId/publishing/screenshots/validate", () => {
 
 	function buildForm(buffer: Buffer, displayType: string): FormData {
 		const form = new FormData();
-		form.append("file", new Blob([buffer], { type: "image/png" }), "shot.png");
+		form.append(
+			"file",
+			new Blob([new Uint8Array(buffer)], { type: "image/png" }),
+			"shot.png",
+		);
 		form.append("displayType", displayType);
 		return form;
 	}

@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 import { AppGroupsService } from "@/modules/app-groups/app-groups.service";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { buildError } from "@/utils/errors";
 import {
@@ -12,6 +13,7 @@ import { AsoProfileService } from "./aso-profile.service";
 export const asoProfileController = new Elysia({
 	prefix: "/apps/:appId/aso-profile",
 })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ params, workspaceId }) => {

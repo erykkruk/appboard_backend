@@ -32,7 +32,15 @@ function getCredentials() {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-describe.skipIf(!SHOULD_RUN)(
+// bun:test's describe typings accept (label, fn) only, but bun itself
+// accepts a timeout options object as the third argument - keep it typed.
+const describeIntegration = describe.skipIf(!SHOULD_RUN) as unknown as (
+	label: string,
+	fn: () => void,
+	options?: { timeout: number },
+) => void;
+
+describeIntegration(
 	"Real ASC API Integration",
 	() => {
 		const creds = getCredentials();

@@ -1,4 +1,5 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import {
 	createSceneBody,
@@ -10,6 +11,7 @@ import { ScreenshotScenesService } from "./screenshot-scenes.service";
 import type { SceneData } from "./screenshot-scenes.types";
 
 export const screenshotScenesController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/:appId/screenshot-scenes",
 		async ({ params, workspaceId }) => {

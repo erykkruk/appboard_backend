@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 import { ROUTE_CAPABILITY_MAP } from "@/config/store-capabilities";
+import { authGuard } from "@/modules/auth";
 import { matchesPathPattern } from "@/modules/features/features.const";
 import { buildError } from "@/utils/errors";
 import { StoreCapabilitiesService } from "./store-capabilities.service";
@@ -19,15 +20,9 @@ function appIdFromPath(pathname: string): string | null {
  */
 export const storeCapabilityGuard = new Elysia({
 	name: "store-capability-guard",
-}).onBeforeHandle(
-	{ as: "scoped" },
-	async ({
-		request,
-		workspaceId,
-	}: {
-		request: Request;
-		workspaceId: string | null;
-	}) => {
+})
+	.use(authGuard)
+	.onBeforeHandle({ as: "scoped" }, async ({ request, workspaceId }) => {
 		if (!workspaceId) return;
 
 		const { pathname } = new URL(request.url);
@@ -48,5 +43,4 @@ export const storeCapabilityGuard = new Elysia({
 				info: `Capability "${match.capability}" is not enabled for this store connection.`,
 			});
 		}
-	},
-);
+	});

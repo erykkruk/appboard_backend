@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import Elysia from "elysia";
 import { AppGroupsService } from "@/modules/app-groups/app-groups.service";
 import { AsoProfileService } from "@/modules/aso-profile/aso-profile.service";
+import { authGuard } from "@/modules/auth";
 import { db } from "@/utils/db";
 import { appGroupMembers, appGroups } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -15,6 +16,7 @@ import { GroupAsoProfileService } from "./group-aso-profile.service";
 export const groupAsoProfileController = new Elysia({
 	prefix: "/app-groups/:groupId/aso-profile",
 })
+	.use(authGuard)
 	.get(
 		"/",
 		async ({ params, workspaceId }) => {

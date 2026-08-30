@@ -301,6 +301,7 @@ export class StoresService {
 	static getProvider(store: {
 		credentials: string | null;
 		type: string;
+		workspaceId: string;
 	}): StoreProvider {
 		if (!store.credentials) {
 			buildError("storeConnectionFailed", {

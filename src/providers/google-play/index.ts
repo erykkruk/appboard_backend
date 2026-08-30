@@ -692,7 +692,8 @@ export class GooglePlayProvider implements StoreProvider {
 					productId: product.productId ?? "",
 					productType: "consumable",
 					status:
-						product.purchaseType === "PURCHASE_TYPE_UNSPECIFIED"
+						(product as { purchaseType?: string }).purchaseType ===
+						"PURCHASE_TYPE_UNSPECIFIED"
 							? "draft"
 							: "active",
 				});
@@ -1071,11 +1072,12 @@ export class GooglePlayProvider implements StoreProvider {
 		groupExternalId: string,
 		language: string,
 		data: { name: string },
-	): Promise<void> {
+	): Promise<{ externalId: string }> {
 		log.info(
 			{ data, groupExternalId, language },
 			"Group localization creation not supported on Google Play",
 		);
+		return { externalId: "" };
 	}
 
 	async updateGroupLocalization(

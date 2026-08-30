@@ -81,7 +81,7 @@ export class AgeRatingService {
 
 	static async publish(appId: string) {
 		const rating = await AgeRatingService.get(appId);
-		if (!rating) {
+		if (!rating?.appleQuestionnaire) {
 			log.info({ appId }, "No age rating configured — skipping publish");
 			return { skipped: true, success: true };
 		}

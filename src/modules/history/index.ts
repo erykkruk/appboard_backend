@@ -1,9 +1,11 @@
 import Elysia from "elysia";
+import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { historyParams, historyQuery, rollbackParams } from "./history.schema";
 import { HistoryService } from "./history.service";
 
 export const historyController = new Elysia({ prefix: "/apps" })
+	.use(authGuard)
 	.get(
 		"/:appId/history",
 		async ({ params, query, workspaceId }) => {

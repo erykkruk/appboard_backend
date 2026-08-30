@@ -51,14 +51,14 @@ interface AppContext {
 	platform: string;
 }
 
-interface ExecutePlanResult {
+export interface ExecutePlanResult {
 	created: Array<{ id: string; name: string; type: string }>;
 	deleted: string[];
 	edited: Array<{ id: string; name: string }>;
 	failed: Array<{ error: string; item: string }>;
 }
 
-interface PlanData {
+export interface PlanData {
 	deletes?: string[];
 	edits?: Array<{
 		localizations?: Array<{
@@ -740,6 +740,8 @@ export class MonetizationChatService {
 				try {
 					await PurchasesService.updateGroupAvailability(
 						groupId,
+						appId,
+						workspaceId,
 						meta.availability,
 					);
 					log.info(

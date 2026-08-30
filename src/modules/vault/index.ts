@@ -1,4 +1,5 @@
 import { Elysia } from "elysia";
+import { authGuard } from "@/modules/auth";
 import { buildError } from "@/utils/errors";
 import { checkRateLimit, rateLimitEnabled } from "@/utils/rate-limit";
 import {
@@ -14,6 +15,7 @@ const UNLOCK_MAX_ATTEMPTS = 5;
 const UNLOCK_WINDOW_MS = 60_000;
 
 export const vaultController = new Elysia({ prefix: "/vault" })
+	.use(authGuard)
 	.get("/status", ({ workspaceId }) => VaultService.status(workspaceId!), {
 		detail: { description: "Vault existence + unlock state", tags: ["Vault"] },
 	})
