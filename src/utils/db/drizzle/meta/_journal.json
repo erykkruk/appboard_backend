@@ -161,6 +161,13 @@
 			"tag": "0022_dusty_johnny_storm",
 			"version": "7",
 			"when": 1788184937823
+		},
+		{
+			"breakpoints": true,
+			"idx": 23,
+			"tag": "0023_fair_scarlet_spider",
+			"version": "7",
+			"when": 1788185384080
 		}
 	],
 	"version": "7"

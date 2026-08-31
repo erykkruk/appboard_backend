@@ -1,4 +1,5 @@
 import config from "@/config";
+import { AppleAdsService } from "@/modules/apple-ads/apple-ads.service";
 import { AppsService } from "@/modules/apps/apps.service";
 import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
@@ -25,6 +26,9 @@ const AUTO_RESEARCH_HOUR = 0;
 // Keyword-score refresh runs daily at 01:00 local (offset from the midnight
 // rank check so the two batches never hammer iTunes at the same time).
 const SCORE_REFRESH_HOUR = 1;
+// Apple Ads dataset sync runs daily at 02:00; it no-ops for countries whose
+// newest completed week is already active, so it only downloads on Mondays.
+const APPLE_SYNC_HOUR = 2;
 const MIN_SCORE_REFRESH_GAP_MS = 20 * 60 * 60 * 1000;
 const SCORE_KEYWORDS_PER_CALL = 10;
 const FREQUENCY_DAYS: Record<AutoResearchFrequency, number> = {
@@ -238,6 +242,13 @@ async function runTick(now: Date, tz: string) {
 		if (scoresRefreshed) {
 			await KeywordScoresHistoryService.cleanup().catch((err) => {
 				log.error({ err }, "Keyword score cleanup failed");
+			});
+		}
+
+		const { hour, minute } = localHourMinute(now, tz);
+		if (hour === APPLE_SYNC_HOUR && minute === 0) {
+			await AppleAdsService.runScheduledSync().catch((err) => {
+				log.error({ err }, "Apple Ads scheduled sync failed");
 			});
 		}
 	} catch (err) {

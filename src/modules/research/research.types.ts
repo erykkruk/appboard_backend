@@ -139,11 +139,21 @@ export interface DownloadEstimates {
 	};
 }
 
-/** Full scoring result for one keyword in one country. */
+/**
+ * Full scoring result for one keyword in one country. `popularity` is the
+ * EFFECTIVE value (drives opportunity/classification/downloads): the internal
+ * estimate by default, or Apple's official value when the workspace selected
+ * the apple source and the term is present in the active weekly dataset.
+ */
 export interface KeywordScore {
 	keyword: string;
 	country: string;
 	popularity: number | null;
+	internalPopularity?: number | null;
+	applePopularity?: number | null;
+	popularitySource?: "internal" | "apple";
+	popularityFallback?: boolean;
+	appleGenre?: string | null;
 	difficulty: number;
 	difficultyLabel: string;
 	opportunity: number;

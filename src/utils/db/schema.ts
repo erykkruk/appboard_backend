@@ -5,6 +5,7 @@ import {
 	integer,
 	jsonb,
 	pgTable,
+	real,
 	text,
 	timestamp,
 	unique,
@@ -826,6 +827,72 @@ export const keywordScoreSnapshots = pgTable(
 		unique().on(t.workspaceId, t.keyword, t.country, t.day),
 		index().on(t.workspaceId, t.keyword, t.country),
 		index().on(t.workspaceId, t.day),
+	],
+);
+
+// ── Apple Ads weekly datasets ───────────────────────────────────────
+// Apple's top-search-terms dataset is the same for everyone (public weekly
+// data per country/genre), synced using whichever connected workspace's
+// credentials run the sync - so these two tables are deliberately NOT
+// workspace-scoped. They never hold user data; endpoints stay auth-guarded.
+
+export const appleTopTerms = pgTable(
+	"apple_top_terms",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		country: varchar({ length: 2 }).notNull(),
+		genre: varchar({ length: 100 }).notNull(),
+		popularity: integer().notNull(),
+		popularityInGenre: integer().notNull(),
+		popularityTier: integer().notNull(),
+		rankInGenre: integer().notNull(),
+		term: varchar({ length: 200 }).notNull(),
+		week: date({ mode: "string" }).notNull(),
+	},
+	(t) => [
+		unique().on(t.country, t.week, t.genre, t.term),
+		index().on(t.country, t.week, t.term),
+		index().on(t.country, t.week, t.genre),
+	],
+);
+
+// A country-week becomes "active" only after row + dataset sanity checks
+// pass; lookups and floors always read the active week.
+export const appleDatasetWeeks = pgTable(
+	"apple_dataset_weeks",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		country: varchar({ length: 2 }).notNull(),
+		status: varchar({ length: 16 }).notNull().default("active"),
+		termCount: integer().notNull(),
+		week: date({ mode: "string" }).notNull(),
+	},
+	(t) => [unique().on(t.country, t.week), index().on(t.country)],
+);
+
+// Per-app impression share from the Apple Ads insights API (workspace data:
+// scoped through the app's cascade).
+export const appleImpressionShares = pgTable(
+	"apple_impression_shares",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		country: varchar({ length: 2 }).notNull(),
+		highShare: real().notNull(),
+		lowShare: real().notNull(),
+		popularityTier: integer(),
+		rank: integer(),
+		searchTerm: varchar({ length: 200 }).notNull(),
+		week: date({ mode: "string" }).notNull(),
+	},
+	(t) => [
+		unique().on(t.appId, t.country, t.searchTerm, t.week),
+		index().on(t.appId),
 	],
 );
 

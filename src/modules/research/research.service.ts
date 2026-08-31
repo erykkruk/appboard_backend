@@ -1,3 +1,7 @@
+import {
+	AppleAdsService,
+	inferAppleGenre,
+} from "@/modules/apple-ads/apple-ads.service";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import {
@@ -205,6 +209,16 @@ export class ResearchService {
 			...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)),
 		].slice(0, MAX_SCORED_KEYWORDS);
 
+		// Apple dual-source context: the workspace's chosen source plus the
+		// active-week official values for the whole batch (one query).
+		const apple = workspaceId
+			? await AppleAdsService.popularityContext(
+					workspaceId,
+					country,
+					unique,
+				).catch(() => null)
+			: null;
+
 		const scores: KeywordScore[] = [];
 		let delayMs = SCORING_DELAY_BASE_MS;
 		for (const keyword of unique) {
@@ -217,12 +231,37 @@ export class ResearchService {
 					country,
 					SCORING_SEARCH_LIMIT,
 				);
-				const popularity = estimatePopularity(competitors, keyword);
+				const internalPopularity = estimatePopularity(competitors, keyword);
+				const applePopularity = apple?.values.get(keyword) ?? null;
+				const appleGenre = inferAppleGenre(competitors);
+
+				// Effective popularity: Apple's official value when selected and
+				// present; otherwise the internal estimate, capped just below the
+				// keyword's own category floor when the term is provably absent
+				// from the active dataset (absence = not top-500 in its genre).
+				let popularity = internalPopularity;
+				let popularitySource: "internal" | "apple" = "internal";
+				let popularityFallback = false;
+				if (apple?.source === "apple" && apple.hasDataset) {
+					if (applePopularity !== null) {
+						popularity = applePopularity;
+						popularitySource = "apple";
+					} else {
+						popularityFallback = true;
+						const floor = apple.floorFor(appleGenre);
+						if (floor !== null && internalPopularity !== null) {
+							popularity = Math.min(internalPopularity, Math.max(1, floor - 1));
+						}
+					}
+				}
+
 				const difficulty = calculateDifficulty(competitors, keyword);
 				const appRank = appstoreId
 					? await appstoreKeywordRank(keyword, appstoreId, country)
 					: undefined;
 				scores.push({
+					appleGenre,
+					applePopularity,
 					appRank,
 					breakdown: difficulty.breakdown,
 					classification: classifyKeyword(popularity, difficulty.score),
@@ -231,9 +270,12 @@ export class ResearchService {
 					difficulty: difficulty.score,
 					difficultyLabel: difficulty.label,
 					downloads: estimateDownloads(popularity, country),
+					internalPopularity,
 					keyword,
 					opportunity: calcOpportunity(popularity, difficulty.score),
 					popularity,
+					popularityFallback,
+					popularitySource,
 					tiers: difficulty.tiers,
 				});
 				delayMs = Math.max(

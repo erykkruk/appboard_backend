@@ -12,6 +12,7 @@ import { monetizationChatController } from "@/modules/ai/monetization-chat.contr
 import { aiChatHistoryController } from "@/modules/ai-chat-history";
 import { appAiPromptsController } from "@/modules/app-ai-prompts";
 import { appGroupsController } from "@/modules/app-groups";
+import { appleAdsController } from "@/modules/apple-ads";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
@@ -99,6 +100,7 @@ const app = new Elysia()
 			.use(purchasesController)
 			.use(monetizationChatController)
 			.use(historyController)
+			.use(appleAdsController)
 			.use(researchController)
 			.use(trackingController),
 	)

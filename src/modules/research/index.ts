@@ -171,6 +171,20 @@ export const researchController = new Elysia({ prefix: "/research" })
 		},
 	)
 	.get(
+		"/keyword-scores/summary",
+		async ({ workspaceId }) => {
+			const countries = await KeywordScoresHistoryService.summary(workspaceId!);
+			return { countries };
+		},
+		{
+			detail: {
+				description:
+					"Per-country ASO posture aggregates from the latest snapshots: download intervals at current ranks, classification distribution, top opportunities",
+				tags: ["Research"],
+			},
+		},
+	)
+	.get(
 		"/keyword-scores/trend",
 		async ({ query, workspaceId }) => {
 			const points = await KeywordScoresHistoryService.trend(

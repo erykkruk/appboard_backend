@@ -169,6 +169,96 @@ export class KeywordScoresHistoryService {
 			.orderBy(keywordScoreSnapshots.day);
 	}
 
+	/**
+	 * Per-country ASO posture aggregates from the latest snapshots:
+	 * estimated daily downloads at CURRENT ranks (intervals, never points -
+	 * unranked keywords contribute zero), classification distribution and
+	 * the top opportunities.
+	 */
+	static async summary(workspaceId: string) {
+		const rows = await db
+			.selectDistinctOn(
+				[keywordScoreSnapshots.keyword, keywordScoreSnapshots.country],
+				{
+					appRank: keywordScoreSnapshots.appRank,
+					classification: keywordScoreSnapshots.classification,
+					country: keywordScoreSnapshots.country,
+					keyword: keywordScoreSnapshots.keyword,
+					opportunity: keywordScoreSnapshots.opportunity,
+					payload: keywordScoreSnapshots.payload,
+					popularity: keywordScoreSnapshots.popularity,
+				},
+			)
+			.from(keywordScoreSnapshots)
+			.where(eq(keywordScoreSnapshots.workspaceId, workspaceId))
+			.orderBy(
+				keywordScoreSnapshots.keyword,
+				keywordScoreSnapshots.country,
+				desc(keywordScoreSnapshots.day),
+			)
+			.limit(MAX_LIST_ROWS);
+
+		const byCountry = new Map<
+			string,
+			{
+				classifications: Record<string, number>;
+				downloadsHigh: number;
+				downloadsLow: number;
+				keywords: number;
+				ranked: number;
+				topOpportunities: Array<{
+					classification: string;
+					keyword: string;
+					opportunity: number;
+					popularity: number | null;
+				}>;
+			}
+		>();
+		for (const row of rows) {
+			const entry = byCountry.get(row.country) ?? {
+				classifications: {},
+				downloadsHigh: 0,
+				downloadsLow: 0,
+				keywords: 0,
+				ranked: 0,
+				topOpportunities: [],
+			};
+			entry.keywords++;
+			entry.classifications[row.classification] =
+				(entry.classifications[row.classification] ?? 0) + 1;
+			if (row.appRank && row.appRank >= 1) {
+				entry.ranked++;
+				const position = row.payload.downloads.positions[row.appRank - 1];
+				if (position) {
+					entry.downloadsLow += position.low;
+					entry.downloadsHigh += position.high;
+				}
+			}
+			entry.topOpportunities.push({
+				classification: row.classification,
+				keyword: row.keyword,
+				opportunity: row.opportunity,
+				popularity: row.popularity,
+			});
+			byCountry.set(row.country, entry);
+		}
+		return [...byCountry.entries()]
+			.map(([country, entry]) => ({
+				classifications: entry.classifications,
+				country,
+				estimatedDailyDownloads: {
+					high: Math.round(entry.downloadsHigh * 100) / 100,
+					low: Math.round(entry.downloadsLow * 100) / 100,
+				},
+				keywords: entry.keywords,
+				ranked: entry.ranked,
+				topOpportunities: entry.topOpportunities
+					.sort((a, b) => b.opportunity - a.opportunity)
+					.slice(0, 5),
+			}))
+			.sort((a, b) => b.keywords - a.keywords);
+	}
+
 	/** Drop snapshots older than the retention window. Returns rows removed. */
 	static async cleanup(retentionDays = RETENTION_DAYS): Promise<number> {
 		const removed = await db
