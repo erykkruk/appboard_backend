@@ -1,16 +1,21 @@
 import {
 	boolean,
+	date,
 	index,
 	integer,
 	jsonb,
 	pgTable,
+	real,
 	text,
 	timestamp,
 	unique,
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
-import type { ResearchRunReport } from "@/modules/research/research.types";
+import type {
+	KeywordScore,
+	ResearchRunReport,
+} from "@/modules/research/research.types";
 import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
 
 const timeColumns = {
@@ -752,6 +757,7 @@ export const appTrackingConfig = pgTable(
 		emailRankDigest: boolean().notNull().default(false),
 		lastAutoResearchAt: timestamp(),
 		lastRankCheckAt: timestamp(),
+		lastScoreRefreshAt: timestamp(),
 		// Where reports are sent; NULL falls back to the workspace owner's email.
 		notifyEmail: varchar({ length: 255 }),
 		rankTrackingEnabled: boolean().notNull().default(false),
@@ -796,6 +802,100 @@ export const rankSnapshots = pgTable(
 	(t) => [index().on(t.appId, t.keyword, t.country), index().on(t.appId)],
 );
 
+// Daily keyword-scoring snapshots: one row per workspace+keyword+country+day
+// (manual searches and the scheduled refresh both upsert the same day row).
+// `payload` carries the full score (breakdown, tiers, downloads, competitors).
+export const keywordScoreSnapshots = pgTable(
+	"keyword_score_snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appRank: integer(),
+		classification: varchar({ length: 32 }).notNull(),
+		country: varchar({ length: 2 }).notNull(),
+		day: date({ mode: "string" }).notNull(),
+		difficulty: integer().notNull(),
+		keyword: varchar({ length: 255 }).notNull(),
+		opportunity: integer().notNull(),
+		payload: jsonb().$type<KeywordScore>().notNull(),
+		popularity: integer(),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [
+		unique().on(t.workspaceId, t.keyword, t.country, t.day),
+		index().on(t.workspaceId, t.keyword, t.country),
+		index().on(t.workspaceId, t.day),
+	],
+);
+
+// ── Apple Ads weekly datasets ───────────────────────────────────────
+// Apple's top-search-terms dataset is the same for everyone (public weekly
+// data per country/genre), synced using whichever connected workspace's
+// credentials run the sync - so these two tables are deliberately NOT
+// workspace-scoped. They never hold user data; endpoints stay auth-guarded.
+
+export const appleTopTerms = pgTable(
+	"apple_top_terms",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		country: varchar({ length: 2 }).notNull(),
+		genre: varchar({ length: 100 }).notNull(),
+		popularity: integer().notNull(),
+		popularityInGenre: integer().notNull(),
+		popularityTier: integer().notNull(),
+		rankInGenre: integer().notNull(),
+		term: varchar({ length: 200 }).notNull(),
+		week: date({ mode: "string" }).notNull(),
+	},
+	(t) => [
+		unique().on(t.country, t.week, t.genre, t.term),
+		index().on(t.country, t.week, t.term),
+		index().on(t.country, t.week, t.genre),
+	],
+);
+
+// A country-week becomes "active" only after row + dataset sanity checks
+// pass; lookups and floors always read the active week.
+export const appleDatasetWeeks = pgTable(
+	"apple_dataset_weeks",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		country: varchar({ length: 2 }).notNull(),
+		status: varchar({ length: 16 }).notNull().default("active"),
+		termCount: integer().notNull(),
+		week: date({ mode: "string" }).notNull(),
+	},
+	(t) => [unique().on(t.country, t.week), index().on(t.country)],
+);
+
+// Per-app impression share from the Apple Ads insights API (workspace data:
+// scoped through the app's cascade).
+export const appleImpressionShares = pgTable(
+	"apple_impression_shares",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		country: varchar({ length: 2 }).notNull(),
+		highShare: real().notNull(),
+		lowShare: real().notNull(),
+		popularityTier: integer(),
+		rank: integer(),
+		searchTerm: varchar({ length: 200 }).notNull(),
+		week: date({ mode: "string" }).notNull(),
+	},
+	(t) => [
+		unique().on(t.appId, t.country, t.searchTerm, t.week),
+		index().on(t.appId),
+	],
+);
+
 // Persisted research reports. `appId` NULL = a save from the standalone tool;
 // otherwise the run is tied to a connected app.
 export const researchRuns = pgTable(
@@ -836,6 +936,7 @@ export const schema = {
 	errorLogs,
 	groupAsoProfiles,
 	inAppPurchases,
+	keywordScoreSnapshots,
 	listingHistory,
 	listings,
 	purchaseLocalizations,

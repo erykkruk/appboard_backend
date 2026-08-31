@@ -257,7 +257,7 @@ function detectBrandKeyword(
 // Regression weights fitted against Apple's official searchPopularity1to100
 // values (US dataset + below-top-terms negatives). Calibrated constants -
 // never hand-tune; refit against fresh official data instead.
-const POPULARITY_WEIGHTS = {
+export const POPULARITY_WEIGHTS = {
 	fDepth: 2.9001,
 	fExact: -0.338,
 	fLeader: -1.9714,
@@ -307,15 +307,27 @@ const RELEVANCE_FLOOR = 0.3;
 const RELEVANCE_RATIO_MULT = 2.6;
 const EXACT_LEADER_TOP_N = 5;
 
+/** Observable signal components feeding the popularity regression. */
+export interface PopularitySignals {
+	fDepth: number;
+	fExact: number;
+	fLeader: number;
+	fResult: number;
+	fSpec: number;
+	fTitle: number;
+	xLeaderMag: number;
+	xTop1Exact: number;
+}
+
 /**
- * Estimate keyword search popularity (1-100, Apple's scale) from the
- * competitor landscape. Core insight: keywords with real search volume
- * attract strong, keyword-optimized apps.
+ * The ONLY feature extractor for popularity - shared by estimatePopularity
+ * and the calibration study script (scripts/estimator-study.ts), so fitted
+ * weights and shipped code can never drift apart.
  */
-export function estimatePopularity(
+export function popularitySignalComponents(
 	competitors: KeywordCompetitor[],
 	keyword: string,
-): number | null {
+): PopularitySignals | null {
 	if (!competitors.length) return null;
 	const n = competitors.length;
 	const kw = keyword.toLowerCase().trim();
@@ -397,17 +409,40 @@ export function estimatePopularity(
 	leaderScore *= relevance;
 	depthScore *= relevance;
 
+	return {
+		fDepth: depthScore,
+		fExact: exactBonus,
+		fLeader: leaderScore,
+		fResult: resultScore,
+		fSpec: specificityPenalty,
+		fTitle: titleScore,
+		xLeaderMag: Math.log10(1 + maxReviews),
+		xTop1Exact: Math.log10(1 + bestExactReviews),
+	};
+}
+
+/**
+ * Estimate keyword search popularity (1-100, Apple's scale) from the
+ * competitor landscape. Core insight: keywords with real search volume
+ * attract strong, keyword-optimized apps.
+ */
+export function estimatePopularity(
+	competitors: KeywordCompetitor[],
+	keyword: string,
+): number | null {
+	const signals = popularitySignalComponents(competitors, keyword);
+	if (!signals) return null;
 	const w = POPULARITY_WEIGHTS;
 	const raw =
 		w.intercept +
-		w.fResult * resultScore +
-		w.fLeader * leaderScore +
-		w.fTitle * titleScore +
-		w.fDepth * depthScore +
-		w.fSpec * specificityPenalty +
-		w.fExact * exactBonus +
-		w.xTop1Exact * Math.log10(1 + bestExactReviews) +
-		w.xLeaderMag * Math.log10(1 + maxReviews);
+		w.fResult * signals.fResult +
+		w.fLeader * signals.fLeader +
+		w.fTitle * signals.fTitle +
+		w.fDepth * signals.fDepth +
+		w.fSpec * signals.fSpec +
+		w.fExact * signals.fExact +
+		w.xTop1Exact * signals.xTop1Exact +
+		w.xLeaderMag * signals.xLeaderMag;
 
 	return Math.round(clamp(raw, 1, 100));
 }

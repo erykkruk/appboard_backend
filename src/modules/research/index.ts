@@ -1,19 +1,23 @@
 import Elysia from "elysia";
 import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
+import { KeywordScoresHistoryService } from "./keyword-scores-history.service";
 import { ResearchAiService } from "./research.ai";
 import { ResearchRunsService } from "./research.runs.service";
 import {
 	analyzeBody,
 	compareBody,
 	competitorsBody,
+	keywordHistoryQuery,
 	keywordScoresBody,
 	keywordsBody,
+	keywordTrendQuery,
 	marketsBody,
 	runIdParams,
 	saveRunBody,
 	scrapeBody,
 	searchBody,
+	snapshotIdParams,
 	visualBody,
 } from "./research.schema";
 import { ResearchService } from "./research.service";
@@ -96,11 +100,12 @@ export const researchController = new Elysia({ prefix: "/research" })
 	)
 	.post(
 		"/keyword-scores",
-		async ({ body }) => {
+		async ({ body, workspaceId }) => {
 			const scores = await ResearchService.keywordScores(
 				body.keywords,
 				body.country,
 				body.appstoreId,
+				workspaceId ?? undefined,
 			);
 			return { scores };
 		},
@@ -108,9 +113,95 @@ export const researchController = new Elysia({ prefix: "/research" })
 			body: keywordScoresBody,
 			detail: {
 				description:
-					"Score keywords for ASO: popularity, difficulty (with breakdown and ranking tiers), opportunity, classification and download estimates",
+					"Score keywords for ASO: popularity, difficulty (with breakdown and ranking tiers), opportunity, classification and download estimates. Results are stored as today's history snapshots.",
 				tags: ["Research"],
 			},
+		},
+	)
+	.get(
+		"/keyword-scores/history",
+		async ({ query, workspaceId }) => {
+			const entries = await KeywordScoresHistoryService.list(workspaceId!, {
+				country: query.country,
+				keyword: query.keyword,
+			});
+			return { entries };
+		},
+		{
+			detail: {
+				description:
+					"Latest stored keyword score per keyword+country (from daily snapshots)",
+				tags: ["Research"],
+			},
+			query: keywordHistoryQuery,
+		},
+	)
+	.get(
+		"/keyword-scores/history/:snapshotId",
+		async ({ params, workspaceId }) => {
+			const snapshot = await KeywordScoresHistoryService.get(
+				workspaceId!,
+				params.snapshotId,
+			);
+			return { snapshot };
+		},
+		{
+			detail: {
+				description:
+					"One stored keyword score snapshot with its full payload (breakdown, tiers, competitors)",
+				tags: ["Research"],
+			},
+			params: snapshotIdParams,
+		},
+	)
+	.delete(
+		"/keyword-scores/history/:snapshotId",
+		async ({ params, workspaceId }) => {
+			return KeywordScoresHistoryService.delete(
+				workspaceId!,
+				params.snapshotId,
+			);
+		},
+		{
+			detail: {
+				description: "Delete a stored keyword score snapshot",
+				tags: ["Research"],
+			},
+			params: snapshotIdParams,
+		},
+	)
+	.get(
+		"/keyword-scores/summary",
+		async ({ workspaceId }) => {
+			const countries = await KeywordScoresHistoryService.summary(workspaceId!);
+			return { countries };
+		},
+		{
+			detail: {
+				description:
+					"Per-country ASO posture aggregates from the latest snapshots: download intervals at current ranks, classification distribution, top opportunities",
+				tags: ["Research"],
+			},
+		},
+	)
+	.get(
+		"/keyword-scores/trend",
+		async ({ query, workspaceId }) => {
+			const points = await KeywordScoresHistoryService.trend(
+				workspaceId!,
+				query.keyword,
+				query.country,
+				query.days,
+			);
+			return { points };
+		},
+		{
+			detail: {
+				description:
+					"Daily popularity/difficulty/opportunity/rank trend for one keyword+country",
+				tags: ["Research"],
+			},
+			query: keywordTrendQuery,
 		},
 	)
 	.post(

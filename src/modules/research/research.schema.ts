@@ -86,6 +86,19 @@ export const keywordScoresBody = t.Object({
 	}),
 });
 
+export const keywordHistoryQuery = t.Object({
+	country: t.Optional(country),
+	keyword: t.Optional(t.String({ minLength: 1 })),
+});
+
+export const keywordTrendQuery = t.Object({
+	country: country,
+	days: t.Optional(t.Numeric({ maximum: 365, minimum: 1 })),
+	keyword: t.String({ minLength: 1 }),
+});
+
+export const snapshotIdParams = t.Object({ snapshotId: t.String() });
+
 export const marketsBody = t.Object({
 	id: t.String({ minLength: 1 }),
 	markets: t.Optional(t.Array(country)),

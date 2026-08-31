@@ -1,706 +1,706 @@
 {
- "fixtures": {
-  "strong_fitness": {
-   "keyword": "fitness",
-   "popularity": 70,
-   "difficulty": 90,
-   "rawTotal": 90,
-   "overrideReason": null,
-   "isBrand": false,
-   "titleMatchCount": 10,
-   "medianReviews": 155000,
-   "opportunity": 12,
-   "classification": "High Competition",
-   "tiers": {
-    "top_5": {
-     "tier_score": 90,
-     "label": "Very Hard",
-     "min_reviews": 160000,
-     "median_reviews": 180000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 5,
-     "total_apps": 5
-    },
-    "top_10": {
-     "tier_score": 90,
-     "label": "Very Hard",
-     "min_reviews": 110000,
-     "median_reviews": 155000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 10,
-     "total_apps": 10
-    },
-    "top_20": {
-     "tier_score": 90,
-     "label": "Very Hard",
-     "min_reviews": 110000,
-     "median_reviews": 155000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 10,
-     "total_apps": 10
-    }
-   }
-  },
-  "backfill_lan_invoice": {
-   "keyword": "lan invoice",
-   "popularity": 52,
-   "difficulty": 29,
-   "rawTotal": 63,
-   "overrideReason": "backfill",
-   "isBrand": false,
-   "titleMatchCount": 1,
-   "medianReviews": 500000,
-   "opportunity": 43,
-   "classification": "Sweet Spot",
-   "tiers": {
-    "top_5": {
-     "tier_score": 29,
-     "label": "Easy",
-     "min_reviews": 40,
-     "median_reviews": 500000,
-     "weak_count": 1,
-     "fresh_count": 0,
-     "title_keyword_count": 1,
-     "total_apps": 5
-    },
-    "top_10": {
-     "tier_score": 29,
-     "label": "Easy",
-     "min_reviews": 40,
-     "median_reviews": 500000,
-     "weak_count": 1,
-     "fresh_count": 0,
-     "title_keyword_count": 1,
-     "total_apps": 10
-    },
-    "top_20": {
-     "tier_score": 29,
-     "label": "Easy",
-     "min_reviews": 40,
-     "median_reviews": 500000,
-     "weak_count": 1,
-     "fresh_count": 0,
-     "title_keyword_count": 1,
-     "total_apps": 10
-    }
-   }
-  },
-  "brand_spotify": {
-   "keyword": "spotify",
-   "popularity": 80,
-   "difficulty": 62,
-   "rawTotal": 62,
-   "overrideReason": null,
-   "isBrand": true,
-   "titleMatchCount": 1,
-   "medianReviews": 100000,
-   "opportunity": 48,
-   "classification": "Moderate",
-   "tiers": {
-    "top_5": {
-     "tier_score": 70,
-     "label": "Hard",
-     "min_reviews": 100000,
-     "median_reviews": 100000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 1,
-     "total_apps": 5
-    },
-    "top_10": {
-     "tier_score": 62,
-     "label": "Hard",
-     "min_reviews": 100000,
-     "median_reviews": 100000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 1,
-     "total_apps": 10
-    },
-    "top_20": {
-     "tier_score": 62,
-     "label": "Hard",
-     "min_reviews": 100000,
-     "median_reviews": 100000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 1,
-     "total_apps": 10
-    }
-   }
-  },
-  "small_set": {
-   "keyword": "obscure niche tool",
-   "popularity": 41,
-   "difficulty": 20,
-   "rawTotal": 47,
-   "overrideReason": "small_result_set",
-   "isBrand": false,
-   "titleMatchCount": 0,
-   "medianReviews": 1500000,
-   "opportunity": 33,
-   "classification": "Sweet Spot",
-   "tiers": {
-    "top_5": {
-     "tier_score": 47,
-     "label": "Moderate",
-     "min_reviews": 1000000,
-     "median_reviews": 1500000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 0,
-     "total_apps": 2
-    },
-    "top_10": {
-     "tier_score": 47,
-     "label": "Moderate",
-     "min_reviews": 1000000,
-     "median_reviews": 1500000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 0,
-     "total_apps": 2
-    },
-    "top_20": {
-     "tier_score": 47,
-     "label": "Moderate",
-     "min_reviews": 1000000,
-     "median_reviews": 1500000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 0,
-     "total_apps": 2
-    }
-   }
-  },
-  "mixed_habit": {
-   "keyword": "habit tracker",
-   "popularity": 63,
-   "difficulty": 74,
-   "rawTotal": 74,
-   "overrideReason": null,
-   "isBrand": false,
-   "titleMatchCount": 6,
-   "medianReviews": 13500,
-   "opportunity": 26,
-   "classification": "High Competition",
-   "tiers": {
-    "top_5": {
-     "tier_score": 82,
-     "label": "Very Hard",
-     "min_reviews": 900,
-     "median_reviews": 40000,
-     "weak_count": 1,
-     "fresh_count": 1,
-     "title_keyword_count": 4,
-     "total_apps": 5
-    },
-    "top_10": {
-     "tier_score": 74,
-     "label": "Hard",
-     "min_reviews": 300,
-     "median_reviews": 13500,
-     "weak_count": 2,
-     "fresh_count": 2,
-     "title_keyword_count": 6,
-     "total_apps": 10
-    },
-    "top_20": {
-     "tier_score": 74,
-     "label": "Hard",
-     "min_reviews": 300,
-     "median_reviews": 13500,
-     "weak_count": 2,
-     "fresh_count": 2,
-     "title_keyword_count": 6,
-     "total_apps": 10
-    }
-   }
-  },
-  "finance_call_options": {
-   "keyword": "call options",
-   "popularity": 38,
-   "difficulty": 44,
-   "rawTotal": 44,
-   "overrideReason": null,
-   "isBrand": false,
-   "titleMatchCount": 0,
-   "medianReviews": 30000,
-   "opportunity": 26,
-   "classification": "Moderate",
-   "tiers": {
-    "top_5": {
-     "tier_score": 44,
-     "label": "Moderate",
-     "min_reviews": 2000,
-     "median_reviews": 30000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 0,
-     "total_apps": 5
-    },
-    "top_10": {
-     "tier_score": 44,
-     "label": "Moderate",
-     "min_reviews": 2000,
-     "median_reviews": 30000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 0,
-     "total_apps": 5
-    },
-    "top_20": {
-     "tier_score": 44,
-     "label": "Moderate",
-     "min_reviews": 2000,
-     "median_reviews": 30000,
-     "weak_count": 0,
-     "fresh_count": 0,
-     "title_keyword_count": 0,
-     "total_apps": 5
-    }
-   }
-  }
- },
- "downloads": {
-  "pop70_us": {
-   "daily_searches": 4600.0,
-   "positions": [
-    {
-     "pos": 1,
-     "ttr": 30.0,
-     "downloads_low": 69.0,
-     "downloads_high": 276.0
-    },
-    {
-     "pos": 2,
-     "ttr": 18.0,
-     "downloads_low": 41.4,
-     "downloads_high": 165.6
-    },
-    {
-     "pos": 3,
-     "ttr": 12.0,
-     "downloads_low": 27.6,
-     "downloads_high": 110.4
-    },
-    {
-     "pos": 4,
-     "ttr": 8.5,
-     "downloads_low": 19.55,
-     "downloads_high": 78.2
-    },
-    {
-     "pos": 5,
-     "ttr": 6.0,
-     "downloads_low": 13.8,
-     "downloads_high": 55.2
-    },
-    {
-     "pos": 6,
-     "ttr": 4.5,
-     "downloads_low": 10.35,
-     "downloads_high": 41.4
-    },
-    {
-     "pos": 7,
-     "ttr": 3.3,
-     "downloads_low": 7.59,
-     "downloads_high": 30.36
-    },
-    {
-     "pos": 8,
-     "ttr": 2.5,
-     "downloads_low": 5.75,
-     "downloads_high": 23.0
-    },
-    {
-     "pos": 9,
-     "ttr": 1.9,
-     "downloads_low": 4.37,
-     "downloads_high": 17.48
-    },
-    {
-     "pos": 10,
-     "ttr": 1.3,
-     "downloads_low": 2.99,
-     "downloads_high": 11.96
-    },
-    {
-     "pos": 11,
-     "ttr": 0.9,
-     "downloads_low": 2.07,
-     "downloads_high": 8.28
-    },
-    {
-     "pos": 12,
-     "ttr": 0.7,
-     "downloads_low": 1.61,
-     "downloads_high": 6.44
-    },
-    {
-     "pos": 13,
-     "ttr": 0.55,
-     "downloads_low": 1.26,
-     "downloads_high": 5.06
-    },
-    {
-     "pos": 14,
-     "ttr": 0.42,
-     "downloads_low": 0.97,
-     "downloads_high": 3.86
-    },
-    {
-     "pos": 15,
-     "ttr": 0.33,
-     "downloads_low": 0.76,
-     "downloads_high": 3.04
-    },
-    {
-     "pos": 16,
-     "ttr": 0.25,
-     "downloads_low": 0.58,
-     "downloads_high": 2.3
-    },
-    {
-     "pos": 17,
-     "ttr": 0.19,
-     "downloads_low": 0.44,
-     "downloads_high": 1.75
-    },
-    {
-     "pos": 18,
-     "ttr": 0.14,
-     "downloads_low": 0.32,
-     "downloads_high": 1.29
-    },
-    {
-     "pos": 19,
-     "ttr": 0.1,
-     "downloads_low": 0.23,
-     "downloads_high": 0.92
-    },
-    {
-     "pos": 20,
-     "ttr": 0.07,
-     "downloads_low": 0.16,
-     "downloads_high": 0.64
-    }
-   ],
-   "tiers": {
-    "top_5": {
-     "low": 34.27,
-     "high": 137.08
-    },
-    "top_6_10": {
-     "low": 6.21,
-     "high": 24.84
-    },
-    "top_11_20": {
-     "low": 0.84,
-     "high": 3.36
-    }
-   }
-  },
-  "pop40_pl": {
-   "daily_searches": 3.5,
-   "positions": [
-    {
-     "pos": 1,
-     "ttr": 30.0,
-     "downloads_low": 0.05,
-     "downloads_high": 0.21
-    },
-    {
-     "pos": 2,
-     "ttr": 18.0,
-     "downloads_low": 0.03,
-     "downloads_high": 0.13
-    },
-    {
-     "pos": 3,
-     "ttr": 12.0,
-     "downloads_low": 0.02,
-     "downloads_high": 0.08
-    },
-    {
-     "pos": 4,
-     "ttr": 8.5,
-     "downloads_low": 0.01,
-     "downloads_high": 0.06
-    },
-    {
-     "pos": 5,
-     "ttr": 6.0,
-     "downloads_low": 0.01,
-     "downloads_high": 0.04
-    },
-    {
-     "pos": 6,
-     "ttr": 4.5,
-     "downloads_low": 0.01,
-     "downloads_high": 0.03
-    },
-    {
-     "pos": 7,
-     "ttr": 3.3,
-     "downloads_low": 0.01,
-     "downloads_high": 0.02
-    },
-    {
-     "pos": 8,
-     "ttr": 2.5,
-     "downloads_low": 0.0,
-     "downloads_high": 0.02
-    },
-    {
-     "pos": 9,
-     "ttr": 1.9,
-     "downloads_low": 0.0,
-     "downloads_high": 0.01
-    },
-    {
-     "pos": 10,
-     "ttr": 1.3,
-     "downloads_low": 0.0,
-     "downloads_high": 0.01
-    },
-    {
-     "pos": 11,
-     "ttr": 0.9,
-     "downloads_low": 0.0,
-     "downloads_high": 0.01
-    },
-    {
-     "pos": 12,
-     "ttr": 0.7,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 13,
-     "ttr": 0.55,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 14,
-     "ttr": 0.42,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 15,
-     "ttr": 0.33,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 16,
-     "ttr": 0.25,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 17,
-     "ttr": 0.19,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 18,
-     "ttr": 0.14,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 19,
-     "ttr": 0.1,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 20,
-     "ttr": 0.07,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    }
-   ],
-   "tiers": {
-    "top_5": {
-     "low": 0.02,
-     "high": 0.1
-    },
-    "top_6_10": {
-     "low": 0.0,
-     "high": 0.02
-    },
-    "top_11_20": {
-     "low": 0.0,
-     "high": 0.0
-    }
-   }
-  },
-  "pop40_pk": {
-   "daily_searches": 1.4,
-   "positions": [
-    {
-     "pos": 1,
-     "ttr": 30.0,
-     "downloads_low": 0.02,
-     "downloads_high": 0.08
-    },
-    {
-     "pos": 2,
-     "ttr": 18.0,
-     "downloads_low": 0.01,
-     "downloads_high": 0.05
-    },
-    {
-     "pos": 3,
-     "ttr": 12.0,
-     "downloads_low": 0.01,
-     "downloads_high": 0.03
-    },
-    {
-     "pos": 4,
-     "ttr": 8.5,
-     "downloads_low": 0.01,
-     "downloads_high": 0.02
-    },
-    {
-     "pos": 5,
-     "ttr": 6.0,
-     "downloads_low": 0.0,
-     "downloads_high": 0.02
-    },
-    {
-     "pos": 6,
-     "ttr": 4.5,
-     "downloads_low": 0.0,
-     "downloads_high": 0.01
-    },
-    {
-     "pos": 7,
-     "ttr": 3.3,
-     "downloads_low": 0.0,
-     "downloads_high": 0.01
-    },
-    {
-     "pos": 8,
-     "ttr": 2.5,
-     "downloads_low": 0.0,
-     "downloads_high": 0.01
-    },
-    {
-     "pos": 9,
-     "ttr": 1.9,
-     "downloads_low": 0.0,
-     "downloads_high": 0.01
-    },
-    {
-     "pos": 10,
-     "ttr": 1.3,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 11,
-     "ttr": 0.9,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 12,
-     "ttr": 0.7,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 13,
-     "ttr": 0.55,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 14,
-     "ttr": 0.42,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 15,
-     "ttr": 0.33,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 16,
-     "ttr": 0.25,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 17,
-     "ttr": 0.19,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 18,
-     "ttr": 0.14,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 19,
-     "ttr": 0.1,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    },
-    {
-     "pos": 20,
-     "ttr": 0.07,
-     "downloads_low": 0.0,
-     "downloads_high": 0.0
-    }
-   ],
-   "tiers": {
-    "top_5": {
-     "low": 0.01,
-     "high": 0.04
-    },
-    "top_6_10": {
-     "low": 0.0,
-     "high": 0.01
-    },
-    "top_11_20": {
-     "low": 0.0,
-     "high": 0.0
-    }
-   }
-  }
- },
- "opportunity_table": {
-  "100_0": 100,
-  "100_100": 0,
-  "40_40": 28,
-  "80_20": 74,
-  "30_20": 30,
-  "20_60": 18,
-  "45_45": 31,
-  "80_45": 62
- },
- "classification_table": {
-  "80_20": "Sweet Spot",
-  "30_20": "Hidden Gem",
-  "10_20": "Low Volume",
-  "80_90": "High Competition",
-  "80_45": "Good Target",
-  "20_60": "Avoid",
-  "45_45": "Moderate"
- }
+	"classification_table": {
+		"10_20": "Low Volume",
+		"20_60": "Avoid",
+		"30_20": "Hidden Gem",
+		"45_45": "Moderate",
+		"80_20": "Sweet Spot",
+		"80_45": "Good Target",
+		"80_90": "High Competition"
+	},
+	"downloads": {
+		"pop40_pk": {
+			"daily_searches": 1.4,
+			"positions": [
+				{
+					"downloads_high": 0.08,
+					"downloads_low": 0.02,
+					"pos": 1,
+					"ttr": 30.0
+				},
+				{
+					"downloads_high": 0.05,
+					"downloads_low": 0.01,
+					"pos": 2,
+					"ttr": 18.0
+				},
+				{
+					"downloads_high": 0.03,
+					"downloads_low": 0.01,
+					"pos": 3,
+					"ttr": 12.0
+				},
+				{
+					"downloads_high": 0.02,
+					"downloads_low": 0.01,
+					"pos": 4,
+					"ttr": 8.5
+				},
+				{
+					"downloads_high": 0.02,
+					"downloads_low": 0.0,
+					"pos": 5,
+					"ttr": 6.0
+				},
+				{
+					"downloads_high": 0.01,
+					"downloads_low": 0.0,
+					"pos": 6,
+					"ttr": 4.5
+				},
+				{
+					"downloads_high": 0.01,
+					"downloads_low": 0.0,
+					"pos": 7,
+					"ttr": 3.3
+				},
+				{
+					"downloads_high": 0.01,
+					"downloads_low": 0.0,
+					"pos": 8,
+					"ttr": 2.5
+				},
+				{
+					"downloads_high": 0.01,
+					"downloads_low": 0.0,
+					"pos": 9,
+					"ttr": 1.9
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 10,
+					"ttr": 1.3
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 11,
+					"ttr": 0.9
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 12,
+					"ttr": 0.7
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 13,
+					"ttr": 0.55
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 14,
+					"ttr": 0.42
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 15,
+					"ttr": 0.33
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 16,
+					"ttr": 0.25
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 17,
+					"ttr": 0.19
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 18,
+					"ttr": 0.14
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 19,
+					"ttr": 0.1
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 20,
+					"ttr": 0.07
+				}
+			],
+			"tiers": {
+				"top_5": {
+					"high": 0.04,
+					"low": 0.01
+				},
+				"top_6_10": {
+					"high": 0.01,
+					"low": 0.0
+				},
+				"top_11_20": {
+					"high": 0.0,
+					"low": 0.0
+				}
+			}
+		},
+		"pop40_pl": {
+			"daily_searches": 3.5,
+			"positions": [
+				{
+					"downloads_high": 0.21,
+					"downloads_low": 0.05,
+					"pos": 1,
+					"ttr": 30.0
+				},
+				{
+					"downloads_high": 0.13,
+					"downloads_low": 0.03,
+					"pos": 2,
+					"ttr": 18.0
+				},
+				{
+					"downloads_high": 0.08,
+					"downloads_low": 0.02,
+					"pos": 3,
+					"ttr": 12.0
+				},
+				{
+					"downloads_high": 0.06,
+					"downloads_low": 0.01,
+					"pos": 4,
+					"ttr": 8.5
+				},
+				{
+					"downloads_high": 0.04,
+					"downloads_low": 0.01,
+					"pos": 5,
+					"ttr": 6.0
+				},
+				{
+					"downloads_high": 0.03,
+					"downloads_low": 0.01,
+					"pos": 6,
+					"ttr": 4.5
+				},
+				{
+					"downloads_high": 0.02,
+					"downloads_low": 0.01,
+					"pos": 7,
+					"ttr": 3.3
+				},
+				{
+					"downloads_high": 0.02,
+					"downloads_low": 0.0,
+					"pos": 8,
+					"ttr": 2.5
+				},
+				{
+					"downloads_high": 0.01,
+					"downloads_low": 0.0,
+					"pos": 9,
+					"ttr": 1.9
+				},
+				{
+					"downloads_high": 0.01,
+					"downloads_low": 0.0,
+					"pos": 10,
+					"ttr": 1.3
+				},
+				{
+					"downloads_high": 0.01,
+					"downloads_low": 0.0,
+					"pos": 11,
+					"ttr": 0.9
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 12,
+					"ttr": 0.7
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 13,
+					"ttr": 0.55
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 14,
+					"ttr": 0.42
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 15,
+					"ttr": 0.33
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 16,
+					"ttr": 0.25
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 17,
+					"ttr": 0.19
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 18,
+					"ttr": 0.14
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 19,
+					"ttr": 0.1
+				},
+				{
+					"downloads_high": 0.0,
+					"downloads_low": 0.0,
+					"pos": 20,
+					"ttr": 0.07
+				}
+			],
+			"tiers": {
+				"top_5": {
+					"high": 0.1,
+					"low": 0.02
+				},
+				"top_6_10": {
+					"high": 0.02,
+					"low": 0.0
+				},
+				"top_11_20": {
+					"high": 0.0,
+					"low": 0.0
+				}
+			}
+		},
+		"pop70_us": {
+			"daily_searches": 4600.0,
+			"positions": [
+				{
+					"downloads_high": 276.0,
+					"downloads_low": 69.0,
+					"pos": 1,
+					"ttr": 30.0
+				},
+				{
+					"downloads_high": 165.6,
+					"downloads_low": 41.4,
+					"pos": 2,
+					"ttr": 18.0
+				},
+				{
+					"downloads_high": 110.4,
+					"downloads_low": 27.6,
+					"pos": 3,
+					"ttr": 12.0
+				},
+				{
+					"downloads_high": 78.2,
+					"downloads_low": 19.55,
+					"pos": 4,
+					"ttr": 8.5
+				},
+				{
+					"downloads_high": 55.2,
+					"downloads_low": 13.8,
+					"pos": 5,
+					"ttr": 6.0
+				},
+				{
+					"downloads_high": 41.4,
+					"downloads_low": 10.35,
+					"pos": 6,
+					"ttr": 4.5
+				},
+				{
+					"downloads_high": 30.36,
+					"downloads_low": 7.59,
+					"pos": 7,
+					"ttr": 3.3
+				},
+				{
+					"downloads_high": 23.0,
+					"downloads_low": 5.75,
+					"pos": 8,
+					"ttr": 2.5
+				},
+				{
+					"downloads_high": 17.48,
+					"downloads_low": 4.37,
+					"pos": 9,
+					"ttr": 1.9
+				},
+				{
+					"downloads_high": 11.96,
+					"downloads_low": 2.99,
+					"pos": 10,
+					"ttr": 1.3
+				},
+				{
+					"downloads_high": 8.28,
+					"downloads_low": 2.07,
+					"pos": 11,
+					"ttr": 0.9
+				},
+				{
+					"downloads_high": 6.44,
+					"downloads_low": 1.61,
+					"pos": 12,
+					"ttr": 0.7
+				},
+				{
+					"downloads_high": 5.06,
+					"downloads_low": 1.26,
+					"pos": 13,
+					"ttr": 0.55
+				},
+				{
+					"downloads_high": 3.86,
+					"downloads_low": 0.97,
+					"pos": 14,
+					"ttr": 0.42
+				},
+				{
+					"downloads_high": 3.04,
+					"downloads_low": 0.76,
+					"pos": 15,
+					"ttr": 0.33
+				},
+				{
+					"downloads_high": 2.3,
+					"downloads_low": 0.58,
+					"pos": 16,
+					"ttr": 0.25
+				},
+				{
+					"downloads_high": 1.75,
+					"downloads_low": 0.44,
+					"pos": 17,
+					"ttr": 0.19
+				},
+				{
+					"downloads_high": 1.29,
+					"downloads_low": 0.32,
+					"pos": 18,
+					"ttr": 0.14
+				},
+				{
+					"downloads_high": 0.92,
+					"downloads_low": 0.23,
+					"pos": 19,
+					"ttr": 0.1
+				},
+				{
+					"downloads_high": 0.64,
+					"downloads_low": 0.16,
+					"pos": 20,
+					"ttr": 0.07
+				}
+			],
+			"tiers": {
+				"top_5": {
+					"high": 137.08,
+					"low": 34.27
+				},
+				"top_6_10": {
+					"high": 24.84,
+					"low": 6.21
+				},
+				"top_11_20": {
+					"high": 3.36,
+					"low": 0.84
+				}
+			}
+		}
+	},
+	"fixtures": {
+		"backfill_lan_invoice": {
+			"classification": "Sweet Spot",
+			"difficulty": 29,
+			"isBrand": false,
+			"keyword": "lan invoice",
+			"medianReviews": 500000,
+			"opportunity": 43,
+			"overrideReason": "backfill",
+			"popularity": 52,
+			"rawTotal": 63,
+			"tiers": {
+				"top_5": {
+					"fresh_count": 0,
+					"label": "Easy",
+					"median_reviews": 500000,
+					"min_reviews": 40,
+					"tier_score": 29,
+					"title_keyword_count": 1,
+					"total_apps": 5,
+					"weak_count": 1
+				},
+				"top_10": {
+					"fresh_count": 0,
+					"label": "Easy",
+					"median_reviews": 500000,
+					"min_reviews": 40,
+					"tier_score": 29,
+					"title_keyword_count": 1,
+					"total_apps": 10,
+					"weak_count": 1
+				},
+				"top_20": {
+					"fresh_count": 0,
+					"label": "Easy",
+					"median_reviews": 500000,
+					"min_reviews": 40,
+					"tier_score": 29,
+					"title_keyword_count": 1,
+					"total_apps": 10,
+					"weak_count": 1
+				}
+			},
+			"titleMatchCount": 1
+		},
+		"brand_spotify": {
+			"classification": "Moderate",
+			"difficulty": 62,
+			"isBrand": true,
+			"keyword": "spotify",
+			"medianReviews": 100000,
+			"opportunity": 48,
+			"overrideReason": null,
+			"popularity": 80,
+			"rawTotal": 62,
+			"tiers": {
+				"top_5": {
+					"fresh_count": 0,
+					"label": "Hard",
+					"median_reviews": 100000,
+					"min_reviews": 100000,
+					"tier_score": 70,
+					"title_keyword_count": 1,
+					"total_apps": 5,
+					"weak_count": 0
+				},
+				"top_10": {
+					"fresh_count": 0,
+					"label": "Hard",
+					"median_reviews": 100000,
+					"min_reviews": 100000,
+					"tier_score": 62,
+					"title_keyword_count": 1,
+					"total_apps": 10,
+					"weak_count": 0
+				},
+				"top_20": {
+					"fresh_count": 0,
+					"label": "Hard",
+					"median_reviews": 100000,
+					"min_reviews": 100000,
+					"tier_score": 62,
+					"title_keyword_count": 1,
+					"total_apps": 10,
+					"weak_count": 0
+				}
+			},
+			"titleMatchCount": 1
+		},
+		"finance_call_options": {
+			"classification": "Moderate",
+			"difficulty": 44,
+			"isBrand": false,
+			"keyword": "call options",
+			"medianReviews": 30000,
+			"opportunity": 26,
+			"overrideReason": null,
+			"popularity": 38,
+			"rawTotal": 44,
+			"tiers": {
+				"top_5": {
+					"fresh_count": 0,
+					"label": "Moderate",
+					"median_reviews": 30000,
+					"min_reviews": 2000,
+					"tier_score": 44,
+					"title_keyword_count": 0,
+					"total_apps": 5,
+					"weak_count": 0
+				},
+				"top_10": {
+					"fresh_count": 0,
+					"label": "Moderate",
+					"median_reviews": 30000,
+					"min_reviews": 2000,
+					"tier_score": 44,
+					"title_keyword_count": 0,
+					"total_apps": 5,
+					"weak_count": 0
+				},
+				"top_20": {
+					"fresh_count": 0,
+					"label": "Moderate",
+					"median_reviews": 30000,
+					"min_reviews": 2000,
+					"tier_score": 44,
+					"title_keyword_count": 0,
+					"total_apps": 5,
+					"weak_count": 0
+				}
+			},
+			"titleMatchCount": 0
+		},
+		"mixed_habit": {
+			"classification": "High Competition",
+			"difficulty": 74,
+			"isBrand": false,
+			"keyword": "habit tracker",
+			"medianReviews": 13500,
+			"opportunity": 26,
+			"overrideReason": null,
+			"popularity": 63,
+			"rawTotal": 74,
+			"tiers": {
+				"top_5": {
+					"fresh_count": 1,
+					"label": "Very Hard",
+					"median_reviews": 40000,
+					"min_reviews": 900,
+					"tier_score": 82,
+					"title_keyword_count": 4,
+					"total_apps": 5,
+					"weak_count": 1
+				},
+				"top_10": {
+					"fresh_count": 2,
+					"label": "Hard",
+					"median_reviews": 13500,
+					"min_reviews": 300,
+					"tier_score": 74,
+					"title_keyword_count": 6,
+					"total_apps": 10,
+					"weak_count": 2
+				},
+				"top_20": {
+					"fresh_count": 2,
+					"label": "Hard",
+					"median_reviews": 13500,
+					"min_reviews": 300,
+					"tier_score": 74,
+					"title_keyword_count": 6,
+					"total_apps": 10,
+					"weak_count": 2
+				}
+			},
+			"titleMatchCount": 6
+		},
+		"small_set": {
+			"classification": "Sweet Spot",
+			"difficulty": 20,
+			"isBrand": false,
+			"keyword": "obscure niche tool",
+			"medianReviews": 1500000,
+			"opportunity": 33,
+			"overrideReason": "small_result_set",
+			"popularity": 41,
+			"rawTotal": 47,
+			"tiers": {
+				"top_5": {
+					"fresh_count": 0,
+					"label": "Moderate",
+					"median_reviews": 1500000,
+					"min_reviews": 1000000,
+					"tier_score": 47,
+					"title_keyword_count": 0,
+					"total_apps": 2,
+					"weak_count": 0
+				},
+				"top_10": {
+					"fresh_count": 0,
+					"label": "Moderate",
+					"median_reviews": 1500000,
+					"min_reviews": 1000000,
+					"tier_score": 47,
+					"title_keyword_count": 0,
+					"total_apps": 2,
+					"weak_count": 0
+				},
+				"top_20": {
+					"fresh_count": 0,
+					"label": "Moderate",
+					"median_reviews": 1500000,
+					"min_reviews": 1000000,
+					"tier_score": 47,
+					"title_keyword_count": 0,
+					"total_apps": 2,
+					"weak_count": 0
+				}
+			},
+			"titleMatchCount": 0
+		},
+		"strong_fitness": {
+			"classification": "High Competition",
+			"difficulty": 90,
+			"isBrand": false,
+			"keyword": "fitness",
+			"medianReviews": 155000,
+			"opportunity": 12,
+			"overrideReason": null,
+			"popularity": 70,
+			"rawTotal": 90,
+			"tiers": {
+				"top_5": {
+					"fresh_count": 0,
+					"label": "Very Hard",
+					"median_reviews": 180000,
+					"min_reviews": 160000,
+					"tier_score": 90,
+					"title_keyword_count": 5,
+					"total_apps": 5,
+					"weak_count": 0
+				},
+				"top_10": {
+					"fresh_count": 0,
+					"label": "Very Hard",
+					"median_reviews": 155000,
+					"min_reviews": 110000,
+					"tier_score": 90,
+					"title_keyword_count": 10,
+					"total_apps": 10,
+					"weak_count": 0
+				},
+				"top_20": {
+					"fresh_count": 0,
+					"label": "Very Hard",
+					"median_reviews": 155000,
+					"min_reviews": 110000,
+					"tier_score": 90,
+					"title_keyword_count": 10,
+					"total_apps": 10,
+					"weak_count": 0
+				}
+			},
+			"titleMatchCount": 10
+		}
+	},
+	"opportunity_table": {
+		"20_60": 18,
+		"30_20": 30,
+		"40_40": 28,
+		"45_45": 31,
+		"80_20": 74,
+		"80_45": 62,
+		"100_0": 100,
+		"100_100": 0
+	}
 }

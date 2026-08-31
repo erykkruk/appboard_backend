@@ -100,32 +100,179 @@ export async function appstoreSearch(
 	);
 }
 
+function toKeywordCompetitor(r: ItunesLookupResult): KeywordCompetitor {
+	return {
+		developer: r.sellerName,
+		genre: r.primaryGenreName ?? (r.genres ?? [])[0],
+		icon: r.artworkUrl60 ?? r.artworkUrl100,
+		price: r.formattedPrice,
+		rating: r.averageUserRating,
+		ratingsCount: r.userRatingCount,
+		released: r.releaseDate,
+		title: r.trackName,
+		trackId: String(r.trackId),
+		url: r.trackViewUrl,
+	};
+}
+
+// ── App Store SSR fallback ─────────────────────────────────────────────
+// When the iTunes Search API is throttled or down, the App Store web search
+// page still server-renders the ranked result list into a
+// `serialized-server-data` script tag. We extract the ordered app ids from it
+// and hydrate them through the Lookup API, producing the same competitor
+// shape as the primary path.
+
+const SSR_LOOKUP_CHUNK = 50;
+
+interface SsrData {
+	data?: Array<{
+		data?: {
+			shelves?: Array<{
+				items?: Array<{ lockup?: { adamId?: string | number } }>;
+			}>;
+			nextPage?: {
+				results?: Array<{ id?: string | number; type?: string }>;
+			};
+		};
+	}>;
+}
+
+/** Ordered app ids from the SSR search page JSON (ranking order, deduped). */
+export function extractSsrAppIds(ssr: SsrData): string[] {
+	const ids: string[] = [];
+	const seen = new Set<string>();
+	const inner = ssr.data?.[0]?.data;
+	if (!inner) return ids;
+	for (const shelf of inner.shelves ?? []) {
+		for (const item of shelf.items ?? []) {
+			const id = item.lockup?.adamId;
+			if (id !== undefined && !seen.has(String(id))) {
+				ids.push(String(id));
+				seen.add(String(id));
+			}
+		}
+	}
+	for (const result of inner.nextPage?.results ?? []) {
+		if (result.type !== "apps") continue;
+		const id = result.id;
+		if (id !== undefined && !seen.has(String(id))) {
+			ids.push(String(id));
+			seen.add(String(id));
+		}
+	}
+	return ids;
+}
+
+async function fetchSsrAppIds(
+	keyword: string,
+	country: string,
+): Promise<string[]> {
+	const res = await fetch(
+		`https://apps.apple.com/${encodeURIComponent(country.toLowerCase())}/iphone/search?term=${encodeURIComponent(keyword)}`,
+		{
+			headers: {
+				...UA,
+				Accept: "text/html,application/xhtml+xml",
+				"Accept-Language": "en-US,en;q=0.9",
+			},
+		},
+	);
+	if (!res.ok) {
+		buildError("storeApiError", { info: `App Store SSR HTTP ${res.status}` });
+	}
+	const html = await res.text();
+	const match = html.match(
+		/<script[^>]*id="serialized-server-data"[^>]*>(.*?)<\/script>/s,
+	);
+	if (!match) {
+		buildError("storeApiError", {
+			info: "App Store SSR: serialized-server-data not found",
+		});
+	}
+	return extractSsrAppIds(JSON.parse(match[1]) as SsrData);
+}
+
+/** Batch-hydrate app ids via the Lookup API, preserving the given order. */
+async function lookupCompetitors(
+	ids: string[],
+	country: string,
+): Promise<KeywordCompetitor[]> {
+	const byId = new Map<string, KeywordCompetitor>();
+	for (let start = 0; start < ids.length; start += SSR_LOOKUP_CHUNK) {
+		const chunk = ids.slice(start, start + SSR_LOOKUP_CHUNK);
+		try {
+			const data = await itunesFetch(
+				`https://itunes.apple.com/lookup?id=${chunk.join(",")}&country=${encodeURIComponent(country)}`,
+			);
+			for (const r of (data.results as ItunesLookupResult[] | undefined) ??
+				[]) {
+				if (r.trackId) byId.set(String(r.trackId), toKeywordCompetitor(r));
+			}
+		} catch {
+			// Partial data beats none - continue with the next chunk.
+		}
+	}
+	return ids
+		.map((id) => byId.get(id))
+		.filter((c): c is KeywordCompetitor => c !== undefined);
+}
+
 /**
  * Keyword search returning the full competitor fields needed for keyword
  * scoring (review counts, seller, release date, genre) in ranking order.
+ * Primary: iTunes Search API. Fallback: App Store SSR page + Lookup API,
+ * producing the identical shape so scoring is deterministic either way.
  */
 export async function appstoreKeywordSearch(
 	keyword: string,
 	country: string,
 	limit: number,
 ): Promise<KeywordCompetitor[]> {
-	const data = await itunesFetch(
-		`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=${limit}`,
-	);
-	return ((data.results as ItunesLookupResult[] | undefined) ?? []).map(
-		(r) => ({
-			developer: r.sellerName,
-			genre: r.primaryGenreName ?? (r.genres ?? [])[0],
-			icon: r.artworkUrl60 ?? r.artworkUrl100,
-			price: r.formattedPrice,
-			rating: r.averageUserRating,
-			ratingsCount: r.userRatingCount,
-			released: r.releaseDate,
-			title: r.trackName,
-			trackId: String(r.trackId),
-			url: r.trackViewUrl,
-		}),
-	);
+	try {
+		const data = await itunesFetch(
+			`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=${limit}`,
+		);
+		return ((data.results as ItunesLookupResult[] | undefined) ?? []).map(
+			toKeywordCompetitor,
+		);
+	} catch (primaryError) {
+		const ids = await fetchSsrAppIds(keyword, country).catch(() => {
+			throw primaryError;
+		});
+		if (!ids.length) return [];
+		const competitors = await lookupCompetitors(ids.slice(0, limit), country);
+		if (!competitors.length) throw primaryError;
+		return competitors;
+	}
+}
+
+/**
+ * Rank of an app in keyword search results, checking the top 200 (iTunes API
+ * maximum). Falls back to the SSR ordered id list when the API is down.
+ */
+export async function appstoreKeywordRank(
+	keyword: string,
+	trackId: string,
+	country: string,
+): Promise<number | null> {
+	try {
+		const data = await itunesFetch(
+			`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=200`,
+		);
+		const idx = (
+			(data.results as ItunesLookupResult[] | undefined) ?? []
+		).findIndex((r) => String(r.trackId) === trackId);
+		return idx >= 0 ? idx + 1 : null;
+	} catch {
+		// Lightweight fallback: position within the SSR ordered id list.
+		try {
+			const ids = await fetchSsrAppIds(keyword, country);
+			const idx = ids.indexOf(trackId);
+			return idx >= 0 ? idx + 1 : null;
+		} catch {
+			return null;
+		}
+	}
 }
 
 export async function appstoreReviews(

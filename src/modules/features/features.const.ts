@@ -138,6 +138,7 @@ export const ROUTE_FEATURE_MAP: Array<{
 	{ feature: "SCREENSHOTS", pattern: "/screenshot-scenes" },
 	{ feature: "SCREENSHOTS", pattern: "/assets" },
 	{ feature: "PUBLISHING", pattern: "/publishing" },
+	{ feature: "RESEARCH", pattern: "/apple-ads" },
 	{ feature: "RESEARCH", pattern: "/research-runs" },
 	{ feature: "RESEARCH", pattern: "/research" },
 	{ feature: "RESEARCH", pattern: "/tracking" },
