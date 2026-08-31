@@ -1,6 +1,8 @@
 import config from "@/config";
 import { AppsService } from "@/modules/apps/apps.service";
+import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
+import { ResearchService } from "@/modules/research/research.service";
 import type { ResearchRunReport } from "@/modules/research/research.types";
 import { createLogger } from "@/utils/logger";
 import { sendMail } from "@/utils/mailer";
@@ -20,6 +22,11 @@ const TICK_MS = 60_000;
 const MIN_RANK_GAP_MS = 6 * 60 * 60 * 1000;
 // Auto-research is evaluated once a day at midnight, then gated by frequency.
 const AUTO_RESEARCH_HOUR = 0;
+// Keyword-score refresh runs daily at 01:00 local (offset from the midnight
+// rank check so the two batches never hammer iTunes at the same time).
+const SCORE_REFRESH_HOUR = 1;
+const MIN_SCORE_REFRESH_GAP_MS = 20 * 60 * 60 * 1000;
+const SCORE_KEYWORDS_PER_CALL = 10;
 const FREQUENCY_DAYS: Record<AutoResearchFrequency, number> = {
 	daily: 1,
 	monthly: 30,
@@ -67,6 +74,20 @@ export function isRankCheckDue(
 	);
 }
 
+export function isScoreRefreshDue(
+	cfg: { lastScoreRefreshAt: Date | null },
+	now: Date,
+	tz: string,
+): boolean {
+	const { hour, minute } = localHourMinute(now, tz);
+	if (minute !== 0 || hour !== SCORE_REFRESH_HOUR) return false;
+	if (!cfg.lastScoreRefreshAt) return true;
+	return (
+		now.getTime() - new Date(cfg.lastScoreRefreshAt).getTime() >=
+		MIN_SCORE_REFRESH_GAP_MS
+	);
+}
+
 export function isAutoResearchDue(
 	cfg: ResearchSchedulable,
 	now: Date,
@@ -102,6 +123,42 @@ async function runScheduledRankCheck(cfg: {
 	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
 	const message = ReportService.buildRankDigest(app.name, positions);
 	await sendMail({ ...message, to: email });
+}
+
+/**
+ * Refresh keyword-score snapshots for every tracked keyword of an app, one
+ * country at a time. iOS apps also get their rank refreshed via the app's
+ * store id. The scoring path persists snapshots itself (workspaceId given).
+ */
+async function runScheduledScoreRefresh(cfg: {
+	appId: string;
+	workspaceId: string;
+}) {
+	const tracked = await TrackingService.getKeywords(cfg.appId);
+	if (!tracked.length) return;
+	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
+	const appstoreId =
+		app.platform === "ios" ? (app.externalId ?? undefined) : undefined;
+
+	const byCountry = new Map<string, string[]>();
+	for (const k of tracked) {
+		byCountry.set(k.country, [...(byCountry.get(k.country) ?? []), k.keyword]);
+	}
+	for (const [country, keywords] of byCountry) {
+		for (
+			let start = 0;
+			start < keywords.length;
+			start += SCORE_KEYWORDS_PER_CALL
+		) {
+			await ResearchService.keywordScores(
+				keywords.slice(start, start + SCORE_KEYWORDS_PER_CALL),
+				country,
+				appstoreId,
+				cfg.workspaceId,
+			);
+		}
+	}
+	await TrackingService.markScoreRefreshRun(cfg.appId);
 }
 
 async function runScheduledAutoResearch(cfg: {
@@ -166,6 +223,22 @@ async function runTick(now: Date, tz: string) {
 			} catch (err) {
 				log.error({ appId: cfg.appId, err }, "Scheduled auto-research failed");
 			}
+		}
+
+		let scoresRefreshed = false;
+		for (const cfg of rankConfigs) {
+			if (!isScoreRefreshDue(cfg, now, tz)) continue;
+			try {
+				await runScheduledScoreRefresh(cfg);
+				scoresRefreshed = true;
+			} catch (err) {
+				log.error({ appId: cfg.appId, err }, "Scheduled score refresh failed");
+			}
+		}
+		if (scoresRefreshed) {
+			await KeywordScoresHistoryService.cleanup().catch((err) => {
+				log.error({ err }, "Keyword score cleanup failed");
+			});
 		}
 	} catch (err) {
 		log.error({ err }, "Scheduler tick failed");

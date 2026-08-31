@@ -2,12 +2,14 @@ import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import {
 	appstoreCompetitors,
+	appstoreKeywordRank,
 	appstoreKeywordSearch,
 	appstoreMeta,
 	appstoreReviews,
 	appstoreSearch,
 	appstoreSearchPosition,
 } from "./appstore.client";
+import { KeywordScoresHistoryService } from "./keyword-scores-history.service";
 import {
 	calcOpportunity,
 	calculateDifficulty,
@@ -48,7 +50,12 @@ const NEGATIVE_MAX_STARS = 3;
 const MAX_SCORED_KEYWORDS = 10;
 const SCORING_SEARCH_LIMIT = 25;
 const SCORING_COMPETITORS_RETURNED = 10;
-const SCORING_CALL_DELAY_MS = 300;
+// Adaptive pacing between iTunes calls: start polite, back off on failures,
+// decay back once calls succeed again. Bounded so one batch request cannot
+// hang the HTTP response for long.
+const SCORING_DELAY_BASE_MS = 300;
+const SCORING_DELAY_MAX_MS = 3_000;
+const SCORING_DELAY_GROWTH = 2;
 
 export type SearchScope = "both" | "appstore" | "playstore";
 
@@ -185,21 +192,24 @@ export class ResearchService {
 	 * breakdown + ranking tiers, opportunity, classification and download
 	 * estimates - all derived from one App Store search per keyword.
 	 * Failures are reported per keyword so a batch survives partial outages.
+	 * When a workspaceId is given, successful scores are also persisted as
+	 * today's history snapshots (best-effort).
 	 */
 	static async keywordScores(
 		keywords: string[],
 		country: string,
 		appstoreId?: string,
+		workspaceId?: string,
 	): Promise<KeywordScore[]> {
 		const unique = [
 			...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)),
 		].slice(0, MAX_SCORED_KEYWORDS);
 
 		const scores: KeywordScore[] = [];
+		let delayMs = SCORING_DELAY_BASE_MS;
 		for (const keyword of unique) {
-			// Modest spacing between iTunes calls to stay clear of rate limits.
 			if (scores.length > 0) {
-				await new Promise((r) => setTimeout(r, SCORING_CALL_DELAY_MS));
+				await new Promise((r) => setTimeout(r, delayMs));
 			}
 			try {
 				const competitors = await appstoreKeywordSearch(
@@ -210,9 +220,7 @@ export class ResearchService {
 				const popularity = estimatePopularity(competitors, keyword);
 				const difficulty = calculateDifficulty(competitors, keyword);
 				const appRank = appstoreId
-					? await appstoreSearchPosition(keyword, appstoreId, country).catch(
-							() => null,
-						)
+					? await appstoreKeywordRank(keyword, appstoreId, country)
 					: undefined;
 				scores.push({
 					appRank,
@@ -228,8 +236,16 @@ export class ResearchService {
 					popularity,
 					tiers: difficulty.tiers,
 				});
+				delayMs = Math.max(
+					SCORING_DELAY_BASE_MS,
+					delayMs / SCORING_DELAY_GROWTH,
+				);
 			} catch (err) {
 				log.warn({ country, err, keyword }, "Keyword scoring failed");
+				delayMs = Math.min(
+					SCORING_DELAY_MAX_MS,
+					delayMs * SCORING_DELAY_GROWTH,
+				);
 				scores.push({
 					breakdown: calculateDifficulty([], keyword).breakdown,
 					classification: "unknown",
@@ -245,6 +261,13 @@ export class ResearchService {
 					tiers: calculateDifficulty([], keyword).tiers,
 				});
 			}
+		}
+		if (workspaceId) {
+			await KeywordScoresHistoryService.upsertToday(workspaceId, scores).catch(
+				(err) => {
+					log.warn({ err, workspaceId }, "Keyword score history upsert failed");
+				},
+			);
 		}
 		return scores;
 	}

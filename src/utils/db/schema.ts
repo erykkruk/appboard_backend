@@ -1,5 +1,6 @@
 import {
 	boolean,
+	date,
 	index,
 	integer,
 	jsonb,
@@ -10,7 +11,10 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
-import type { ResearchRunReport } from "@/modules/research/research.types";
+import type {
+	KeywordScore,
+	ResearchRunReport,
+} from "@/modules/research/research.types";
 import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
 
 const timeColumns = {
@@ -752,6 +756,7 @@ export const appTrackingConfig = pgTable(
 		emailRankDigest: boolean().notNull().default(false),
 		lastAutoResearchAt: timestamp(),
 		lastRankCheckAt: timestamp(),
+		lastScoreRefreshAt: timestamp(),
 		// Where reports are sent; NULL falls back to the workspace owner's email.
 		notifyEmail: varchar({ length: 255 }),
 		rankTrackingEnabled: boolean().notNull().default(false),
@@ -796,6 +801,34 @@ export const rankSnapshots = pgTable(
 	(t) => [index().on(t.appId, t.keyword, t.country), index().on(t.appId)],
 );
 
+// Daily keyword-scoring snapshots: one row per workspace+keyword+country+day
+// (manual searches and the scheduled refresh both upsert the same day row).
+// `payload` carries the full score (breakdown, tiers, downloads, competitors).
+export const keywordScoreSnapshots = pgTable(
+	"keyword_score_snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appRank: integer(),
+		classification: varchar({ length: 32 }).notNull(),
+		country: varchar({ length: 2 }).notNull(),
+		day: date({ mode: "string" }).notNull(),
+		difficulty: integer().notNull(),
+		keyword: varchar({ length: 255 }).notNull(),
+		opportunity: integer().notNull(),
+		payload: jsonb().$type<KeywordScore>().notNull(),
+		popularity: integer(),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [
+		unique().on(t.workspaceId, t.keyword, t.country, t.day),
+		index().on(t.workspaceId, t.keyword, t.country),
+		index().on(t.workspaceId, t.day),
+	],
+);
+
 // Persisted research reports. `appId` NULL = a save from the standalone tool;
 // otherwise the run is tied to a connected app.
 export const researchRuns = pgTable(
@@ -836,6 +869,7 @@ export const schema = {
 	errorLogs,
 	groupAsoProfiles,
 	inAppPurchases,
+	keywordScoreSnapshots,
 	listingHistory,
 	listings,
 	purchaseLocalizations,

@@ -406,4 +406,11 @@ export class TrackingService {
 			.set({ lastAutoResearchAt: new Date() })
 			.where(eq(appTrackingConfig.appId, appId));
 	}
+
+	static async markScoreRefreshRun(appId: string) {
+		await db
+			.update(appTrackingConfig)
+			.set({ lastScoreRefreshAt: new Date() })
+			.where(eq(appTrackingConfig.appId, appId));
+	}
 }
