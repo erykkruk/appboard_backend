@@ -29,6 +29,7 @@ import {
 	privacyDeclarationController,
 	privacyTemplatesController,
 } from "@/modules/privacy-declaration";
+import { publicReportsController } from "@/modules/public-reports";
 import { publishingController } from "@/modules/publishing";
 import { purchasesController } from "@/modules/purchases";
 import { researchController } from "@/modules/research";
@@ -69,6 +70,8 @@ const app = new Elysia()
 	.use(demoController)
 	// Public feedback form (marketing site) — also pre-auth-guard.
 	.use(feedbackController)
+	// Public ASO check-up ingest (free tool) — also pre-auth-guard.
+	.use(publicReportsController)
 	.use(authGuard)
 	.group("/api", (app) =>
 		app

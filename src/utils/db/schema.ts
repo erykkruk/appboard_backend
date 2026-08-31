@@ -830,6 +830,48 @@ export const keywordScoreSnapshots = pgTable(
 	],
 );
 
+// ── Public ASO check-up reports ─────────────────────────────────────
+// Anonymous crowd data from the free browser-side ASO check (no account):
+// the visitor's browser computes the scores and posts the results here.
+// Client-submitted = UNTRUSTED: ranges are validated on ingest, rows carry
+// source="web_client" and are never mixed into workspace-scoped data.
+
+export const publicAsoReports = pgTable(
+	"public_aso_reports",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appName: varchar({ length: 255 }),
+		asoScore: integer(),
+		country: varchar({ length: 2 }).notNull(),
+		ipHash: varchar({ length: 64 }).notNull(),
+		keywordCount: integer().notNull(),
+		source: varchar({ length: 32 }).notNull().default("web_client"),
+		trackId: varchar({ length: 32 }).notNull(),
+	},
+	(t) => [index().on(t.trackId, t.country), index().on(t.createdAt)],
+);
+
+export const publicKeywordObservations = pgTable(
+	"public_keyword_observations",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appRank: integer(),
+		classification: varchar({ length: 32 }).notNull(),
+		country: varchar({ length: 2 }).notNull(),
+		day: date({ mode: "string" }).notNull(),
+		difficulty: integer().notNull(),
+		keyword: varchar({ length: 255 }).notNull(),
+		opportunity: integer().notNull(),
+		popularity: integer(),
+		reportId: uuid()
+			.notNull()
+			.references(() => publicAsoReports.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.keyword, t.country, t.day), index().on(t.reportId)],
+);
+
 // ── Apple Ads weekly datasets ───────────────────────────────────────
 // Apple's top-search-terms dataset is the same for everyone (public weekly
 // data per country/genre), synced using whichever connected workspace's

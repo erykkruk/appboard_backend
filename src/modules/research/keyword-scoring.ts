@@ -19,7 +19,7 @@ import type {
 	KeywordDifficultyBreakdown,
 	KeywordRankingTier,
 	KeywordRankingTiers,
-} from "./research.types";
+} from "./scoring-types";
 
 // --------------------------------------------------------------------------
 // Shared helpers
