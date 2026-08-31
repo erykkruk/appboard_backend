@@ -148,6 +148,11 @@ Market research for ANY store app (not just connected ones) — port of the stan
 - **Resilience**: `appstoreKeywordSearch` ma SSR fallback (serialized-server-data + Lookup API, identyczny ksztalt), `appstoreKeywordRank` skanuje top 200 z fallbackiem SSR; batch scoring pacing adaptacyjny 300ms->3s.
 - **Kalibracja**: `scripts/estimator-study.ts` - refit wag estymatora na oficjalnych danych (print-only; wagi w `keyword-scoring.ts` aktualizowac tylko gdy holdout lepszy). `popularitySignalComponents()` to JEDYNY feature extractor - dzielony przez produkcje i study.
 
+## Public ASO Check-up (free tool ingest)
+
+- **Silnik scoringu jest browser-safe**: `scoring-types.ts` (zero importow) + `keyword-scoring.ts` (importuje TYLKO type-only z scoring-types). Panel (appboard_web) kopiuje oba pliki przez `scripts/sync-aso-engine.sh` i liczy darmowy raport W PRZEGLADARCE uzytkownika (iTunes odpytywany z IP odwiedzajacego - zero calli Apple z naszego backendu dla anonimow). Test `public-reports.test.ts` pilnuje tej granicy - nie dodawaj importow do tych plikow.
+- **Ingest**: `POST /api/public/aso-reports` (PRE-auth-guard, jak feedback; rate limit 10/h/IP, IP tylko jako sha256). Tabele `public_aso_reports` + `public_keyword_observations` - crowd data, source="web_client", NIEZAUFANE (walidacja zakresow na wejsciu) i trzymane OSOBNO od danych workspace'ow. To rosnaca baza keyword->score per kraj/dzien.
+
 ## Alternative Stores (MULTI_STORE)
 
 Six Android stores behind the `MULTI_STORE` feature flag, each with a real provider under `src/providers/<store>/`. All extend `AlternativeStoreProvider` (`src/providers/alternative/base.ts`), which raises a typed 400 for every capability a store's API cannot do — **never a silent no-op**. A provider overrides only what it truly implements, so `src/config/store-capabilities.ts` stays honest (`wired` vs `consoleOnly`).
