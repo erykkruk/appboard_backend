@@ -3,6 +3,10 @@ import { and, eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { listingsController } from "@/modules/listings";
 import { publishingController } from "@/modules/publishing";
+import {
+	mainKeywordCandidates,
+	ResearchRunsService,
+} from "@/modules/research/research.runs.service";
 import { reviewsController } from "@/modules/reviews";
 import { storesController } from "@/modules/stores";
 import { storeCapabilityGuard } from "@/modules/stores/store-capabilities.guard";
@@ -10,7 +14,7 @@ import { parseStoreLink } from "@/modules/stores/store-url";
 import { vaultActionGuard } from "@/modules/vault/vault.guard";
 import { vaultSession } from "@/modules/vault/vault.session";
 import { db } from "@/utils/db";
-import { apps, listings, stores } from "@/utils/db/schema";
+import { apps, listings, researchRuns, stores } from "@/utils/db/schema";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import {
 	authGuard,
@@ -96,6 +100,9 @@ function stubItunes(): void {
 		if (url.includes("rss/customerreviews")) {
 			return Response.json(RSS_REVIEWS);
 		}
+		if (url.includes("itunes.apple.com/search")) {
+			return Response.json(ITUNES_LOOKUP);
+		}
 		throw new Error(`Unstubbed request: ${url}`);
 	}) as typeof globalThis.fetch;
 }
@@ -157,6 +164,27 @@ describe("parseStoreLink", () => {
 		expect(parseStoreLink("")).toBeNull();
 		expect(parseStoreLink("https://example.com/app/id123456789")).toBeNull();
 		expect(parseStoreLink("not a link")).toBeNull();
+	});
+});
+
+describe("mainKeywordCandidates", () => {
+	it("derives bigrams, unigrams and genre from public metadata", () => {
+		const candidates = mainKeywordCandidates({
+			genre: "Productivity, Utilities",
+			title: "TaskMaster: Todo List and Planner",
+		});
+		expect(candidates).toContain("taskmaster todo");
+		expect(candidates).toContain("todo list");
+		expect(candidates).toContain("planner");
+		expect(candidates).toContain("productivity");
+		expect(candidates.length).toBeLessThanOrEqual(8);
+	});
+
+	it("filters stopwords and short tokens", () => {
+		const candidates = mainKeywordCandidates({ title: "The Best App for AI" });
+		expect(candidates).not.toContain("the");
+		expect(candidates).not.toContain("app");
+		expect(candidates).not.toContain("ai");
 	});
 });
 
@@ -355,6 +383,28 @@ describe("POST /api/stores/import", () => {
 		expect(res.status).toBe(403);
 		const err = await res.json();
 		expect(err.code).toBe("INTEGRATION_REQUIRED");
+	});
+
+	it("runs auto research with derived keywords, reviews and pricing meta", async () => {
+		stubItunes();
+		const run = await ResearchRunsService.runForApp(
+			importedAppId,
+			getTestWorkspaceId(),
+			{ autoKeywords: true, country: "us", kind: "scheduled" },
+		);
+		try {
+			const report = run.report as {
+				keywords?: unknown[];
+				meta: { price?: string };
+				reviewsCount: number;
+			};
+			expect(report.meta.price).toBe("Free");
+			expect(report.reviewsCount).toBe(2);
+			expect(report.keywords?.length).toBeGreaterThan(0);
+			expect(run.kind).toBe("scheduled");
+		} finally {
+			await db.delete(researchRuns).where(eq(researchRuns.id, run.id));
+		}
 	});
 
 	it("stays fully usable for public apps while the vault is locked", async () => {

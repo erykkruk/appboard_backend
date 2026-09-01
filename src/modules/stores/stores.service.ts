@@ -1,4 +1,5 @@
 import { and, count, eq } from "drizzle-orm";
+import config from "@/config";
 import {
 	isAlternativeStoreType,
 	type Platform,
@@ -14,6 +15,7 @@ import { FeaturesService } from "@/modules/features/features.service";
 import { ListingsService } from "@/modules/listings/listings.service";
 import { appstoreMeta } from "@/modules/research/appstore.client";
 import { playstoreMeta } from "@/modules/research/playstore.client";
+import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import type { ResearchAppMeta } from "@/modules/research/research.types";
 import {
 	decryptCredentials,
@@ -453,6 +455,21 @@ export class StoresService {
 			await AssetsService.syncFromStore(app.id);
 		} catch (err) {
 			log.warn({ appId: app.id, err }, "Initial public sync incomplete");
+		}
+
+		// Deep research kicks off in the background: all public reviews, store
+		// metadata (pricing/IAP included) and main-keyword positions land in
+		// research history moments after the app appears. Skipped under test —
+		// it would outlive the stubbed fetch window and hit real stores.
+		if (config.NODE_ENV !== "test") {
+			void ResearchRunsService.runForApp(app.id, workspaceId, {
+				autoKeywords: true,
+				country,
+				deep: true,
+				kind: "scheduled",
+			}).catch((err) => {
+				log.warn({ appId: app.id, err }, "Post-import research failed");
+			});
 		}
 
 		await db
