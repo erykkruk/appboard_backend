@@ -7,6 +7,8 @@ import { reviewsController } from "@/modules/reviews";
 import { storesController } from "@/modules/stores";
 import { storeCapabilityGuard } from "@/modules/stores/store-capabilities.guard";
 import { parseStoreLink } from "@/modules/stores/store-url";
+import { vaultActionGuard } from "@/modules/vault/vault.guard";
+import { vaultSession } from "@/modules/vault/vault.session";
 import { db } from "@/utils/db";
 import { apps, listings, stores } from "@/utils/db/schema";
 import { errorHandler } from "@/utils/errors/errorHandler";
@@ -16,13 +18,16 @@ import {
 	authRequestB,
 	cleanupStores,
 	getTestWorkspaceId,
+	TEST_VAULT_DEK,
 } from "./setup";
 
+// Guard order mirrors src/index.ts: vault gate before the capability gate.
 const app = new Elysia()
 	.use(errorHandler)
 	.use(authGuard)
 	.group("/api", (a) =>
 		a
+			.use(vaultActionGuard)
 			.use(storeCapabilityGuard)
 			.use(storesController)
 			.use(listingsController)
@@ -352,6 +357,43 @@ describe("POST /api/stores/import", () => {
 		expect(err.code).toBe("INTEGRATION_REQUIRED");
 	});
 
+	it("stays fully usable for public apps while the vault is locked", async () => {
+		vaultSession.lock(getTestWorkspaceId());
+		try {
+			stubItunes();
+			// Import is credential-less by design — no vault needed.
+			const imp = await app.handle(
+				authRequest("http://localhost/api/stores/import", {
+					body: JSON.stringify({
+						url: `https://apps.apple.com/us/app/x/id${APPLE_ID}`,
+					}),
+					headers: { "Content-Type": "application/json" },
+					method: "POST",
+				}),
+			);
+			expect(imp.status).toBe(200);
+
+			// Local draft edits and public-data syncs stay open too.
+			const draft = await app.handle(
+				authRequest(`http://localhost/api/apps/${importedAppId}/listings/en`, {
+					body: JSON.stringify({ title: "Locked-vault edit" }),
+					headers: { "Content-Type": "application/json" },
+					method: "PUT",
+				}),
+			);
+			expect(draft.status).toBe(200);
+
+			const sync = await app.handle(
+				authRequest(`http://localhost/api/apps/${importedAppId}/reviews/sync`, {
+					method: "POST",
+				}),
+			);
+			expect(sync.status).toBe(200);
+		} finally {
+			vaultSession.unlock(getTestWorkspaceId(), TEST_VAULT_DEK);
+		}
+	});
+
 	it("re-binds the app to a real connection and drops the empty public store", async () => {
 		const res = await app.handle(
 			authRequest("http://localhost/api/stores/connect", {
@@ -389,5 +431,33 @@ describe("POST /api/stores/import", () => {
 			.where(eq(stores.id, publicStoreId))
 			.limit(1);
 		expect(publicRow).toBeUndefined();
+	});
+
+	it("disconnects a public connection while the vault is locked", async () => {
+		stubItunes();
+		const imp = await app.handle(
+			authRequest("http://localhost/api/stores/import", {
+				body: JSON.stringify({
+					url: "https://apps.apple.com/us/app/other/id555555555",
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(imp.status).toBe(200);
+		const { app: imported } = await imp.json();
+		createdStoreIds.push(imported.store.id);
+
+		vaultSession.lock(getTestWorkspaceId());
+		try {
+			const res = await app.handle(
+				authRequest(`http://localhost/api/stores/${imported.store.id}`, {
+					method: "DELETE",
+				}),
+			);
+			expect(res.status).toBe(200);
+		} finally {
+			vaultSession.unlock(getTestWorkspaceId(), TEST_VAULT_DEK);
+		}
 	});
 });

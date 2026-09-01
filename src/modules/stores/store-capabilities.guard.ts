@@ -6,7 +6,7 @@ import { buildError } from "@/utils/errors";
 import { StoreCapabilitiesService } from "./store-capabilities.service";
 
 /** Extract the `:appId` segment from an `/api/apps/:appId/...` pathname. */
-function appIdFromPath(pathname: string): string | null {
+export function appIdFromPath(pathname: string): string | null {
 	const segments = pathname.split("/").filter(Boolean);
 	const appsIndex = segments.indexOf("apps");
 	if (appsIndex === -1) return null;
