@@ -175,6 +175,27 @@
 			"tag": "0024_mean_changeling",
 			"version": "7",
 			"when": 1788190164227
+		},
+		{
+			"breakpoints": true,
+			"idx": 25,
+			"tag": "0025_cold_spyke",
+			"version": "7",
+			"when": 1788195634629
+		},
+		{
+			"breakpoints": true,
+			"idx": 26,
+			"tag": "0026_confused_triathlon",
+			"version": "7",
+			"when": 1788267058637
+		},
+		{
+			"breakpoints": true,
+			"idx": 27,
+			"tag": "0027_open_plazm",
+			"version": "7",
+			"when": 1788268225311
 		}
 	],
 	"version": "7"

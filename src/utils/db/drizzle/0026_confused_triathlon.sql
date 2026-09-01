@@ -1,0 +1,1 @@
+ALTER TABLE "public_aso_reports" ALTER COLUMN "track_id" DROP NOT NULL;

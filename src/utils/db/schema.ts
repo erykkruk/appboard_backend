@@ -847,7 +847,9 @@ export const publicAsoReports = pgTable(
 		ipHash: varchar({ length: 64 }).notNull(),
 		keywordCount: integer().notNull(),
 		source: varchar({ length: 32 }).notNull().default("web_client"),
-		trackId: varchar({ length: 32 }).notNull(),
+		store: varchar({ length: 16 }).notNull().default("appstore"),
+		// NULL for keyword-only checks (the difficulty checker has no app).
+		trackId: varchar({ length: 255 }),
 	},
 	(t) => [index().on(t.trackId, t.country), index().on(t.createdAt)],
 );
@@ -870,6 +872,26 @@ export const publicKeywordObservations = pgTable(
 			.references(() => publicAsoReports.id, { onDelete: "cascade" }),
 	},
 	(t) => [index().on(t.keyword, t.country, t.day), index().on(t.reportId)],
+);
+
+// Daily free-tool quota. One row per (day, tool, subject) where a subject is
+// either a hashed IP or a cookie id - both are counted, and the higher of the
+// two decides, so clearing cookies or switching IP alone does not reset it.
+export const publicToolUsage = pgTable(
+	"public_tool_usage",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		day: date({ mode: "string" }).notNull(),
+		subject: varchar({ length: 64 }).notNull(),
+		subjectKind: varchar({ length: 8 }).notNull(),
+		tool: varchar({ length: 32 }).notNull(),
+		used: integer().notNull().default(0),
+	},
+	(t) => [
+		unique().on(t.day, t.tool, t.subjectKind, t.subject),
+		index().on(t.day),
+	],
 );
 
 // ── Apple Ads weekly datasets ───────────────────────────────────────

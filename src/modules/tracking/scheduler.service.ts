@@ -1,6 +1,7 @@
 import config from "@/config";
 import { AppleAdsService } from "@/modules/apple-ads/apple-ads.service";
 import { AppsService } from "@/modules/apps/apps.service";
+import { FreeToolQuotaService } from "@/modules/public-reports/quota.service";
 import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import { ResearchService } from "@/modules/research/research.service";
@@ -242,6 +243,9 @@ async function runTick(now: Date, tz: string) {
 		if (scoresRefreshed) {
 			await KeywordScoresHistoryService.cleanup().catch((err) => {
 				log.error({ err }, "Keyword score cleanup failed");
+			});
+			await FreeToolQuotaService.cleanup().catch((err) => {
+				log.error({ err }, "Free-tool quota cleanup failed");
 			});
 		}
 
