@@ -153,6 +153,17 @@ Market research for ANY store app (not just connected ones) — port of the stan
 - **Silnik scoringu jest browser-safe**: `scoring-types.ts` (zero importow) + `keyword-scoring.ts` (importuje TYLKO type-only z scoring-types). Panel (appboard_web) kopiuje oba pliki przez `scripts/sync-aso-engine.sh` i liczy darmowy raport W PRZEGLADARCE uzytkownika (iTunes odpytywany z IP odwiedzajacego - zero calli Apple z naszego backendu dla anonimow). Test `public-reports.test.ts` pilnuje tej granicy - nie dodawaj importow do tych plikow.
 - **Ingest**: `POST /api/public/aso-reports` (PRE-auth-guard, jak feedback; rate limit 10/h/IP, IP tylko jako sha256). Tabele `public_aso_reports` + `public_keyword_observations` - crowd data, source="web_client", NIEZAUFANE (walidacja zakresow na wejsciu) i trzymane OSOBNO od danych workspace'ow. To rosnaca baza keyword->score per kraj/dzien.
 
+## Link-first import (public connection mode)
+
+Apps can be added from a public store link WITHOUT API credentials - integration is an optional add-on for publishing.
+
+- `POST /api/stores/import` (body: `{ url }` or `{ platform, externalId, country? }`) parses the link (`stores/store-url.ts`, reuses research `parseStoreUrl`), validates the app exists publicly, creates/reuses ONE credential-less store per (workspace, type) with `stores.connectionMode = "public"` (`credentials = NULL`, status "connected"), inserts the app row and syncs the public listing + screenshots immediately. Import country pinned in `apps.rawData.publicCountry`.
+- **Providers**: `src/providers/public/` - `PublicAppStoreProvider` (iTunes lookup + review RSS/web fallback) and `PublicGooglePlayProvider` (google-play-scraper). Reads are wired (listings, assets, reviews, categories); EVERY write raises typed **403 `INTEGRATION_REQUIRED`** - the panel renders a "connect your store API" CTA off that code. Never a silent no-op.
+- **Single choke point**: `resolveProviderForStore/ForApp` (`stores/provider-resolver.ts`) replaces the old `decryptCredentials + createProvider` pattern in services. Do NOT construct providers by hand in services - always go through the resolver.
+- `storeCapabilityGuard` additionally blocks publishing/purchases MUTATIONS (non-GET) for public apps with 403 INTEGRATION_REQUIRED; GETs stay open (cached/local data). Reviews are not blocked there - public review sync genuinely works, only reply fails at the provider.
+- **Upgrade path**: connecting a real API store re-binds imported apps by `externalId` (App Store externalId == iTunes trackId; Play == packageName), so drafts/history/tracked keywords survive; `syncApps` then deletes emptied public connections.
+- `GET /stores` and `GET /apps` expose `connectionMode` ("api" | "public") for the panel.
+
 ## Alternative Stores (MULTI_STORE)
 
 Six Android stores behind the `MULTI_STORE` feature flag, each with a real provider under `src/providers/<store>/`. All extend `AlternativeStoreProvider` (`src/providers/alternative/base.ts`), which raises a typed 400 for every capability a store's API cannot do — **never a silent no-op**. A provider overrides only what it truly implements, so `src/config/store-capabilities.ts` stays honest (`wired` vs `consoleOnly`).
