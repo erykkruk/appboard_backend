@@ -163,6 +163,7 @@ Apps can be added from a public store link WITHOUT API credentials - integration
 - `storeCapabilityGuard` additionally blocks publishing/purchases MUTATIONS (non-GET) for public apps with 403 INTEGRATION_REQUIRED; GETs stay open (cached/local data). Reviews are not blocked there - public review sync genuinely works, only reply fails at the provider.
 - **Upgrade path**: connecting a real API store re-binds imported apps by `externalId` (App Store externalId == iTunes trackId; Play == packageName), so drafts/history/tracked keywords survive; `syncApps` then deletes emptied public connections.
 - `GET /stores` and `GET /apps` expose `connectionMode` ("api" | "public") for the panel.
+- **Auto research on import**: every import fires a background deep research run (`ResearchRunsService.runForApp` with `autoKeywords: true` - full review scrape, pricing/IAP meta, top-50 positions for keywords derived from title+genre via `mainKeywordCandidates`; AI analysis best-effort). Skipped when `NODE_ENV === "test"` (would outlive stubbed fetch and hit real stores).
 
 ## Alternative Stores (MULTI_STORE)
 
