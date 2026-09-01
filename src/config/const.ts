@@ -60,6 +60,14 @@ export type Platform = (typeof PLATFORMS)[number];
 export const STORE_STATUSES = ["connected", "error", "disconnected"] as const;
 export type StoreStatus = (typeof STORE_STATUSES)[number];
 
+// How a store row is connected: "api" uses real store credentials, "public" is
+// a credential-less connection created by importing an app from a store link —
+// it serves public store data only and cannot publish.
+export const STORE_CONNECTION_MODES = ["api", "public"] as const;
+export type StoreConnectionMode = (typeof STORE_CONNECTION_MODES)[number];
+
+export const DEFAULT_PUBLIC_COUNTRY = "us";
+
 export const APP_STATUSES = ["active", "removed"] as const;
 export type AppStatus = (typeof APP_STATUSES)[number];
 

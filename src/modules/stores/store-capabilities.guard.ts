@@ -38,6 +38,22 @@ export const storeCapabilityGuard = new Elysia({
 		// Unknown app → let the route's ownership check surface the 404.
 		if (!resolved) return;
 
+		// Public (link) connections have no store API behind them: block
+		// publishing/purchases mutations with the upgrade-flavored 403 the panel
+		// turns into a "connect your store API" CTA. Reads (GET) stay open —
+		// they serve cached/local data. Reviews are not gated here because the
+		// public review sync genuinely works; only replying fails, with the same
+		// typed error raised by the provider.
+		if (
+			resolved.connectionMode === "public" &&
+			request.method !== "GET" &&
+			(match.capability === "publishing" || match.capability === "purchases")
+		) {
+			buildError("integrationRequired", {
+				info: "This app was added from a public store link. Connect your store API to publish changes.",
+			});
+		}
+
 		if (!resolved.capabilities.includes(match.capability)) {
 			buildError("forbidden", {
 				info: `Capability "${match.capability}" is not enabled for this store connection.`,

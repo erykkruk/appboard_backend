@@ -1,8 +1,7 @@
 import { and, eq } from "drizzle-orm";
-import { APP_STORE_CATEGORIES, type StoreType } from "@/config/const";
+import { APP_STORE_CATEGORIES } from "@/config/const";
 import { AIService } from "@/modules/ai/ai.service";
-import { decryptCredentials } from "@/modules/vault/credentials";
-import { createProvider } from "@/providers";
+import { resolveProviderForApp } from "@/modules/stores/provider-resolver";
 import { db } from "@/utils/db";
 import { apps, listingHistory, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -233,11 +232,7 @@ function parseJsonContent(content: string): {
 export class ListingsService {
 	static async syncFromStore(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		const fetched = await provider.fetchListings(app.externalId);
 
@@ -452,11 +447,7 @@ export class ListingsService {
 
 	static async publish(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		const dirtyDrafts = await db
 			.select()
@@ -750,11 +741,7 @@ export class ListingsService {
 			return { skipped: true, success: true };
 		}
 
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		await provider.updateCategories(
 			app.externalId,

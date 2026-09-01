@@ -1,7 +1,6 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
-import { decryptCredentials } from "@/modules/vault/credentials";
-import { createProvider } from "@/providers";
+import { resolveProviderForApp } from "@/modules/stores/provider-resolver";
 import { db } from "@/utils/db";
 import { apps, reviews, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -51,11 +50,7 @@ function assertReplyAllowed(
 export class ReviewsService {
 	static async syncFromStore(appId: string) {
 		const app = await ReviewsService.getAppWithStore(appId);
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		const fetched = await provider.fetchReviews(app.externalId);
 
@@ -168,11 +163,7 @@ export class ReviewsService {
 
 		assertReplyAllowed(app.store.type as StoreType, review, text);
 
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		await provider.replyToReview(app.externalId, review.externalId, text);
 

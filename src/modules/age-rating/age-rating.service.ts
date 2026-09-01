@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
-import type { StoreType } from "@/config/const";
-import { decryptCredentials } from "@/modules/vault/credentials";
-import { createProvider } from "@/providers";
+import {
+	isPublicStore,
+	resolveProviderForStore,
+} from "@/modules/stores/provider-resolver";
 import { db } from "@/utils/db";
 import { appAgeRatings, apps, stores } from "@/utils/db/schema";
 import { createLogger } from "@/utils/logger";
@@ -110,16 +111,14 @@ export class AgeRatingService {
 		const app = result[0].app;
 		const store = result[0].store;
 
-		if (!store.credentials) {
+		// Public (link) connections keep the local save but skip the store push,
+		// exactly like an API connection with no credentials.
+		if (isPublicStore(store) || !store.credentials) {
 			log.warn({ appId }, "No store credentials for age rating push");
 			return;
 		}
 
-		const credentials = decryptCredentials(
-			store.credentials,
-			store.workspaceId,
-		);
-		const provider = createProvider(store.type as StoreType, credentials);
+		const provider = resolveProviderForStore(store);
 
 		await provider.updateAgeRating(app.externalId, appleQuestionnaire);
 		log.info({ appId }, "Age rating pushed to store");

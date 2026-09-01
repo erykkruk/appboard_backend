@@ -31,6 +31,8 @@ export interface ResearchAppMeta {
 	adSupported?: boolean;
 	summary?: string;
 	screenshots?: string[];
+	bundleId?: string;
+	releaseNotes?: string;
 }
 
 export interface ResearchReview {

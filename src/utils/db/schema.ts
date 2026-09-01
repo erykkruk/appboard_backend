@@ -167,6 +167,9 @@ export const stores = pgTable(
 		// `store-capabilities.ts`). NULL means "not set" and is treated as all
 		// selectable capabilities enabled, so existing connections keep full access.
 		capabilities: jsonb().$type<string[]>(),
+		// "api" = real store credentials; "public" = credential-less connection
+		// created by importing an app from a public store link (read-only).
+		connectionMode: varchar({ length: 20 }).notNull().default("api"),
 		credentials: text(),
 		lastSyncedAt: timestamp(),
 		name: varchar({ length: 255 }).notNull(),

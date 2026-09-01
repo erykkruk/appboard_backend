@@ -1,7 +1,8 @@
 import { eq } from "drizzle-orm";
-import type { StoreType } from "@/config/const";
-import { decryptCredentials } from "@/modules/vault/credentials";
-import { createProvider } from "@/providers";
+import {
+	isPublicStore,
+	resolveProviderForStore,
+} from "@/modules/stores/provider-resolver";
 import { db } from "@/utils/db";
 import { appPrivacyDeclarations, apps, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -108,14 +109,10 @@ export class PrivacyDeclarationService {
 
 		const { app, store } = result[0];
 
-		if (!store.credentials)
+		if (!isPublicStore(store) && !store.credentials)
 			buildError("badRequest", { info: "No store credentials configured" });
 
-		const credentials = decryptCredentials(
-			store.credentials,
-			store.workspaceId,
-		);
-		const provider = createProvider(store.type as StoreType, credentials);
+		const provider = resolveProviderForStore(store);
 
 		await provider.updatePrivacyDeclaration(app.externalId, {
 			dataCollections: declaration.dataCollections as Array<{

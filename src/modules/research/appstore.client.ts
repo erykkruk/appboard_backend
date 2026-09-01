@@ -19,6 +19,8 @@ interface ItunesLookupResult {
 	trackId?: number;
 	trackName: string;
 	sellerName: string;
+	bundleId?: string;
+	releaseNotes?: string;
 	artworkUrl60?: string;
 	artworkUrl100?: string;
 	averageUserRating?: number;
@@ -58,6 +60,7 @@ export async function appstoreMeta(
 		});
 	}
 	return {
+		bundleId: app.bundleId,
 		contentRating: app.contentAdvisoryRating,
 		country,
 		description: app.description,
@@ -71,6 +74,7 @@ export async function appstoreMeta(
 		rating: app.averageUserRating,
 		ratingsCount: app.userRatingCount,
 		released: app.releaseDate,
+		releaseNotes: app.releaseNotes,
 		screenshots: (app.screenshotUrls ?? []).slice(0, MAX_SCREENSHOTS),
 		store: "appstore",
 		title: app.trackName,

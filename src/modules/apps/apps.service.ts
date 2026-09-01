@@ -21,6 +21,7 @@ export class AppsService {
 			.select({
 				app: apps,
 				store: {
+					connectionMode: stores.connectionMode,
 					id: stores.id,
 					name: stores.name,
 					type: stores.type,
@@ -41,6 +42,7 @@ export class AppsService {
 			.select({
 				app: apps,
 				store: {
+					connectionMode: stores.connectionMode,
 					id: stores.id,
 					name: stores.name,
 					type: stores.type,
