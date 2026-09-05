@@ -12,6 +12,7 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+import type { AppAuditReport } from "@/modules/audit/audit.types";
 import type {
 	KeywordScore,
 	ResearchRunReport,
@@ -516,6 +517,53 @@ export const appAgeRatings = pgTable("app_age_ratings", {
 	presetId: varchar({ length: 50 }).notNull(),
 });
 
+/**
+ * Latest listing audit per app and country. Computing one costs a minute of
+ * live store calls, so the panel always reads the stored row and a refresh
+ * runs in the background - the score is never a blocking request.
+ */
+export const appAudits = pgTable(
+	"app_audits",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		country: varchar({ length: 2 }).notNull(),
+		draftScore: integer(),
+		/** Full report; NULL while the first measurement is still running. */
+		report: jsonb().$type<AppAuditReport>(),
+		startedAt: timestamp(),
+		status: varchar({ length: 20 }).notNull().default("ready"),
+		storeScore: integer().notNull(),
+	},
+	(t) => [unique().on(t.appId, t.country)],
+);
+
+/**
+ * Things that happened to an app and could plausibly move its rankings: a new
+ * version, a submission, a store publish. Listing FIELD changes already live
+ * in `listing_history`; this covers everything that is not a field edit, so
+ * the rank chart can mark "we changed something here" honestly.
+ */
+export const appEvents = pgTable(
+	"app_events",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		/** Human-readable one-liner shown on the chart marker. */
+		label: varchar({ length: 255 }).notNull(),
+		meta: jsonb().$type<Record<string, unknown>>(),
+		occurredAt: timestamp().notNull().defaultNow(),
+		type: varchar({ length: 40 }).notNull(),
+	},
+	(t) => [index().on(t.appId, t.occurredAt)],
+);
+
 // ── App Groups ─────────────────────────────────────────────────────
 
 export const appGroups = pgTable(
@@ -993,6 +1041,8 @@ export const schema = {
 	appAgeRatings,
 	appAiPrompts,
 	appAsoProfiles,
+	appAudits,
+	appEvents,
 	appGroupMembers,
 	appGroups,
 	appPrivacyDeclarations,

@@ -56,6 +56,7 @@ export async function playstoreMeta(
 		released: app.released,
 		releaseNotes: app.recentChanges,
 		reviewsCount: app.reviews,
+		screenshotCount: (app.screenshots ?? []).length,
 		screenshots: (app.screenshots ?? []).slice(0, MAX_SCREENSHOTS),
 		store: "playstore",
 		summary: app.summary,

@@ -171,6 +171,32 @@ describe("scoring engine stays browser-safe", () => {
 		expect(engineImports[0]).toContain('from "./scoring-types"');
 		expect(engineImports[0]?.startsWith("import type")).toBe(true);
 	});
+
+	it("listing-suggestions.ts imports only engine types", async () => {
+		const src = await Bun.file(
+			"src/modules/research/listing-suggestions.ts",
+		).text();
+		const imports =
+			src.match(/^import(?:\s+type)?[\s\S]*?from\s+"[^"]+";/gm) ?? [];
+		expect(imports.length).toBeGreaterThan(0);
+		for (const line of imports) {
+			expect(line.startsWith("import type")).toBe(true);
+			expect(/from "\.\/(scoring-types|listing-audit)";$/.test(line)).toBe(
+				true,
+			);
+		}
+	});
+
+	it("listing-audit.ts has no runtime imports either", async () => {
+		const audit = await Bun.file(
+			"src/modules/research/listing-audit.ts",
+		).text();
+		const auditImports =
+			audit.match(/^import(?:\s+type)?[\s\S]*?from\s+"[^"]+";/gm) ?? [];
+		expect(auditImports).toHaveLength(1);
+		expect(auditImports[0]).toContain('from "./scoring-types"');
+		expect(auditImports[0]?.startsWith("import type")).toBe(true);
+	});
 });
 
 describe("free-tool daily quota", () => {

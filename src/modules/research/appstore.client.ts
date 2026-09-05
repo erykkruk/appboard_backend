@@ -31,6 +31,7 @@ interface ItunesLookupResult {
 	version?: string;
 	trackViewUrl: string;
 	genres?: string[];
+	languageCodesISO2A?: string[];
 	primaryGenreName?: string;
 	contentAdvisoryRating?: string;
 	formattedPrice?: string;
@@ -46,12 +47,81 @@ async function itunesFetch(url: string): Promise<Record<string, unknown>> {
 	return (await res.json()) as Record<string, unknown>;
 }
 
+/**
+ * App Store localizations, keyed by the ISO-2 code the Lookup API reports in
+ * `languageCodesISO2A`. `itunes` is the value the Lookup API's `l` parameter
+ * wants; `listing` is the locale App Store Connect uses, which is what we
+ * store as a listing language so a later real API connection lines up.
+ * Verified against the live API: passing `l` returns genuinely localized
+ * title, description AND screenshot URLs.
+ */
+const APP_STORE_LOCALES: Record<string, { itunes: string; listing: string }> = {
+	AR: { itunes: "ar_sa", listing: "ar-SA" },
+	CA: { itunes: "ca_es", listing: "ca" },
+	CS: { itunes: "cs_cz", listing: "cs" },
+	DA: { itunes: "da_dk", listing: "da" },
+	DE: { itunes: "de_de", listing: "de-DE" },
+	EL: { itunes: "el_gr", listing: "el" },
+	EN: { itunes: "en_us", listing: "en-US" },
+	ES: { itunes: "es_es", listing: "es-ES" },
+	FI: { itunes: "fi_fi", listing: "fi" },
+	FR: { itunes: "fr_fr", listing: "fr-FR" },
+	HE: { itunes: "he_il", listing: "he" },
+	HI: { itunes: "hi_in", listing: "hi" },
+	HR: { itunes: "hr_hr", listing: "hr" },
+	HU: { itunes: "hu_hu", listing: "hu" },
+	ID: { itunes: "id_id", listing: "id" },
+	IT: { itunes: "it_it", listing: "it" },
+	JA: { itunes: "ja_jp", listing: "ja" },
+	KO: { itunes: "ko_kr", listing: "ko" },
+	MS: { itunes: "ms_my", listing: "ms" },
+	NL: { itunes: "nl_nl", listing: "nl-NL" },
+	NO: { itunes: "no_no", listing: "no" },
+	PL: { itunes: "pl_pl", listing: "pl" },
+	PT: { itunes: "pt_br", listing: "pt-BR" },
+	RO: { itunes: "ro_ro", listing: "ro" },
+	RU: { itunes: "ru_ru", listing: "ru" },
+	SK: { itunes: "sk_sk", listing: "sk" },
+	SV: { itunes: "sv_se", listing: "sv" },
+	TH: { itunes: "th_th", listing: "th" },
+	TR: { itunes: "tr_tr", listing: "tr" },
+	UK: { itunes: "uk_ua", listing: "uk" },
+	VI: { itunes: "vi_vn", listing: "vi" },
+	ZH: { itunes: "zh_cn", listing: "zh-Hans" },
+};
+
+/** ISO-2 store language code -> the locale pair we use for it, if known. */
+export function appStoreLocale(
+	iso2: string,
+): { itunes: string; listing: string } | null {
+	return APP_STORE_LOCALES[iso2.trim().toUpperCase()] ?? null;
+}
+
+/** Our listing locale -> the ISO-2 code, for going back the other way. */
+export function isoForListingLanguage(language: string): string | null {
+	const wanted = language.toLowerCase();
+	for (const [iso, pair] of Object.entries(APP_STORE_LOCALES)) {
+		if (pair.listing.toLowerCase() === wanted) return iso;
+	}
+	// Tolerate a bare language where we store a region ("de" for "de-DE").
+	const bare = wanted.split(/[-_]/)[0];
+	for (const [iso, pair] of Object.entries(APP_STORE_LOCALES)) {
+		if (pair.listing.toLowerCase().split("-")[0] === bare) return iso;
+	}
+	return null;
+}
+
 export async function appstoreMeta(
 	id: string,
 	country: string,
+	/** ISO-2 language code; when set, the store answers in that language. */
+	language?: string,
 ): Promise<ResearchAppMeta> {
+	const locale = language ? appStoreLocale(language) : null;
 	const data = await itunesFetch(
-		`https://itunes.apple.com/lookup?id=${encodeURIComponent(id)}&country=${encodeURIComponent(country)}`,
+		`https://itunes.apple.com/lookup?id=${encodeURIComponent(id)}&country=${encodeURIComponent(country)}${
+			locale ? `&l=${locale.itunes}` : ""
+		}`,
 	);
 	const app = (data.results as ItunesLookupResult[] | undefined)?.[0];
 	if (!app) {
@@ -69,12 +139,14 @@ export async function appstoreMeta(
 		genre: (app.genres ?? []).slice(0, 2).join(", "),
 		icon: app.artworkUrl100,
 		id,
+		languages: app.languageCodesISO2A,
 		lastUpdate: app.currentVersionReleaseDate,
 		price: app.formattedPrice,
 		rating: app.averageUserRating,
 		ratingsCount: app.userRatingCount,
 		released: app.releaseDate,
 		releaseNotes: app.releaseNotes,
+		screenshotCount: (app.screenshotUrls ?? []).length,
 		screenshots: (app.screenshotUrls ?? []).slice(0, MAX_SCREENSHOTS),
 		store: "appstore",
 		title: app.trackName,
@@ -317,11 +389,25 @@ export async function appstoreReviews(
 		}
 		if (entries.length < FULL_RSS_PAGE_SIZE) break;
 	}
-	if (reviews.length) return reviews;
-	// Apple quietly emptied the customerreviews RSS feed (returns 0 entries
-	// for every app as of mid-2026) — fall back to the reviews Apple
-	// server-renders into the store web page (~20 most helpful ones).
-	return appstoreReviewsFromWebPage(id, country);
+	// The RSS feed and the store web page are two PARTIAL views of the same
+	// storefront: the feed came back for some apps in late 2026 but returns a
+	// subset, and the page server-renders the most helpful ~20. Using the
+	// page only when the feed is empty silently dropped every review the feed
+	// happened to omit. Merge both and dedupe on content.
+	const fromPage = await appstoreReviewsFromWebPage(id, country).catch(
+		() => [] as ResearchReview[],
+	);
+	// Page entries go first: they carry the real review date, the feed does
+	// not, and a dated duplicate must win over an undated one.
+	const seen = new Set<string>();
+	const merged: ResearchReview[] = [];
+	for (const review of [...fromPage, ...reviews]) {
+		const key = `${review.title ?? ""}|${review.stars}|${review.text}`;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		merged.push(review);
+	}
+	return merged;
 }
 
 interface EmbeddedReview {

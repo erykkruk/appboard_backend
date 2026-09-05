@@ -16,8 +16,10 @@ import { appleAdsController } from "@/modules/apple-ads";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
+import { auditController } from "@/modules/audit";
 import { authGuard } from "@/modules/auth";
 import { apiKeysController } from "@/modules/auth/api-keys.controller";
+import { bulkController } from "@/modules/bulk";
 import { demoController } from "@/modules/demo";
 import { featuresController } from "@/modules/features";
 import { featureGuard } from "@/modules/features/features.guard";
@@ -25,6 +27,7 @@ import { feedbackController } from "@/modules/feedback";
 import { groupAsoProfileController } from "@/modules/group-aso-profile";
 import { historyController } from "@/modules/history";
 import { listingsController } from "@/modules/listings";
+import { overviewController } from "@/modules/overview";
 import {
 	privacyDeclarationController,
 	privacyTemplatesController,
@@ -86,6 +89,9 @@ const app = new Elysia()
 			.use(reviewsController)
 			.use(publishingController)
 			.use(appsController)
+			.use(auditController)
+			.use(bulkController)
+			.use(overviewController)
 			.use(asoProfileController)
 			.use(privacyTemplatesController)
 			.use(privacyDeclarationController)

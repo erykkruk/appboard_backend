@@ -31,8 +31,12 @@ export interface ResearchAppMeta {
 	adSupported?: boolean;
 	summary?: string;
 	screenshots?: string[];
+	/** Total screenshots the store serves; `screenshots` is a capped preview. */
+	screenshotCount?: number;
 	bundleId?: string;
 	releaseNotes?: string;
+	/** Listing languages the store reports, e.g. ["EN", "PL"]. */
+	languages?: string[];
 }
 
 export interface ResearchReview {
