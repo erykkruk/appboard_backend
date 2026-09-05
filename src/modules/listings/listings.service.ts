@@ -431,7 +431,10 @@ export class ListingsService {
 			for (const field of LISTING_FIELDS) {
 				const draftVal = (draft[field] ?? null) as string | null;
 				const remoteVal = (remote?.[field] ?? null) as string | null;
-				if (draftVal !== remoteVal) {
+				// An empty draft field and a store field that was never set are the
+				// same thing to a person; listing "" vs null as a change put a blank
+				// "Keywords:" row in every copy-and-paste.
+				if ((draftVal ?? "") !== (remoteVal ?? "")) {
 					fields.push({ field, newValue: draftVal, oldValue: remoteVal });
 				}
 			}
