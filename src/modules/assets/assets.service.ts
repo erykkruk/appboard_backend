@@ -1,5 +1,8 @@
-import { and, eq } from "drizzle-orm";
-import { resolveProviderForApp } from "@/modules/stores/provider-resolver";
+import { and, eq, notInArray } from "drizzle-orm";
+import {
+	isPublicStore,
+	resolveProviderForApp,
+} from "@/modules/stores/provider-resolver";
 import { db } from "@/utils/db";
 import { apps, assets, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -25,8 +28,32 @@ export class AssetsService {
 		const languages = [...languageSet];
 		let totalSynced = 0;
 
+		// For a credential-less connection the store is the whole truth: what it
+		// no longer serves must not linger. Without this, changing how we key a
+		// screenshot (or the store dropping one) leaves orphans behind forever.
+		const reconcile = isPublicStore(app.store);
+
 		for (const language of languages) {
 			const fetched = await provider.fetchAssets(app.externalId, language);
+
+			if (reconcile) {
+				const keep = fetched.map((asset) => asset.externalId);
+				const stale = and(
+					eq(assets.appId, appId),
+					eq(assets.language, language),
+					eq(assets.assetType, "screenshot"),
+					keep.length > 0 ? notInArray(assets.externalId, keep) : undefined,
+				);
+				const removed = await db.delete(assets).where(stale).returning({
+					id: assets.id,
+				});
+				if (removed.length > 0) {
+					log.info(
+						{ appId, count: removed.length, language },
+						"Removed screenshots the store no longer serves",
+					);
+				}
+			}
 
 			for (const asset of fetched) {
 				const existing = await db

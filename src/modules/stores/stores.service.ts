@@ -1,4 +1,4 @@
-import { and, count, eq } from "drizzle-orm";
+import { and, count, eq, sql } from "drizzle-orm";
 import config from "@/config";
 import {
 	isAlternativeStoreType,
@@ -7,6 +7,7 @@ import {
 	type StoreType,
 } from "@/config/const";
 import {
+	PUBLIC_CONNECTION_CAPABILITIES,
 	resolveDefaultCapabilities,
 	validateCapabilitySelection,
 } from "@/config/store-capabilities";
@@ -24,6 +25,7 @@ import {
 import { createProvider } from "@/providers";
 import { validateAlternativeCredentials } from "@/providers/alternative/credentials.schema";
 import { createPublicProvider } from "@/providers/public";
+import { storeFactsFrom } from "@/providers/public/shared";
 import type { AppData, StoreProvider } from "@/providers/store-provider";
 import { db } from "@/utils/db";
 import { apps, stores } from "@/utils/db/schema";
@@ -274,6 +276,12 @@ export class StoresService {
 						platform: appData.platform,
 						status: appStatus,
 						storeId,
+						// Merge, never replace: rawData also holds the import country.
+						...(appData.storeFacts
+							? {
+									rawData: sql`coalesce(${apps.rawData}, '{}'::jsonb) || ${JSON.stringify({ storeFacts: appData.storeFacts })}::jsonb`,
+								}
+							: {}),
 					})
 					.where(eq(apps.id, existing[0].id));
 			} else {
@@ -286,6 +294,9 @@ export class StoresService {
 					platform: appData.platform,
 					status: appStatus,
 					storeId,
+					...(appData.storeFacts
+						? { rawData: { storeFacts: appData.storeFacts } }
+						: {}),
 				});
 			}
 		}
@@ -424,6 +435,11 @@ export class StoresService {
 			[publicStore] = await db
 				.insert(stores)
 				.values({
+					// Store the honest read-only set. Leaving this NULL would resolve
+					// to "everything enabled" and report publishing/purchases the
+					// connection cannot do. Older public rows stay NULL on purpose -
+					// `resolveStoredCapabilities` still tolerates them.
+					capabilities: PUBLIC_CONNECTION_CAPABILITIES,
 					connectionMode: "public",
 					name: `${STORE_TYPE_LABELS[parsed.type]} (public)`,
 					status: "connected",
@@ -442,7 +458,7 @@ export class StoresService {
 				lastSyncedAt: new Date(),
 				name: meta.title,
 				platform: parsed.type === "app_store" ? "ios" : "android",
-				rawData: { publicCountry: country },
+				rawData: { publicCountry: country, storeFacts: storeFactsFrom(meta) },
 				status: "active",
 				storeId: publicStore.id,
 			})

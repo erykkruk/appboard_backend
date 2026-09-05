@@ -54,6 +54,12 @@ export const storeCapabilityGuard = new Elysia({
 			});
 		}
 
+		// A public connection stores a read-only capability set, so the check
+		// below would reject cached GETs too. Keep reads open, as documented above.
+		if (resolved.connectionMode === "public" && request.method === "GET") {
+			return;
+		}
+
 		if (!resolved.capabilities.includes(match.capability)) {
 			buildError("forbidden", {
 				info: `Capability "${match.capability}" is not enabled for this store connection.`,

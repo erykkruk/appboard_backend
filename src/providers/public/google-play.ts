@@ -12,7 +12,12 @@ import type {
 } from "@/providers/store-provider";
 import { createLogger } from "@/utils/logger";
 import { type PublicProviderContext, PublicStoreProvider } from "./base";
-import { splitGenres, toReviewData, toScreenshotAssets } from "./shared";
+import {
+	splitGenres,
+	storeFactsFrom,
+	toReviewData,
+	toScreenshotAssets,
+} from "./shared";
 
 const log = createLogger("public-google-play");
 
@@ -38,6 +43,7 @@ export class PublicGooglePlayProvider extends PublicStoreProvider {
 					iconUrl: meta.icon,
 					name: meta.title,
 					platform: "android",
+					storeFacts: storeFactsFrom(meta),
 				});
 			} catch (err) {
 				// One unavailable app must not sink the whole refresh.
@@ -67,7 +73,9 @@ export class PublicGooglePlayProvider extends PublicStoreProvider {
 
 	async fetchReviews(appId: string): Promise<ReviewData[]> {
 		const reviews = await playstoreReviews(appId, this.country);
-		return reviews.map((r) => toReviewData(r, "Google Play user"));
+		return reviews.map((r) =>
+			toReviewData(r, "Google Play user", this.country),
+		);
 	}
 
 	async fetchCategories(appId: string): Promise<CategoryData> {

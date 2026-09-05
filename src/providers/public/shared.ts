@@ -17,6 +17,7 @@ function publicReviewId(review: ResearchReview): string {
 export function toReviewData(
 	review: ResearchReview,
 	fallbackAuthor: string,
+	territory?: string,
 ): ReviewData {
 	const parsed = review.date ? new Date(review.date) : null;
 	return {
@@ -27,16 +28,57 @@ export function toReviewData(
 		reviewDate: parsed && !Number.isNaN(parsed.getTime()) ? parsed : new Date(),
 		title: review.title,
 		...(review.version ? { appVersion: review.version } : {}),
+		...(territory ? { territory: territory.toUpperCase() } : {}),
+	};
+}
+
+/** Public store meta -> the facts worth keeping on the app row. */
+export function storeFactsFrom(meta: {
+	lastUpdate?: string;
+	rating?: number;
+	ratingsCount?: number;
+	releaseNotes?: string;
+	version?: string;
+}) {
+	return {
+		rating: meta.rating,
+		ratingsCount: meta.ratingsCount,
+		releaseNotes: meta.releaseNotes,
+		updatedAt: meta.lastUpdate,
+		version: meta.version,
 	};
 }
 
 /** Screenshot URLs → asset rows with stable synthetic ids (hash of the URL). */
-export function toScreenshotAssets(urls: string[]): AssetData[] {
-	return urls.map((url) => ({
+/**
+ * The Lookup API hands out 320x480 thumbnails. Apple's CDN serves the same
+ * image at any box size and never upscales past the original, so asking for
+ * a 6.7-inch box returns the native file. Verified: 1284x2778bb on a 6.5-inch
+ * screenshot comes back as 1242x2688 - the original. The thumbnail would make
+ * the editor start from a blurry 320-pixel image of the user's own screen.
+ */
+const FULL_SIZE_BOX = "1284x2778bb";
+
+export function fullSizeStoreImage(url: string): string {
+	if (!/\.mzstatic\.com\//.test(url)) return url;
+	return url.replace(/\/\d+x\d+bb\.(jpg|png|webp)$/i, `/${FULL_SIZE_BOX}.$1`);
+}
+
+export function toScreenshotAssets(
+	urls: string[],
+	language?: string,
+): AssetData[] {
+	return urls.map((raw) => ({
 		assetType: "screenshot",
 		deviceType: "phone",
-		externalId: `public-${createHash("sha256").update(url).digest("hex").slice(0, 24)}`,
-		url,
+		// The id hashes the URL, and localized screenshots have different URLs,
+		// so per-language sets never collide. The language is folded in anyway
+		// for the rare app that ships the same image in two languages.
+		externalId: `public-${createHash("sha256")
+			.update(language ? `${language}:${raw}` : raw)
+			.digest("hex")
+			.slice(0, 24)}`,
+		url: fullSizeStoreImage(raw),
 	}));
 }
 

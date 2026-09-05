@@ -1,6 +1,7 @@
 import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { Elysia } from "elysia";
+import { appsController } from "@/modules/apps";
 import { listingsController } from "@/modules/listings";
 import { publishingController } from "@/modules/publishing";
 import {
@@ -34,6 +35,7 @@ const app = new Elysia()
 			.use(vaultActionGuard)
 			.use(storeCapabilityGuard)
 			.use(storesController)
+			.use(appsController)
 			.use(listingsController)
 			.use(reviewsController)
 			.use(publishingController),
@@ -307,6 +309,28 @@ describe("POST /api/stores/import", () => {
 		const row = data.stores.find((s: { id: string }) => s.id === publicStoreId);
 		expect(row.connectionMode).toBe("public");
 		expect(row.status).toBe("connected");
+	});
+
+	it("reports only the read-only capabilities a public connection really has", async () => {
+		const res = await app.handle(authRequest("http://localhost/api/stores/"));
+		const data = await res.json();
+		const row = data.stores.find((s: { id: string }) => s.id === publicStoreId);
+
+		expect(row.capabilities).toEqual(["listings", "assets", "reviews"]);
+		expect(row.capabilities).not.toContain("publishing");
+		expect(row.capabilities).not.toContain("purchases");
+	});
+
+	it("exposes connectionMode on the app capabilities endpoint", async () => {
+		const res = await app.handle(
+			authRequest(`http://localhost/api/apps/${importedAppId}/capabilities`),
+		);
+		expect(res.status).toBe(200);
+		const data = await res.json();
+
+		expect(data.connectionMode).toBe("public");
+		// The existing platform payload must stay untouched.
+		expect(data.capabilities.listings.fields).toContain("title");
 	});
 
 	it("syncs public reviews from the RSS feed", async () => {

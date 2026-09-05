@@ -1,6 +1,13 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { StoreType } from "@/config/const";
-import { resolveProviderForApp } from "@/modules/stores/provider-resolver";
+import { appstoreMeta } from "@/modules/research/appstore.client";
+import { playstoreMeta } from "@/modules/research/playstore.client";
+import {
+	isPublicStore,
+	resolveProviderForApp,
+} from "@/modules/stores/provider-resolver";
+import { storeFactsFrom } from "@/providers/public/shared";
+import type { StoreFacts } from "@/providers/store-provider";
 import { db } from "@/utils/db";
 import { apps, reviews, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -54,6 +61,15 @@ export class ReviewsService {
 
 		const fetched = await provider.fetchReviews(app.externalId);
 
+		// A link-imported app has no other channel for its rating: refresh the
+		// store facts whenever reviews sync, so the average on the dashboard is
+		// the store's, not one computed from the handful of reviews with text.
+		if (isPublicStore(app.store)) {
+			await ReviewsService.refreshStoreFacts(app).catch((err) =>
+				log.warn({ appId, err }, "Store facts refresh failed"),
+			);
+		}
+
 		for (const review of fetched) {
 			const existing = await db
 				.select()
@@ -76,6 +92,10 @@ export class ReviewsService {
 					reviewDate: review.reviewDate,
 					syncedAt: new Date(),
 					title: review.title,
+					// Only fill what the provider actually knows; never blank a
+					// value the store gave us earlier.
+					...(review.territory ? { territory: review.territory } : {}),
+					...(review.appVersion ? { appVersion: review.appVersion } : {}),
 				};
 				// Only overwrite reply fields if provider returned them
 				if (review.replyText !== undefined) {
@@ -209,12 +229,43 @@ export class ReviewsService {
 			.from(reviews)
 			.where(and(eq(reviews.appId, appId), isNull(reviews.replyText)));
 
+		// The synced reviews are only the ones with text. The store's own
+		// average counts every star rating, so it is the number to show first -
+		// "5.0 from 1 review" next to a store that says 4.0 from 5 is a lie.
+		const [appRow] = await db
+			.select({ rawData: apps.rawData })
+			.from(apps)
+			.where(eq(apps.id, appId))
+			.limit(1);
+		const facts = (appRow?.rawData as { storeFacts?: StoreFacts } | null)
+			?.storeFacts;
+
 		return {
 			averageRating: Math.round(avgRating * 100) / 100,
 			distribution,
 			noReplyCount: noReplyResult?.count ?? 0,
+			storeRating: facts?.rating ?? null,
+			storeRatingsCount: facts?.ratingsCount ?? null,
 			totalReviews,
 		};
+	}
+
+	private static async refreshStoreFacts(app: {
+		id: string;
+		externalId: string;
+		platform: string;
+		rawData: unknown;
+	}) {
+		const raw = (app.rawData as Record<string, unknown> | null) ?? {};
+		const country = (raw.publicCountry as string | undefined) ?? "us";
+		const meta =
+			app.platform === "ios"
+				? await appstoreMeta(app.externalId, country)
+				: await playstoreMeta(app.externalId, country);
+		await db
+			.update(apps)
+			.set({ rawData: { ...raw, storeFacts: storeFactsFrom(meta) } })
+			.where(eq(apps.id, app.id));
 	}
 
 	private static async getAppWithStore(appId: string) {
