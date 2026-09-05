@@ -169,6 +169,19 @@ export interface StoreProvider {
 	verifyCapabilityAccess?(): Promise<CapabilityAccessResult[]>;
 }
 
+/**
+ * What the public store page says about an app right now. Ratings without
+ * text are not exposed as reviews anywhere, so this is the only place the
+ * real average and count can come from.
+ */
+export interface StoreFacts {
+	rating?: number;
+	ratingsCount?: number;
+	releaseNotes?: string;
+	updatedAt?: string;
+	version?: string;
+}
+
 export interface AppData {
 	bundleId: string;
 	externalId: string;
@@ -176,6 +189,7 @@ export interface AppData {
 	isDraft?: boolean;
 	name: string;
 	platform: "android" | "ios";
+	storeFacts?: StoreFacts;
 }
 
 export interface ListingData {

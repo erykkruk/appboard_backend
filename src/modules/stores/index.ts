@@ -4,6 +4,7 @@ import {
 	STORE_CAPABILITY_CATALOG,
 	STORE_SETUP_INFO,
 } from "@/config/store-capabilities";
+import { AppsService } from "@/modules/apps/apps.service";
 import { authGuard } from "@/modules/auth";
 import { verifyStoreOwnership } from "@/modules/auth/verify-ownership";
 import { buildError } from "@/utils/errors";
@@ -15,6 +16,7 @@ import {
 import {
 	addPackageBody,
 	connectStoreBody,
+	importAppBody,
 	renameStoreBody,
 	storeCapabilitiesBody,
 	storeIdParams,
@@ -82,6 +84,34 @@ export const storesController = new Elysia({ prefix: "/stores" })
 			detail: { description: "Connect a new store", tags: ["Stores"] },
 		},
 	)
+	.post(
+		"/import",
+		async ({ body, workspaceId }) => {
+			if (
+				rateLimitEnabled() &&
+				!checkRateLimit(
+					`store-import:${workspaceId}`,
+					CONNECT_MAX_ATTEMPTS,
+					CONNECT_WINDOW_MS,
+				)
+			) {
+				buildError("rateLimitExceeded", {
+					info: "Too many import attempts. Try again in a minute.",
+				});
+			}
+			const result = await StoresService.importApp(workspaceId!, body);
+			const app = await AppsService.findOne(workspaceId!, result.appId);
+			return { app, created: result.created };
+		},
+		{
+			body: importAppBody,
+			detail: {
+				description:
+					"Add an app from a public store link (no API credentials needed)",
+				tags: ["Stores"],
+			},
+		},
+	)
 	.get(
 		"/",
 		async ({ workspaceId }) => {
@@ -92,6 +122,7 @@ export const storesController = new Elysia({ prefix: "/stores" })
 						s.type as StoreType,
 						s.capabilities,
 					),
+					connectionMode: s.connectionMode,
 					id: s.id,
 					lastSyncedAt: s.lastSyncedAt,
 					name: s.name,

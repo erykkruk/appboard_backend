@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
-import { APP_STORE_CATEGORIES, type StoreType } from "@/config/const";
+import { APP_STORE_CATEGORIES } from "@/config/const";
 import { AIService } from "@/modules/ai/ai.service";
-import { decryptCredentials } from "@/modules/vault/credentials";
-import { createProvider } from "@/providers";
+import { resolveProviderForApp } from "@/modules/stores/provider-resolver";
+import { AppEventsService } from "@/modules/tracking/app-events.service";
 import { db } from "@/utils/db";
 import { apps, listingHistory, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -233,11 +233,7 @@ function parseJsonContent(content: string): {
 export class ListingsService {
 	static async syncFromStore(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		const fetched = await provider.fetchListings(app.externalId);
 
@@ -435,7 +431,10 @@ export class ListingsService {
 			for (const field of LISTING_FIELDS) {
 				const draftVal = (draft[field] ?? null) as string | null;
 				const remoteVal = (remote?.[field] ?? null) as string | null;
-				if (draftVal !== remoteVal) {
+				// An empty draft field and a store field that was never set are the
+				// same thing to a person; listing "" vs null as a change put a blank
+				// "Keywords:" row in every copy-and-paste.
+				if ((draftVal ?? "") !== (remoteVal ?? "")) {
 					fields.push({ field, newValue: draftVal, oldValue: remoteVal });
 				}
 			}
@@ -452,11 +451,7 @@ export class ListingsService {
 
 	static async publish(appId: string) {
 		const app = await ListingsService.getAppWithStore(appId);
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		const dirtyDrafts = await db
 			.select()
@@ -554,6 +549,18 @@ export class ListingsService {
 				}
 			}
 			await provider.publishListings(app.externalId);
+		}
+
+		// One event for the whole publish. Field-level detail already lands in
+		// listing_history; this is the marker that says "a release happened".
+		if (batchUpdates.length > 0) {
+			const languages = batchUpdates.map((b) => b.draft.language);
+			await AppEventsService.record(
+				appId,
+				"listing_published",
+				`Listing published (${languages.join(", ")})`,
+				{ languages },
+			);
 		}
 
 		// Record history + update remote + mark clean
@@ -750,11 +757,7 @@ export class ListingsService {
 			return { skipped: true, success: true };
 		}
 
-		const credentials = decryptCredentials(
-			app.store.credentials!,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForApp(app);
 
 		await provider.updateCategories(
 			app.externalId,

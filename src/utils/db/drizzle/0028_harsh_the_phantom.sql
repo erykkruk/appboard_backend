@@ -1,0 +1,1 @@
+ALTER TABLE "stores" ADD COLUMN "connection_mode" varchar(20) DEFAULT 'api' NOT NULL;

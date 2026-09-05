@@ -6,6 +6,7 @@ export const errors = {
 	badRequest: { code: "BAD_REQUEST", status: 400 },
 	encryptionFailed: { code: "ENCRYPTION_FAILED", status: 500 },
 	forbidden: { code: "FORBIDDEN", status: 403 },
+	integrationRequired: { code: "INTEGRATION_REQUIRED", status: 403 },
 	invalidScreenshotDimensions: {
 		code: "INVALID_SCREENSHOT_DIMENSIONS",
 		status: 422,

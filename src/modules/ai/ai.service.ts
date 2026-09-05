@@ -406,6 +406,44 @@ TASK: Generate ${fieldLabel} for this app. Write in ${language} language. Stay w
 	return prompt;
 }
 
+/**
+ * User prompt for a description built around target keywords. Unlike
+ * buildUserPrompt it carries the current store text, so the model has real
+ * facts to keep instead of guessing them from the app name.
+ */
+function buildKeywordDescriptionPrompt(
+	appName: string,
+	platform: string,
+	brief: string,
+	keywords: string[],
+	charLimit: number,
+): string {
+	const fieldLabel = FIELD_LABELS.description;
+	const keywordBlock = keywords.length
+		? `Target keywords, most important first. Work each one in naturally (the first ones early in the text) and never as a bare list:
+${keywords.map((keyword) => `- ${keyword}`).join("\n")}
+
+`
+		: "";
+	const task = keywords.length
+		? `Write a new ${fieldLabel} for this app built around the target keywords.`
+		: `Write a new ${fieldLabel} for this app.`;
+
+	return `App name: ${appName}
+Platform: ${platform === "ios" ? "iOS (App Store)" : "Android (Google Play)"}
+Field: ${fieldLabel}
+Maximum characters: ${charLimit}
+
+What the app does (current store text or a short brief):
+"""
+${brief}
+"""
+
+${keywordBlock}TASK: ${task} Keep every claim grounded in the text above. Write in the SAME LANGUAGE as that text. Open with the strongest benefit. Stay within ${charLimit} characters.
+
+IMPORTANT: Return ONLY the generated text, no explanations, no quotes, no labels. Just the raw content. Do NOT include any emoji or special Unicode symbols.`;
+}
+
 function resolveFieldForPlatform(
 	field: ListingField,
 	platform: string,
@@ -561,16 +599,46 @@ export class AIService {
 		return model || DEFAULT_MODEL;
 	}
 
+	/**
+	 * Workspace key first, then the instance-wide env key. A self-hosted
+	 * install that sets OPENROUTER_API_KEY once should get AI everywhere
+	 * without every workspace pasting the same key into Settings.
+	 */
+	static async resolveApiKey(workspaceId: string): Promise<string | null> {
+		const own = await SettingsService.getRaw(workspaceId, "OPENROUTER_API_KEY");
+		if (own) return own;
+		return config.OPENROUTER_API_KEY || null;
+	}
+
+	/**
+	 * Last OpenRouter outcome per workspace, in memory. A key can be present
+	 * and still be rejected (expired, revoked, typo) - without this the panel
+	 * would say "AI is on" and then fail on every click.
+	 */
+	private static readonly lastErrors = new Map<string, string | null>();
+
+	/** What the panel needs to say "AI is on" or "add a key and you get...". */
+	static async status(workspaceId: string): Promise<{
+		configured: boolean;
+		source: "workspace" | "instance" | null;
+		lastError: string | null;
+	}> {
+		const lastError = AIService.lastErrors.get(workspaceId) ?? null;
+		const own = await SettingsService.getRaw(workspaceId, "OPENROUTER_API_KEY");
+		if (own) return { configured: true, lastError, source: "workspace" };
+		if (config.OPENROUTER_API_KEY) {
+			return { configured: true, lastError, source: "instance" };
+		}
+		return { configured: false, lastError: null, source: null };
+	}
+
 	private static async callOpenRouter(
 		workspaceId: string,
 		systemPrompt: string,
 		userPrompt: string,
 		purpose: AiPurpose = "generate",
 	): Promise<{ content: string; model: string }> {
-		const apiKey = await SettingsService.getRaw(
-			workspaceId,
-			"OPENROUTER_API_KEY",
-		);
+		const apiKey = await AIService.resolveApiKey(workspaceId);
 		if (!apiKey) {
 			buildError("badRequest", {
 				info: "OpenRouter API key not configured. Go to Settings to add it.",
@@ -597,6 +665,12 @@ export class AIService {
 
 		if (!response.ok) {
 			const errorBody = await response.text().catch(() => "Unknown error");
+			AIService.lastErrors.set(
+				workspaceId,
+				response.status === 401
+					? "OpenRouter rejected the key"
+					: `OpenRouter error ${response.status}`,
+			);
 			log.error({ errorBody, status: response.status }, "OpenRouter API error");
 
 			if (response.status === 402) {
@@ -638,6 +712,7 @@ export class AIService {
 			});
 		}
 
+		AIService.lastErrors.set(workspaceId, null);
 		return { content: content.trim(), model: data.model ?? DEFAULT_MODEL };
 	}
 
@@ -801,22 +876,71 @@ Return a JSON object where keys are language codes and values are translations. 
 		}
 	}
 
+	/**
+	 * A description rewritten around target keywords. The brief is the current
+	 * store text (or a short pitch) so the model keeps the facts and only
+	 * reworks the copy; from the app name alone it would invent features.
+	 */
 	static async generateDescription(
 		workspaceId: string,
 		appName: string,
-		_prompt: string,
+		prompt: string,
 		platform?: string,
-		_keywords?: string[],
+		keywords?: string[],
 	) {
-		const { model, result } = await AIService.generateListingField(
-			workspaceId,
+		// The panel sends the app platform, older callers a store type.
+		const resolvedPlatform =
+			!platform || platform === "ios" || platform === "app_store"
+				? "ios"
+				: "android";
+		const charLimit = FIELD_CHAR_LIMITS.description;
+		const targetKeywords = (keywords ?? [])
+			.map((keyword) => keyword.trim())
+			.filter((keyword) => keyword.length > 0);
+
+		const systemPrompt = await resolvePrompt(
 			"description",
-			"",
-			appName,
-			platform ?? "ios",
-			"en-US",
+			"generate",
+			resolvedPlatform,
+			workspaceId,
 		);
-		return { description: result, model };
+		const userPrompt = buildKeywordDescriptionPrompt(
+			appName,
+			resolvedPlatform,
+			prompt,
+			targetKeywords,
+			charLimit,
+		);
+
+		log.info(
+			{ keywords: targetKeywords.length, platform: resolvedPlatform },
+			"Generating keyword-targeted description",
+		);
+
+		const { content, model } = await AIService.callOpenRouter(
+			workspaceId,
+			systemPrompt,
+			userPrompt,
+			"generate",
+		);
+
+		// Line by line so paragraph breaks survive: stripEmoji folds every run
+		// of whitespace, which would turn a 4000-character description into
+		// one block.
+		const cleaned = content
+			.split("\n")
+			.map((line) => stripEmoji(line))
+			.join("\n")
+			.replace(/\n{3,}/g, "\n\n")
+			.trim();
+		const description =
+			cleaned.length > charLimit
+				? truncateToLimit(cleaned, charLimit, "description")
+				: cleaned;
+
+		// `result` is what every other AI endpoint returns; `description` stays
+		// for callers written against the old shape.
+		return { description, model, result: description };
 	}
 
 	static async suggestKeywords(

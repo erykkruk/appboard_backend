@@ -153,6 +153,37 @@ Market research for ANY store app (not just connected ones) — port of the stan
 - **Silnik scoringu jest browser-safe**: `scoring-types.ts` (zero importow) + `keyword-scoring.ts` (importuje TYLKO type-only z scoring-types). Panel (appboard_web) kopiuje oba pliki przez `scripts/sync-aso-engine.sh` i liczy darmowy raport W PRZEGLADARCE uzytkownika (iTunes odpytywany z IP odwiedzajacego - zero calli Apple z naszego backendu dla anonimow). Test `public-reports.test.ts` pilnuje tej granicy - nie dodawaj importow do tych plikow.
 - **Ingest**: `POST /api/public/aso-reports` (PRE-auth-guard, jak feedback; rate limit 10/h/IP, IP tylko jako sha256). Tabele `public_aso_reports` + `public_keyword_observations` - crowd data, source="web_client", NIEZAUFANE (walidacja zakresow na wejsciu) i trzymane OSOBNO od danych workspace'ow. To rosnaca baza keyword->score per kraj/dzien.
 
+## Link-first import (public connection mode)
+
+Apps can be added from a public store link WITHOUT API credentials - integration is an optional add-on for publishing.
+
+- `POST /api/stores/import` (body: `{ url }` or `{ platform, externalId, country? }`) parses the link (`stores/store-url.ts`, reuses research `parseStoreUrl`), validates the app exists publicly, creates/reuses ONE credential-less store per (workspace, type) with `stores.connectionMode = "public"` (`credentials = NULL`, status "connected"), inserts the app row and syncs the public listing + screenshots immediately. Import country pinned in `apps.rawData.publicCountry`.
+- **Providers**: `src/providers/public/` - `PublicAppStoreProvider` (iTunes lookup + review RSS/web fallback) and `PublicGooglePlayProvider` (google-play-scraper). Reads are wired (listings, assets, reviews, categories); EVERY write raises typed **403 `INTEGRATION_REQUIRED`** - the panel renders a "connect your store API" CTA off that code. Never a silent no-op.
+- **Single choke point**: `resolveProviderForStore/ForApp` (`stores/provider-resolver.ts`) replaces the old `decryptCredentials + createProvider` pattern in services. Do NOT construct providers by hand in services - always go through the resolver.
+- `storeCapabilityGuard` additionally blocks publishing/purchases MUTATIONS (non-GET) for public apps with 403 INTEGRATION_REQUIRED; GETs stay open (cached/local data). Reviews are not blocked there - public review sync genuinely works, only reply fails at the provider.
+- **Upgrade path**: connecting a real API store re-binds imported apps by `externalId` (App Store externalId == iTunes trackId; Play == packageName), so drafts/history/tracked keywords survive; `syncApps` then deletes emptied public connections.
+- `GET /stores` and `GET /apps` expose `connectionMode` ("api" | "public") for the panel.
+- **Auto research on import**: every import fires a background deep research run (`ResearchRunsService.runForApp` with `autoKeywords: true` - full review scrape, pricing/IAP meta, top-50 positions for keywords derived from title+genre via `mainKeywordCandidates`; AI analysis best-effort). Skipped when `NODE_ENV === "test"` (would outlive stubbed fetch and hit real stores).
+
+## App audit + fix queue (`src/modules/audit/`)
+
+- **Engine = `src/modules/research/listing-audit.ts`** (browser-safe: only type imports from `scoring-types`, synced to the panel by `scripts/sync-aso-engine.sh` together with `keyword-scoring.ts` and `listing-suggestions.ts`; the boundary test in `public-reports.test.ts` guards all three). Rules produce `AuditIssue { actionable }`: `actionable: false` = context the panel must NOT render with a button (few ratings, stale update, ranks-only-brand). Measuring runs on every scored keyword; RECOMMENDING (title-upgrade, missing-winnable-terms) only on `options.recommendable` = own-listing candidates + rivals from the app's own genre (`inGenre`). Never let a cross-category term become advice.
+- Keyword candidates: own title/description (multilingual stopword list - Polish/German/French/Spanish fillers included on purpose, "nie"/"nikt" used to become "keywords") + a second pass over rival titles (`extractCompetitorCandidates`). Brand token never counts as a ranking win (`isBrandKeyword`).
+- `GET /apps/:id/audit` is **cache-first**: table `app_audits` (unique appId+country, `report` NULL while measuring). A read returns instantly with `status: "measuring" | "ready" | "failed" | "not-in-store"`; the real computation (~1 min of live iTunes calls) runs detached and is re-triggered when older than 12 h or `?refresh=true`. Never make this endpoint blocking again - the socket died at 29 s. Store score comes from the LIVE listing in the audited market's language (`appstoreMeta(id, country, iso)`), draft score from the same rules over the draft row.
+- `GET /apps/:id/audit/suggestions` - deterministic before/after proposals (title, subtitle, keyword field) from `listing-suggestions.ts`; accepting is the ordinary `PUT /apps/:id/listings/:language`. The report carries `language` = audited market language so Polish proposals never land on `en-US`.
+
+## Public import: every language, real facts
+
+- `PublicAppStoreProvider.fetchListings` fetches one listing per language in `languageCodesISO2A` via the Lookup `l=` param (`APP_STORE_LOCALES` map in `appstore.client.ts`); a language whose text equals the default is a fallback, not a localization, and is skipped. `fetchAssets(appId, language)` returns that language's screenshots, upgraded from the 320x480 thumbnail to the full-size CDN box (`fullSizeStoreImage`, verified: `1284x2778bb` returns the original, never upscaled). Assets sync reconciles for public connections (rows the store no longer serves are deleted).
+- Reviews: `appstoreReviews` MERGES the RSS feed and the store web page (both partial) and dedupes on content; the public provider reads every storefront implied by the app's languages (cap 8) and stamps `territory`. Ratings without text are not exposed by Apple anywhere.
+- `apps.rawData.storeFacts` (`{ rating, ratingsCount, version, updatedAt, releaseNotes }`) is written at import, by `syncApps`, and refreshed on every public review sync; `GET /apps/:id/reviews/stats` returns `storeRating` / `storeRatingsCount` next to the text-review average - they are different numbers and the panel shows both.
+- Local apps: `POST /apps { name, platform }` creates an app that is in no store (`rawData.notInStore = true`, `externalId = local-<uuid>` so a later real connection can never mis-bind it). The audit answers `not-in-store` immediately; every store write stays a typed 403.
+
+## App events + reminders (`src/modules/tracking/`)
+
+- `app_events` (`AppEventsService.record`, never throws) marks version created/submitted and listing published; `GET /apps/:id/tracking/history` merges them with `listing_history` into chart annotations (`CHART_EVENT_TYPES` only - reminder events are housekeeping).
+- `DraftReminderService` (scheduler, 09:00 local): a dirty draft older than 3 days + `notifyEmail` on the tracking config -> one email per app per 7 days, cooldown tracked by the `draft_reminder_sent` event.
+
 ## Alternative Stores (MULTI_STORE)
 
 Six Android stores behind the `MULTI_STORE` feature flag, each with a real provider under `src/providers/<store>/`. All extend `AlternativeStoreProvider` (`src/providers/alternative/base.ts`), which raises a typed 400 for every capability a store's API cannot do — **never a silent no-op**. A provider overrides only what it truly implements, so `src/config/store-capabilities.ts` stays honest (`wired` vs `consoleOnly`).

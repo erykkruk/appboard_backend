@@ -46,6 +46,7 @@ describe("Error utilities", () => {
 			"badRequest",
 			"encryptionFailed",
 			"forbidden",
+			"integrationRequired",
 			"invalidScreenshotDimensions",
 			"notFound",
 			"rateLimitExceeded",

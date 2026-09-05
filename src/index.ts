@@ -16,15 +16,19 @@ import { appleAdsController } from "@/modules/apple-ads";
 import { appsController } from "@/modules/apps";
 import { asoProfileController } from "@/modules/aso-profile";
 import { assetsController } from "@/modules/assets";
+import { auditController } from "@/modules/audit";
 import { authGuard } from "@/modules/auth";
 import { apiKeysController } from "@/modules/auth/api-keys.controller";
+import { bulkController } from "@/modules/bulk";
 import { demoController } from "@/modules/demo";
+import { devSessionController, devSessionEnabled } from "@/modules/dev-session";
 import { featuresController } from "@/modules/features";
 import { featureGuard } from "@/modules/features/features.guard";
 import { feedbackController } from "@/modules/feedback";
 import { groupAsoProfileController } from "@/modules/group-aso-profile";
 import { historyController } from "@/modules/history";
 import { listingsController } from "@/modules/listings";
+import { overviewController } from "@/modules/overview";
 import {
 	privacyDeclarationController,
 	privacyTemplatesController,
@@ -68,6 +72,8 @@ const app = new Elysia()
 	.all("/api/auth/*", ({ request }) => auth.handler(request))
 	// Public demo sign-in — must stay BEFORE the auth guard.
 	.use(demoController)
+	// Registered only for local development with test auth on (see module).
+	.use(devSessionEnabled ? devSessionController : new Elysia())
 	// Public feedback form (marketing site) — also pre-auth-guard.
 	.use(feedbackController)
 	// Public ASO check-up ingest (free tool) — also pre-auth-guard.
@@ -86,6 +92,9 @@ const app = new Elysia()
 			.use(reviewsController)
 			.use(publishingController)
 			.use(appsController)
+			.use(auditController)
+			.use(bulkController)
+			.use(overviewController)
 			.use(asoProfileController)
 			.use(privacyTemplatesController)
 			.use(privacyDeclarationController)

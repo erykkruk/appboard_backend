@@ -1,23 +1,51 @@
-import { and, eq } from "drizzle-orm";
-import { isAlternativeStoreType, type StoreType } from "@/config/const";
+import { and, count, eq, sql } from "drizzle-orm";
+import config from "@/config";
 import {
+	isAlternativeStoreType,
+	type Platform,
+	STORE_TYPE_LABELS,
+	type StoreType,
+} from "@/config/const";
+import {
+	PUBLIC_CONNECTION_CAPABILITIES,
 	resolveDefaultCapabilities,
 	validateCapabilitySelection,
 } from "@/config/store-capabilities";
+import { AssetsService } from "@/modules/assets/assets.service";
 import { FeaturesService } from "@/modules/features/features.service";
+import { ListingsService } from "@/modules/listings/listings.service";
+import { appstoreMeta } from "@/modules/research/appstore.client";
+import { playstoreMeta } from "@/modules/research/playstore.client";
+import { ResearchRunsService } from "@/modules/research/research.runs.service";
+import type { ResearchAppMeta } from "@/modules/research/research.types";
 import {
 	decryptCredentials,
 	encryptCredentials,
 } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
 import { validateAlternativeCredentials } from "@/providers/alternative/credentials.schema";
-import type { StoreProvider } from "@/providers/store-provider";
+import { createPublicProvider } from "@/providers/public";
+import { storeFactsFrom } from "@/providers/public/shared";
+import type { AppData, StoreProvider } from "@/providers/store-provider";
 import { db } from "@/utils/db";
 import { apps, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
+import {
+	isPublicStore,
+	publicCountryFor,
+	resolveProviderForStore,
+} from "./provider-resolver";
+import { parseStoreLink, resolveImportCountry } from "./store-url";
 
 const log = createLogger("stores-service");
+
+export interface ImportAppInput {
+	country?: string;
+	externalId?: string;
+	platform?: Platform;
+	url?: string;
+}
 
 export class StoresService {
 	static async connect(
@@ -184,21 +212,29 @@ export class StoresService {
 			.limit(1);
 
 		if (!store) buildError("notFound", { info: "Store not found" });
-		if (!store.credentials) {
+		if (!isPublicStore(store) && !store.credentials) {
 			buildError("storeConnectionFailed", {
 				info: "Store has no credentials",
 			});
 		}
 
-		const credentials = decryptCredentials(
-			store.credentials,
-			store.workspaceId,
-		);
-		const provider = createProvider(store.type as StoreType, credentials);
+		// Decrypt outside the try so a locked vault surfaces as its own 423
+		// instead of being wrapped into a sync failure.
+		let fetchApps: () => Promise<AppData[]>;
+		if (isPublicStore(store)) {
+			fetchApps = () => StoresService.fetchPublicApps(store);
+		} else {
+			const credentials = decryptCredentials(
+				store.credentials!,
+				store.workspaceId,
+			);
+			const provider = createProvider(store.type as StoreType, credentials);
+			fetchApps = () => provider.fetchApps();
+		}
 
 		let fetchedApps: Awaited<ReturnType<StoreProvider["fetchApps"]>>;
 		try {
-			fetchedApps = await provider.fetchApps();
+			fetchedApps = await fetchApps();
 		} catch (err) {
 			// Surface broken connections instead of silently staying "connected":
 			// the panel renders this status and the user sees the real reason.
@@ -240,6 +276,12 @@ export class StoresService {
 						platform: appData.platform,
 						status: appStatus,
 						storeId,
+						// Merge, never replace: rawData also holds the import country.
+						...(appData.storeFacts
+							? {
+									rawData: sql`coalesce(${apps.rawData}, '{}'::jsonb) || ${JSON.stringify({ storeFacts: appData.storeFacts })}::jsonb`,
+								}
+							: {}),
 					})
 					.where(eq(apps.id, existing[0].id));
 			} else {
@@ -252,6 +294,9 @@ export class StoresService {
 					platform: appData.platform,
 					status: appStatus,
 					storeId,
+					...(appData.storeFacts
+						? { rawData: { storeFacts: appData.storeFacts } }
+						: {}),
 				});
 			}
 		}
@@ -261,6 +306,12 @@ export class StoresService {
 			.update(stores)
 			.set({ lastSyncedAt: new Date(), status: "connected" })
 			.where(eq(stores.id, storeId));
+
+		// Apps imported from a public link re-bind to a real API connection by
+		// externalId during sync — drop public connections left with no apps.
+		if (!isPublicStore(store)) {
+			await StoresService.cleanupEmptyPublicStores(store.workspaceId);
+		}
 
 		log.info({ appCount: fetchedApps.length, storeId }, "Apps synced");
 		return { synced: fetchedApps.length };
@@ -299,19 +350,207 @@ export class StoresService {
 	}
 
 	static getProvider(store: {
+		connectionMode: string;
 		credentials: string | null;
 		type: string;
 		workspaceId: string;
 	}): StoreProvider {
-		if (!store.credentials) {
-			buildError("storeConnectionFailed", {
-				info: "Store has no credentials",
+		return resolveProviderForStore(store);
+	}
+
+	/**
+	 * Add an app to the workspace from a public store link (or a typeahead
+	 * pick), without any API credentials. Creates (or reuses) the workspace's
+	 * public connection for that store type and pulls the public listing +
+	 * screenshots right away, so the app opens with data.
+	 */
+	static async importApp(workspaceId: string, input: ImportAppInput) {
+		let parsed: ReturnType<typeof parseStoreLink>;
+		if (input.url) {
+			parsed = parseStoreLink(input.url);
+			if (!parsed) {
+				buildError("badRequest", {
+					info: "Unrecognized store link. Paste an App Store or Google Play listing URL.",
+				});
+			}
+		} else if (input.platform && input.externalId) {
+			const type = input.platform === "ios" ? "app_store" : "google_play";
+			const bare = parseStoreLink(input.externalId);
+			if (!bare || bare.type !== type) {
+				buildError("badRequest", {
+					info: "Invalid app identifier for the selected platform.",
+				});
+			}
+			parsed = { externalId: bare.externalId, type };
+		} else {
+			buildError("badRequest", {
+				info: "Provide either a store link or a platform with an app identifier.",
 			});
 		}
-		const credentials = decryptCredentials(
-			store.credentials,
-			store.workspaceId,
+
+		const country = resolveImportCountry(input.country, parsed.country);
+
+		// Validate the app exists publicly and grab metadata for the app row.
+		let meta: ResearchAppMeta;
+		if (parsed.type === "app_store") {
+			meta = await appstoreMeta(parsed.externalId, country);
+		} else {
+			try {
+				meta = await playstoreMeta(parsed.externalId, country);
+			} catch {
+				buildError("notFound", {
+					info: "App not found on Google Play for this country.",
+				});
+			}
+		}
+
+		// Already in the workspace (under any connection) → just point at it.
+		const [existing] = await db
+			.select({ id: apps.id, storeId: apps.storeId })
+			.from(apps)
+			.innerJoin(stores, eq(apps.storeId, stores.id))
+			.where(
+				and(
+					eq(apps.externalId, parsed.externalId),
+					eq(stores.workspaceId, workspaceId),
+				),
+			)
+			.limit(1);
+		if (existing) {
+			return { appId: existing.id, created: false, storeId: existing.storeId };
+		}
+
+		let [publicStore] = await db
+			.select()
+			.from(stores)
+			.where(
+				and(
+					eq(stores.workspaceId, workspaceId),
+					eq(stores.type, parsed.type),
+					eq(stores.connectionMode, "public"),
+				),
+			)
+			.limit(1);
+		if (!publicStore) {
+			[publicStore] = await db
+				.insert(stores)
+				.values({
+					// Store the honest read-only set. Leaving this NULL would resolve
+					// to "everything enabled" and report publishing/purchases the
+					// connection cannot do. Older public rows stay NULL on purpose -
+					// `resolveStoredCapabilities` still tolerates them.
+					capabilities: PUBLIC_CONNECTION_CAPABILITIES,
+					connectionMode: "public",
+					name: `${STORE_TYPE_LABELS[parsed.type]} (public)`,
+					status: "connected",
+					type: parsed.type,
+					workspaceId,
+				})
+				.returning();
+		}
+
+		const [app] = await db
+			.insert(apps)
+			.values({
+				bundleId: meta.bundleId ?? parsed.externalId,
+				externalId: parsed.externalId,
+				iconUrl: meta.icon,
+				lastSyncedAt: new Date(),
+				name: meta.title,
+				platform: parsed.type === "app_store" ? "ios" : "android",
+				rawData: { publicCountry: country, storeFacts: storeFactsFrom(meta) },
+				status: "active",
+				storeId: publicStore.id,
+			})
+			.returning();
+
+		// Best effort — a scrape hiccup must not fail the import; the panel can
+		// re-sync listings/assets on demand.
+		try {
+			await ListingsService.syncFromStore(app.id);
+			await AssetsService.syncFromStore(app.id);
+		} catch (err) {
+			log.warn({ appId: app.id, err }, "Initial public sync incomplete");
+		}
+
+		// Deep research kicks off in the background: all public reviews, store
+		// metadata (pricing/IAP included) and main-keyword positions land in
+		// research history moments after the app appears. Skipped under test —
+		// it would outlive the stubbed fetch window and hit real stores.
+		if (config.NODE_ENV !== "test") {
+			void ResearchRunsService.runForApp(app.id, workspaceId, {
+				autoKeywords: true,
+				country,
+				deep: true,
+				kind: "scheduled",
+			}).catch((err) => {
+				log.warn({ appId: app.id, err }, "Post-import research failed");
+			});
+		}
+
+		await db
+			.update(stores)
+			.set({ lastSyncedAt: new Date() })
+			.where(eq(stores.id, publicStore.id));
+
+		log.info(
+			{ appId: app.id, country, externalId: parsed.externalId, workspaceId },
+			"App imported from public link",
 		);
-		return createProvider(store.type as StoreType, credentials);
+		return { appId: app.id, created: true, storeId: publicStore.id };
+	}
+
+	/**
+	 * The apps table is the registry for a public connection — refresh each
+	 * app's public metadata, grouped by the country it was imported for.
+	 */
+	private static async fetchPublicApps(store: {
+		id: string;
+		type: string;
+	}): Promise<AppData[]> {
+		const rows = await db
+			.select({ externalId: apps.externalId, rawData: apps.rawData })
+			.from(apps)
+			.where(eq(apps.storeId, store.id));
+
+		const byCountry = new Map<string, string[]>();
+		for (const row of rows) {
+			const country = publicCountryFor(row);
+			const ids = byCountry.get(country) ?? [];
+			ids.push(row.externalId);
+			byCountry.set(country, ids);
+		}
+
+		const fetched: AppData[] = [];
+		for (const [country, externalIds] of byCountry) {
+			const provider = createPublicProvider(store.type as StoreType, {
+				country,
+				externalIds,
+			});
+			fetched.push(...(await provider.fetchApps()));
+		}
+		return fetched;
+	}
+
+	/** Drop public connections whose apps were re-bound to a real API store. */
+	private static async cleanupEmptyPublicStores(workspaceId: string) {
+		const rows = await db
+			.select({ appCount: count(apps.id), id: stores.id })
+			.from(stores)
+			.leftJoin(apps, eq(apps.storeId, stores.id))
+			.where(
+				and(
+					eq(stores.workspaceId, workspaceId),
+					eq(stores.connectionMode, "public"),
+				),
+			)
+			.groupBy(stores.id);
+
+		for (const row of rows) {
+			if (row.appCount === 0) {
+				await db.delete(stores).where(eq(stores.id, row.id));
+				log.info({ storeId: row.id }, "Empty public connection removed");
+			}
+		}
 	}
 }
