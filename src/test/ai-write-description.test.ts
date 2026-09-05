@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
+import config from "@/config";
 import { aiController } from "@/modules/ai";
 import { SettingsService } from "@/modules/settings/settings.service";
 import { errorHandler } from "@/utils/errors/errorHandler";
@@ -125,20 +126,29 @@ describe("POST /api/ai/generate-description (write with AI)", () => {
 	});
 
 	it("does not let workspace B use workspace A's key", async () => {
-		let called = false;
-		globalThis.fetch = (async () => {
-			called = true;
-			return new Response("{}", { status: 200 });
-		}) as unknown as typeof fetch;
+		// The instance-wide env key (a valid fallback on self-hosted installs)
+		// would mask the guarantee under test: B must never reach A's key, and
+		// with no key of its own and no instance key it must get a clean 400.
+		const instanceKey = config.OPENROUTER_API_KEY;
+		config.OPENROUTER_API_KEY = undefined;
+		try {
+			let called = false;
+			globalThis.fetch = (async () => {
+				called = true;
+				return new Response("{}", { status: 200 });
+			}) as unknown as typeof fetch;
 
-		const response = await post(
-			{ appName: "Pomo", keywords: ["focus timer"], prompt: BRIEF },
-			authRequestB,
-		);
+			const response = await post(
+				{ appName: "Pomo", keywords: ["focus timer"], prompt: BRIEF },
+				authRequestB,
+			);
 
-		expect(response.status).toBe(400);
-		const body = (await response.json()) as { code: string };
-		expect(body.code).toBe("BAD_REQUEST");
-		expect(called).toBe(false);
+			expect(response.status).toBe(400);
+			const body = (await response.json()) as { code: string };
+			expect(body.code).toBe("BAD_REQUEST");
+			expect(called).toBe(false);
+		} finally {
+			config.OPENROUTER_API_KEY = instanceKey;
+		}
 	});
 });

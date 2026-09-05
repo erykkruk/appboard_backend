@@ -19,6 +19,7 @@ import {
 import { langFor } from "@/modules/research/playstore.client";
 import { ResearchService } from "@/modules/research/research.service";
 import type { KeywordScore } from "@/modules/research/scoring-types";
+import { TrackingService } from "@/modules/tracking/tracking.service";
 import { db } from "@/utils/db";
 import { appAudits, apps, assets, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -40,6 +41,8 @@ const MAX_COMPETITOR_KEYWORDS = 6;
 const FRESH_FOR_MS = 12 * 60 * 60 * 1000;
 /** A run that has not finished in this long is treated as dead, not running. */
 const RUN_TIMEOUT_MS = 5 * 60 * 1000;
+/** Terms seeded into nightly tracking after the first audit of a country. */
+const AUTO_TRACK_LIMIT = 15;
 
 interface AppRow {
 	externalId: string;
@@ -188,6 +191,38 @@ export class AuditService {
 		};
 	}
 
+	/**
+	 * First audit for a country -> track its recommendable terms plus anything
+	 * the app already ranks for, and switch nightly checks on. Only when the
+	 * app tracks nothing yet: a hand-curated list is never overwritten.
+	 */
+	private static async autoTrack(
+		appId: string,
+		workspaceId: string,
+		country: string,
+		report: AppAuditReport,
+	): Promise<void> {
+		const existing = await TrackingService.getKeywords(appId);
+		if (
+			existing.some((k) => k.country.toLowerCase() === country.toLowerCase())
+		) {
+			return;
+		}
+		const allowed = new Set(report.recommendable.map((k) => k.toLowerCase()));
+		const picked = report.keywords
+			.filter((k) => !k.error)
+			.filter((k) => allowed.has(k.keyword.toLowerCase()) || k.appRank != null)
+			.sort((a, b) => b.opportunity - a.opportunity)
+			.map((k) => k.keyword)
+			.slice(0, AUTO_TRACK_LIMIT);
+		if (picked.length === 0) return;
+		await TrackingService.addKeywords(appId, country.toUpperCase(), picked);
+		await TrackingService.updateConfig(appId, workspaceId, {
+			rankTrackingEnabled: true,
+		});
+		log.info({ appId, count: picked.length, country }, "Auto-tracking seeded");
+	}
+
 	private static async resolveCountry(
 		appId: string,
 		override?: string,
@@ -261,6 +296,11 @@ export class AuditService {
 					},
 					target: [appAudits.appId, appAudits.country],
 				});
+			// Nightly positions should start without anyone clicking "track":
+			// the audit already knows which terms matter, so seed them once.
+			await AuditService.autoTrack(appId, workspaceId, country, report).catch(
+				(err) => log.warn({ appId, err }, "Auto-tracking after audit failed"),
+			);
 		} catch (error) {
 			log.error({ appId, country, err: error }, "App audit failed");
 			// Keep whatever report is already stored: a failed refresh must not

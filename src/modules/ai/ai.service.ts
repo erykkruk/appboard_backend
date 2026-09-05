@@ -599,16 +599,46 @@ export class AIService {
 		return model || DEFAULT_MODEL;
 	}
 
+	/**
+	 * Workspace key first, then the instance-wide env key. A self-hosted
+	 * install that sets OPENROUTER_API_KEY once should get AI everywhere
+	 * without every workspace pasting the same key into Settings.
+	 */
+	static async resolveApiKey(workspaceId: string): Promise<string | null> {
+		const own = await SettingsService.getRaw(workspaceId, "OPENROUTER_API_KEY");
+		if (own) return own;
+		return config.OPENROUTER_API_KEY || null;
+	}
+
+	/**
+	 * Last OpenRouter outcome per workspace, in memory. A key can be present
+	 * and still be rejected (expired, revoked, typo) - without this the panel
+	 * would say "AI is on" and then fail on every click.
+	 */
+	private static readonly lastErrors = new Map<string, string | null>();
+
+	/** What the panel needs to say "AI is on" or "add a key and you get...". */
+	static async status(workspaceId: string): Promise<{
+		configured: boolean;
+		source: "workspace" | "instance" | null;
+		lastError: string | null;
+	}> {
+		const lastError = AIService.lastErrors.get(workspaceId) ?? null;
+		const own = await SettingsService.getRaw(workspaceId, "OPENROUTER_API_KEY");
+		if (own) return { configured: true, lastError, source: "workspace" };
+		if (config.OPENROUTER_API_KEY) {
+			return { configured: true, lastError, source: "instance" };
+		}
+		return { configured: false, lastError: null, source: null };
+	}
+
 	private static async callOpenRouter(
 		workspaceId: string,
 		systemPrompt: string,
 		userPrompt: string,
 		purpose: AiPurpose = "generate",
 	): Promise<{ content: string; model: string }> {
-		const apiKey = await SettingsService.getRaw(
-			workspaceId,
-			"OPENROUTER_API_KEY",
-		);
+		const apiKey = await AIService.resolveApiKey(workspaceId);
 		if (!apiKey) {
 			buildError("badRequest", {
 				info: "OpenRouter API key not configured. Go to Settings to add it.",
@@ -635,6 +665,12 @@ export class AIService {
 
 		if (!response.ok) {
 			const errorBody = await response.text().catch(() => "Unknown error");
+			AIService.lastErrors.set(
+				workspaceId,
+				response.status === 401
+					? "OpenRouter rejected the key"
+					: `OpenRouter error ${response.status}`,
+			);
 			log.error({ errorBody, status: response.status }, "OpenRouter API error");
 
 			if (response.status === 402) {
@@ -676,6 +712,7 @@ export class AIService {
 			});
 		}
 
+		AIService.lastErrors.set(workspaceId, null);
 		return { content: content.trim(), model: data.model ?? DEFAULT_MODEL };
 	}
 
