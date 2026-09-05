@@ -8,6 +8,7 @@ import { ResearchService } from "@/modules/research/research.service";
 import type { ResearchRunReport } from "@/modules/research/research.types";
 import { createLogger } from "@/utils/logger";
 import { sendMail } from "@/utils/mailer";
+import { DraftReminderService } from "./draft-reminder.service";
 import { ReportService } from "./report.service";
 import { TrackingService } from "./tracking.service";
 import {
@@ -30,6 +31,8 @@ const SCORE_REFRESH_HOUR = 1;
 // Apple Ads dataset sync runs daily at 02:00; it no-ops for countries whose
 // newest completed week is already active, so it only downloads on Mondays.
 const APPLE_SYNC_HOUR = 2;
+/** Morning, local time: a nudge about a draft nobody published. */
+const DRAFT_REMINDER_HOUR = 9;
 const MIN_SCORE_REFRESH_GAP_MS = 20 * 60 * 60 * 1000;
 const SCORE_KEYWORDS_PER_CALL = 10;
 const FREQUENCY_DAYS: Record<AutoResearchFrequency, number> = {
@@ -250,6 +253,11 @@ async function runTick(now: Date, tz: string) {
 		}
 
 		const { hour, minute } = localHourMinute(now, tz);
+		if (hour === DRAFT_REMINDER_HOUR && minute === 0) {
+			await DraftReminderService.runScheduled(now).catch((err) => {
+				log.error({ err }, "Draft reminders failed");
+			});
+		}
 		if (hour === APPLE_SYNC_HOUR && minute === 0) {
 			await AppleAdsService.runScheduledSync().catch((err) => {
 				log.error({ err }, "Apple Ads scheduled sync failed");

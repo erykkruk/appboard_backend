@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { APP_STORE_CATEGORIES } from "@/config/const";
 import { AIService } from "@/modules/ai/ai.service";
 import { resolveProviderForApp } from "@/modules/stores/provider-resolver";
+import { AppEventsService } from "@/modules/tracking/app-events.service";
 import { db } from "@/utils/db";
 import { apps, listingHistory, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -545,6 +546,18 @@ export class ListingsService {
 				}
 			}
 			await provider.publishListings(app.externalId);
+		}
+
+		// One event for the whole publish. Field-level detail already lands in
+		// listing_history; this is the marker that says "a release happened".
+		if (batchUpdates.length > 0) {
+			const languages = batchUpdates.map((b) => b.draft.language);
+			await AppEventsService.record(
+				appId,
+				"listing_published",
+				`Listing published (${languages.join(", ")})`,
+				{ languages },
+			);
 		}
 
 		// Record history + update remote + mark clean

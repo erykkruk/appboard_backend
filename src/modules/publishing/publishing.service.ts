@@ -6,6 +6,7 @@ import { AgeRatingService } from "@/modules/age-rating/age-rating.service";
 import { AssetsService } from "@/modules/assets/assets.service";
 import { ListingsService } from "@/modules/listings/listings.service";
 import { PrivacyDeclarationService } from "@/modules/privacy-declaration/privacy-declaration.service";
+import { AppEventsService } from "@/modules/tracking/app-events.service";
 import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
 import {
@@ -3773,6 +3774,13 @@ export class PublishingService {
 			}
 		}
 
+		await AppEventsService.record(
+			appId,
+			"version_created",
+			`Version ${versionString} created`,
+			{ versionString },
+		);
+
 		return {
 			copiedLanguages,
 			state: result.state,
@@ -3875,6 +3883,12 @@ export class PublishingService {
 		log.info(
 			{ appId, submissionId: submission.id, versionId: version.id },
 			"Submitted app for review",
+		);
+
+		await AppEventsService.record(
+			appId,
+			"version_submitted",
+			"Submitted for review",
 		);
 
 		return { submitted: true };
