@@ -21,6 +21,7 @@ import { authGuard } from "@/modules/auth";
 import { apiKeysController } from "@/modules/auth/api-keys.controller";
 import { bulkController } from "@/modules/bulk";
 import { demoController } from "@/modules/demo";
+import { devSessionController, devSessionEnabled } from "@/modules/dev-session";
 import { featuresController } from "@/modules/features";
 import { featureGuard } from "@/modules/features/features.guard";
 import { feedbackController } from "@/modules/feedback";
@@ -71,6 +72,8 @@ const app = new Elysia()
 	.all("/api/auth/*", ({ request }) => auth.handler(request))
 	// Public demo sign-in — must stay BEFORE the auth guard.
 	.use(demoController)
+	// Registered only for local development with test auth on (see module).
+	.use(devSessionEnabled ? devSessionController : new Elysia())
 	// Public feedback form (marketing site) — also pre-auth-guard.
 	.use(feedbackController)
 	// Public ASO check-up ingest (free tool) — also pre-auth-guard.
