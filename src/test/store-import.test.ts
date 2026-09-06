@@ -333,6 +333,17 @@ describe("POST /api/stores/import", () => {
 		expect(data.capabilities.listings.fields).toContain("title");
 	});
 
+	it("pulls public reviews at import, before any manual sync", async () => {
+		// The Reviews screen reads the reviews table only; a fresh import must
+		// not open on "No reviews synced yet" when the store has some.
+		const list = await app.handle(
+			authRequest(`http://localhost/api/apps/${importedAppId}/reviews`),
+		);
+		expect(list.status).toBe(200);
+		const reviewsData = await list.json();
+		expect(reviewsData.reviews.length).toBeGreaterThan(0);
+	});
+
 	it("syncs public reviews from the RSS feed", async () => {
 		stubItunes();
 		const res = await app.handle(

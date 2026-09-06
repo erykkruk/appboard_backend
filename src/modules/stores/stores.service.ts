@@ -18,6 +18,7 @@ import { appstoreMeta } from "@/modules/research/appstore.client";
 import { playstoreMeta } from "@/modules/research/playstore.client";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import type { ResearchAppMeta } from "@/modules/research/research.types";
+import { ReviewsService } from "@/modules/reviews/reviews.service";
 import {
 	decryptCredentials,
 	encryptCredentials,
@@ -472,6 +473,15 @@ export class StoresService {
 		} catch (err) {
 			log.warn({ appId: app.id, err }, "Initial public sync incomplete");
 		}
+
+		// Reviews are a separate table from research history and the Reviews
+		// screen reads only that table, so pull them now instead of waiting for
+		// the nightly sync. Detached in production (up to eight storefronts);
+		// awaited under test so the stubbed fetch covers it.
+		const reviewSync = ReviewsService.syncFromStore(app.id).catch((err) => {
+			log.warn({ appId: app.id, err }, "Post-import review sync failed");
+		});
+		if (config.NODE_ENV === "test") await reviewSync;
 
 		// Deep research kicks off in the background: all public reviews, store
 		// metadata (pricing/IAP included) and main-keyword positions land in
