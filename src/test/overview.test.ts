@@ -270,3 +270,34 @@ describe("workspace overview", () => {
 		});
 	});
 });
+
+describe("overview: app that is in no store yet", () => {
+	const localStoreIds: string[] = [];
+
+	afterAll(async () => {
+		await cleanupStores(localStoreIds);
+	});
+
+	it("is reported as local, not as a public link", async () => {
+		const storeId = await seedPublicStore("app_store");
+		localStoreIds.push(storeId);
+		const [row] = await db
+			.insert(apps)
+			.values({
+				bundleId: "local",
+				externalId: "local-overview-test",
+				name: "Not Released Yet",
+				platform: "ios",
+				rawData: { notInStore: true },
+				status: "draft",
+				storeId,
+			})
+			.returning();
+
+		const res = await app.handle(authRequest(URL));
+		const body = (await res.json()) as OverviewResponse;
+		const found = body.apps.find((a) => a.id === row.id);
+		expect(found?.connectionMode).toBe("local");
+		expect(found?.lastSyncedAt).toBeNull();
+	});
+});

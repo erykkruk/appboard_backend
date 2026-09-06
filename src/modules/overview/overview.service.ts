@@ -18,7 +18,8 @@ const AVG_POSITION_DECIMALS = 1;
 export interface OverviewAppRow {
 	auditScore: number | null;
 	avgPosition: number | null;
-	connectionMode: StoreConnectionMode;
+	/** "local" = created here, in no store yet; nothing to sync or rate. */
+	connectionMode: StoreConnectionMode | "local";
 	draftScore: number | null;
 	iconUrl: string | null;
 	id: string;
@@ -50,7 +51,11 @@ export interface OverviewResponse {
 	totals: OverviewTotals;
 }
 
-type AppRawData = { publicCountry?: string; storeFacts?: StoreFacts } | null;
+type AppRawData = {
+	notInStore?: boolean;
+	publicCountry?: string;
+	storeFacts?: StoreFacts;
+} | null;
 
 interface ReviewStats {
 	total: number;
@@ -121,14 +126,17 @@ export class OverviewService {
 			]);
 
 		const rows: OverviewAppRow[] = appRows.map((row) => {
-			const facts = (row.rawData as AppRawData)?.storeFacts;
+			const raw = row.rawData as AppRawData;
+			const facts = raw?.storeFacts;
 			const reviewsForApp = reviewStats.get(row.id);
 			const audit = auditScores.get(row.id);
 			const ranks = rankStats.get(row.id);
 			return {
 				auditScore: audit?.storeScore ?? null,
 				avgPosition: ranks?.avgPosition ?? null,
-				connectionMode: row.connectionMode as StoreConnectionMode,
+				connectionMode: raw?.notInStore
+					? "local"
+					: (row.connectionMode as StoreConnectionMode),
 				draftScore: audit?.draftScore ?? null,
 				iconUrl: row.iconUrl ?? null,
 				id: row.id,
