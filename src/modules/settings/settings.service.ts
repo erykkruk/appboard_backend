@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { AiErrors } from "@/modules/ai/ai-errors";
 import { decrypt, encrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
 import { settings } from "@/utils/db/schema";
@@ -80,6 +81,10 @@ export class SettingsService {
 				workspaceId,
 			});
 		}
+
+		// A fresh key deserves a clean slate: the panel should not keep saying
+		// the previous one was rejected until the next AI call happens.
+		if (k === "OPENROUTER_API_KEY") AiErrors.clear(workspaceId);
 
 		return { key: k, success: true };
 	}

@@ -6,6 +6,7 @@ import {
 	getSettingKey,
 	type PromptMode,
 } from "@/modules/ai/ai.prompts";
+import { AiErrors } from "@/modules/ai/ai-errors";
 import {
 	getDefaultPurchasePrompt,
 	getPurchaseSettingKey,
@@ -610,20 +611,13 @@ export class AIService {
 		return config.OPENROUTER_API_KEY || null;
 	}
 
-	/**
-	 * Last OpenRouter outcome per workspace, in memory. A key can be present
-	 * and still be rejected (expired, revoked, typo) - without this the panel
-	 * would say "AI is on" and then fail on every click.
-	 */
-	private static readonly lastErrors = new Map<string, string | null>();
-
 	/** What the panel needs to say "AI is on" or "add a key and you get...". */
 	static async status(workspaceId: string): Promise<{
 		configured: boolean;
 		source: "workspace" | "instance" | null;
 		lastError: string | null;
 	}> {
-		const lastError = AIService.lastErrors.get(workspaceId) ?? null;
+		const lastError = AiErrors.get(workspaceId);
 		const own = await SettingsService.getRaw(workspaceId, "OPENROUTER_API_KEY");
 		if (own) return { configured: true, lastError, source: "workspace" };
 		if (config.OPENROUTER_API_KEY) {
@@ -665,7 +659,7 @@ export class AIService {
 
 		if (!response.ok) {
 			const errorBody = await response.text().catch(() => "Unknown error");
-			AIService.lastErrors.set(
+			AiErrors.set(
 				workspaceId,
 				response.status === 401
 					? "OpenRouter rejected the key"
@@ -712,7 +706,7 @@ export class AIService {
 			});
 		}
 
-		AIService.lastErrors.set(workspaceId, null);
+		AiErrors.set(workspaceId, null);
 		return { content: content.trim(), model: data.model ?? DEFAULT_MODEL };
 	}
 
