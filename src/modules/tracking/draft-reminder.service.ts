@@ -5,6 +5,7 @@ import {
 	apps,
 	appTrackingConfig,
 	listings,
+	stores,
 } from "@/utils/db/schema";
 import { createLogger } from "@/utils/logger";
 import { type MailMessage, sendMail } from "@/utils/mailer";
@@ -21,6 +22,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export interface DueDraftReminder {
 	appId: string;
 	appName: string;
+	/** False for link-imported and local apps: the text goes to the store by hand. */
+	canPublish: boolean;
 	email: string;
 	languages: string[];
 	oldestDraftAt: Date;
@@ -42,12 +45,14 @@ export class DraftReminderService {
 			.select({
 				appId: apps.id,
 				appName: apps.name,
+				connectionMode: stores.connectionMode,
 				email: appTrackingConfig.notifyEmail,
 				language: listings.language,
 				updatedAt: listings.updatedAt,
 			})
 			.from(listings)
 			.innerJoin(apps, eq(listings.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
 			.innerJoin(appTrackingConfig, eq(appTrackingConfig.appId, apps.id))
 			.where(
 				and(
@@ -76,6 +81,7 @@ export class DraftReminderService {
 			const entry = byApp.get(row.appId) ?? {
 				appId: row.appId,
 				appName: row.appName,
+				canPublish: row.connectionMode === "api",
 				email: row.email,
 				languages: [],
 				oldestDraftAt: row.updatedAt,
@@ -97,11 +103,14 @@ export class DraftReminderService {
 			Math.floor((now.getTime() - due.oldestDraftAt.getTime()) / DAY_MS),
 		);
 		const langs = due.languages.join(", ");
+		const nextStep = due.canPublish
+			? "Nothing reaches the store until you publish it. Open AppBoard, review the diff and push it - or discard it."
+			: "Nothing reaches the store until you paste it there. Open Publish in AppBoard, copy the changes into the store console, then press 'I pasted it into the store' - or discard the draft.";
 		const text = [
 			`${due.appName} has an unpublished draft (${langs}) that has been waiting for ${days} days.`,
-			"Nothing reaches the store until you publish it. Open AppBoard, review the diff and push it - or discard it.",
+			nextStep,
 		].join("\n\n");
-		const html = `<p><strong>${escapeHtml(due.appName)}</strong> has an unpublished draft (${escapeHtml(langs)}) that has been waiting for ${days} days.</p><p>Nothing reaches the store until you publish it. Open AppBoard, review the diff and push it - or discard it.</p>`;
+		const html = `<p><strong>${escapeHtml(due.appName)}</strong> has an unpublished draft (${escapeHtml(langs)}) that has been waiting for ${days} days.</p><p>${escapeHtml(nextStep)}</p>`;
 		return {
 			html,
 			subject: `AppBoard - a draft for ${due.appName} is still unpublished`,

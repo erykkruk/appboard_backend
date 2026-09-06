@@ -80,18 +80,28 @@ describe("draft reminders", () => {
 	});
 
 	it("writes a plain, honest message", () => {
-		const msg = DraftReminderService.buildMessage(
-			{
-				appId: "x",
-				appName: "Drafty",
-				email: "owner@example.com",
-				languages: ["en-US", "pl"],
-				oldestDraftAt: new Date(Date.now() - 4 * DAY),
-			},
-			new Date(),
-		);
+		const due = {
+			appId: "x",
+			appName: "Drafty",
+			canPublish: true,
+			email: "owner@example.com",
+			languages: ["en-US", "pl"],
+			oldestDraftAt: new Date(Date.now() - 4 * DAY),
+		};
+		const msg = DraftReminderService.buildMessage(due, new Date());
 		expect(msg.subject).toContain("Drafty");
 		expect(msg.text).toContain("4 days");
 		expect(msg.text).toContain("en-US, pl");
+		expect(msg.text).toContain("push it");
+
+		// No store API: the draft leaves by copy and paste, and the email
+		// must say so instead of promising a push that would 403.
+		const byHand = DraftReminderService.buildMessage(
+			{ ...due, canPublish: false },
+			new Date(),
+		);
+		expect(byHand.text).toContain("I pasted it into the store");
+		expect(byHand.text).not.toContain("push it");
+		expect(byHand.html).toContain("I pasted it into the store");
 	});
 });

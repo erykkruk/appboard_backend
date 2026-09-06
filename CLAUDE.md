@@ -182,7 +182,7 @@ Apps can be added from a public store link WITHOUT API credentials - integration
 ## App events + reminders (`src/modules/tracking/`)
 
 - `app_events` (`AppEventsService.record`, never throws) marks version created/submitted and listing published; `GET /apps/:id/tracking/history` merges them with `listing_history` into chart annotations (`CHART_EVENT_TYPES` only - reminder events are housekeeping).
-- `DraftReminderService` (scheduler, 09:00 local): a dirty draft older than 3 days + `notifyEmail` on the tracking config -> one email per app per 7 days, cooldown tracked by the `draft_reminder_sent` event.
+- `DraftReminderService` (scheduler, 09:00 local): a dirty draft older than 3 days + `notifyEmail` on the tracking config -> one email per app per 7 days, cooldown tracked by the `draft_reminder_sent` event. `canPublish` (store `connectionMode === "api"`) picks the copy: API stores are told to push, everyone else to paste into the store console and press "I pasted it into the store" (`POST /listings/mark-published`).
 
 ## Alternative Stores (MULTI_STORE)
 
