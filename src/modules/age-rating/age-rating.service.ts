@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
-import type { StoreType } from "@/config/const";
-import { decryptCredentials } from "@/modules/vault/credentials";
-import { createProvider } from "@/providers";
+import {
+	isPublicStore,
+	resolveProviderForStore,
+} from "@/modules/stores/provider-resolver";
 import { db } from "@/utils/db";
 import { appAgeRatings, apps, stores } from "@/utils/db/schema";
+import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import { computeAppleRating, getAgeRatingPreset } from "./age-rating.templates";
 
@@ -110,16 +112,16 @@ export class AgeRatingService {
 		const app = result[0].app;
 		const store = result[0].store;
 
-		if (!store.credentials) {
-			log.warn({ appId }, "No store credentials for age rating push");
-			return;
+		// A credential-less connection cannot push anything to the store. Saying
+		// "published" here would be a lie, so raise the same typed 403 every other
+		// write on a public connection raises and let the panel offer the upgrade.
+		if (isPublicStore(store) || !store.credentials) {
+			buildError("integrationRequired", {
+				info: "This app has no store API connection, so the age rating cannot be published. It stays saved in AppBoard - connect your store API to push it.",
+			});
 		}
 
-		const credentials = decryptCredentials(
-			store.credentials,
-			store.workspaceId,
-		);
-		const provider = createProvider(store.type as StoreType, credentials);
+		const provider = resolveProviderForStore(store);
 
 		await provider.updateAgeRating(app.externalId, appleQuestionnaire);
 		log.info({ appId }, "Age rating pushed to store");

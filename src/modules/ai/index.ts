@@ -17,6 +17,13 @@ import { AIService } from "./ai.service";
 
 export const aiController = new Elysia({ prefix: "/ai" })
 	.use(authGuard)
+	.get("/status", async ({ workspaceId }) => AIService.status(workspaceId!), {
+		detail: {
+			description:
+				"Whether AI features are available for this workspace (own OpenRouter key or the instance key) - lets the panel show what a key unlocks instead of failing on click.",
+			tags: ["AI"],
+		},
+	})
 	.post(
 		"/generate-listing-field",
 		async ({ body, workspaceId }) => {

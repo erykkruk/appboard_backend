@@ -196,11 +196,13 @@ const APP_STORE_CAPABILITIES: StoreCapabilityDefinition[] = [
 		consoleRoles: [APP_MANAGER],
 		core: true,
 		dependsOn: [],
-		description: "Upload and manage screenshots and app previews.",
+		// App previews (video) are not wired through the API yet - only
+		// screenshots are read and uploaded, so the label must not promise them.
+		description: "Upload and manage screenshots.",
 		gateable: false,
 		gcpApis: [],
 		id: "assets",
-		name: "Screenshots & previews",
+		name: "Screenshots",
 		storeType: "app_store",
 		wired: true,
 	},
@@ -542,6 +544,18 @@ export function resolveDefaultCapabilities(
 ): StoreCapabilityId[] {
 	return getSelectableCapabilityIds(storeType);
 }
+
+/**
+ * What a credential-less (public link) connection can actually do: read the
+ * store listing, its screenshots and its reviews. Publishing, purchases and the
+ * metadata pushes all need an API key, so they must never be reported as
+ * available for such a connection.
+ */
+export const PUBLIC_CONNECTION_CAPABILITIES: StoreCapabilityId[] = [
+	"listings",
+	"assets",
+	"reviews",
+];
 
 /**
  * Normalize a user-provided capability selection for a store type:

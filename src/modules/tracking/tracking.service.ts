@@ -14,6 +14,7 @@ import {
 } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
+import { AppEventsService, CHART_EVENT_TYPES } from "./app-events.service";
 import {
 	AUTO_RESEARCH_FREQUENCIES,
 	type AutoResearchFrequency,
@@ -305,15 +306,39 @@ export class TrackingService {
 			.where(and(...conditions))
 			.orderBy(asc(rankSnapshots.createdAt));
 
-		// Listing changes overlaid on the chart as vertical annotations.
+		// Everything that could have moved these ranks, overlaid on the chart:
+		// listing field edits from history, plus version and publish events.
+		// Without the second source a new release leaves no mark at all, and a
+		// jump in the graph looks like it came from nowhere.
 		const history = await HistoryService.getHistory(appId);
-		const annotations = history.map((h) => ({
-			date: h.publishedAt ?? h.createdAt,
-			field: h.field,
-			language: h.language,
-			newValue: h.newValue,
-			oldValue: h.oldValue,
-		}));
+		const events = await AppEventsService.list(appId);
+		const annotations = [
+			...history.map((h) => ({
+				date: h.publishedAt ?? h.createdAt,
+				field: h.field,
+				label: `${h.field} changed`,
+				language: h.language,
+				newValue: h.newValue,
+				oldValue: h.oldValue,
+				type: "listing_field" as const,
+			})),
+			// Housekeeping events (reminder emails) are recorded for their own
+			// cooldown, not because they moved a ranking - keep them off the chart.
+			...events
+				.filter((e) => CHART_EVENT_TYPES.has(e.type))
+				.map((e) => ({
+					date: e.occurredAt,
+					field: e.type,
+					label: e.label,
+					language: "",
+					newValue: null,
+					oldValue: null,
+					type: e.type,
+				})),
+		].sort(
+			(a, b) =>
+				new Date(a.date ?? 0).getTime() - new Date(b.date ?? 0).getTime(),
+		);
 
 		return { annotations, snapshots };
 	}

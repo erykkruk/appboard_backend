@@ -11,7 +11,15 @@ import {
 } from "@/modules/age-rating/age-rating.templates";
 import { appsController } from "@/modules/apps";
 import { storesController } from "@/modules/stores";
-import { authGuard, authRequest, authRequestB, cleanupStores } from "./setup";
+import { db } from "@/utils/db";
+import { apps as appsTable, stores as storesTable } from "@/utils/db/schema";
+import {
+	authGuard,
+	authRequest,
+	authRequestB,
+	cleanupStores,
+	getTestWorkspaceId,
+} from "./setup";
 
 describe("Age Rating module", () => {
 	const app = new Elysia()
@@ -26,9 +34,12 @@ describe("Age Rating module", () => {
 
 	let storeId: string;
 	let appId: string;
+	let publicStoreId: string;
+	let publicAppId: string;
 
 	afterAll(async () => {
-		if (storeId) await cleanupStores([storeId]);
+		const ids = [storeId, publicStoreId].filter(Boolean);
+		if (ids.length > 0) await cleanupStores(ids);
 	});
 
 	it("sets up mock store with apps", async () => {
@@ -220,6 +231,53 @@ describe("Age Rating module", () => {
 		expect(res.status).toBe(200);
 		const response = await res.json();
 		expect(response.success).toBe(true);
+	});
+
+	it("publish on a public (link) connection fails with 403 INTEGRATION_REQUIRED", async () => {
+		const [publicStore] = await db
+			.insert(storesTable)
+			.values({
+				connectionMode: "public",
+				name: "Public Age Rating Store",
+				status: "connected",
+				type: "app_store",
+				workspaceId: getTestWorkspaceId(),
+			})
+			.returning();
+		publicStoreId = publicStore.id;
+
+		const [publicApp] = await db
+			.insert(appsTable)
+			.values({
+				bundleId: "com.example.public",
+				externalId: "1234567890",
+				name: "Public App",
+				platform: "ios",
+				storeId: publicStore.id,
+			})
+			.returning();
+		publicAppId = publicApp.id;
+
+		await app.handle(
+			authRequest(`http://localhost/api/apps/${publicAppId}/age-rating`, {
+				body: JSON.stringify({ presetId: "everyone" }),
+				headers: { "Content-Type": "application/json" },
+				method: "PUT",
+			}),
+		);
+
+		// A credential-less connection cannot push to the store; reporting success
+		// here would tell the user the rating went live when nothing was sent.
+		const res = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${publicAppId}/age-rating/publish`,
+				{ method: "POST" },
+			),
+		);
+
+		expect(res.status).toBe(403);
+		const body = await res.json();
+		expect(body.code).toBe("INTEGRATION_REQUIRED");
 	});
 
 	it("POST /api/apps/:appId/age-rating/publish returns 404 when no rating saved", async () => {

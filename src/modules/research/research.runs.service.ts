@@ -15,6 +15,55 @@ import {
 const log = createLogger("research-runs");
 
 const KEYWORD_SAMPLE_LIMIT = 15;
+const AUTO_KEYWORD_LIMIT = 8;
+
+const KEYWORD_STOPWORDS = new Set([
+	"and",
+	"app",
+	"apps",
+	"best",
+	"for",
+	"free",
+	"new",
+	"pro",
+	"the",
+	"with",
+	"your",
+]);
+
+/**
+ * Deterministic "main keyword" candidates from public metadata — title
+ * unigrams/bigrams plus the primary genre. Feeds the automatic post-import
+ * research run, so it must work without an AI key; the AI's asoKeywords
+ * enrich the report separately when a key is configured.
+ */
+export function mainKeywordCandidates(
+	meta: { genre?: string; title: string },
+	limit = AUTO_KEYWORD_LIMIT,
+): string[] {
+	const words = meta.title
+		.toLowerCase()
+		.split(/[^\p{L}\p{N}]+/u)
+		.filter((w) => w.length >= 3 && !KEYWORD_STOPWORDS.has(w));
+
+	const candidates: string[] = [];
+	const seen = new Set<string>();
+	const push = (phrase: string) => {
+		if (phrase && !seen.has(phrase)) {
+			seen.add(phrase);
+			candidates.push(phrase);
+		}
+	};
+
+	for (let i = 0; i < words.length - 1; i++) {
+		push(`${words[i]} ${words[i + 1]}`);
+	}
+	for (const word of words) push(word);
+	const genre = meta.genre?.split(",")[0]?.trim().toLowerCase();
+	if (genre) push(genre);
+
+	return candidates.slice(0, limit);
+}
 
 export interface SaveRunInput {
 	appId?: string | null;
@@ -125,6 +174,9 @@ export class ResearchRunsService {
 		appId: string,
 		workspaceId: string,
 		options: {
+			/** Derive main-keyword candidates from the scraped metadata when no
+			 * explicit keywords are given (used by the post-import auto run). */
+			autoKeywords?: boolean;
 			country: string;
 			deep?: boolean;
 			keywords?: string[];
@@ -162,9 +214,13 @@ export class ResearchRunsService {
 			.map((k) => k.trim())
 			.filter(Boolean)
 			.slice(0, KEYWORD_SAMPLE_LIMIT);
-		if (trimmed.length) {
+		const candidates =
+			trimmed.length === 0 && options.autoKeywords
+				? mainKeywordCandidates(meta)
+				: trimmed;
+		if (candidates.length) {
 			keywords = await ResearchService.keywordPositions(
-				trimmed,
+				candidates,
 				country,
 				store === "appstore" ? app.externalId : undefined,
 				store === "playstore" ? app.externalId : undefined,

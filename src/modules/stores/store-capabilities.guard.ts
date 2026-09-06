@@ -6,7 +6,7 @@ import { buildError } from "@/utils/errors";
 import { StoreCapabilitiesService } from "./store-capabilities.service";
 
 /** Extract the `:appId` segment from an `/api/apps/:appId/...` pathname. */
-function appIdFromPath(pathname: string): string | null {
+export function appIdFromPath(pathname: string): string | null {
 	const segments = pathname.split("/").filter(Boolean);
 	const appsIndex = segments.indexOf("apps");
 	if (appsIndex === -1) return null;
@@ -37,6 +37,28 @@ export const storeCapabilityGuard = new Elysia({
 		const resolved = await StoreCapabilitiesService.getForApp(appId);
 		// Unknown app → let the route's ownership check surface the 404.
 		if (!resolved) return;
+
+		// Public (link) connections have no store API behind them: block
+		// publishing/purchases mutations with the upgrade-flavored 403 the panel
+		// turns into a "connect your store API" CTA. Reads (GET) stay open —
+		// they serve cached/local data. Reviews are not gated here because the
+		// public review sync genuinely works; only replying fails, with the same
+		// typed error raised by the provider.
+		if (
+			resolved.connectionMode === "public" &&
+			request.method !== "GET" &&
+			(match.capability === "publishing" || match.capability === "purchases")
+		) {
+			buildError("integrationRequired", {
+				info: "This app was added from a public store link. Connect your store API to publish changes.",
+			});
+		}
+
+		// A public connection stores a read-only capability set, so the check
+		// below would reject cached GETs too. Keep reads open, as documented above.
+		if (resolved.connectionMode === "public" && request.method === "GET") {
+			return;
+		}
 
 		if (!resolved.capabilities.includes(match.capability)) {
 			buildError("forbidden", {

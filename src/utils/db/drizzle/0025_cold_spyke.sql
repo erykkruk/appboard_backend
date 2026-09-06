@@ -1,0 +1,2 @@
+ALTER TABLE "public_aso_reports" ALTER COLUMN "track_id" SET DATA TYPE varchar(255);--> statement-breakpoint
+ALTER TABLE "public_aso_reports" ADD COLUMN "store" varchar(16) DEFAULT 'appstore' NOT NULL;

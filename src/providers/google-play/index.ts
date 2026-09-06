@@ -252,7 +252,7 @@ export class GooglePlayProvider implements StoreProvider {
 				language: listing.language ?? "en-US",
 				shortDesc: listing.shortDescription ?? "",
 				title: listing.title ?? "",
-				// Google Play API v3 does not return video/promo URLs in listings
+				videoUrl: listing.video ?? undefined,
 			}));
 
 			log.info(
@@ -284,6 +284,7 @@ export class GooglePlayProvider implements StoreProvider {
 				fullDescription?: string | null;
 				shortDescription?: string | null;
 				title?: string | null;
+				video?: string | null;
 			} = {};
 
 			try {
@@ -311,6 +312,9 @@ export class GooglePlayProvider implements StoreProvider {
 					shortDescription:
 						data.shortDesc ?? existingListing.shortDescription ?? "",
 					title: data.title ?? existingListing.title ?? "",
+					// Play replaces the whole listing, so an omitted promo video is
+					// wiped. Carry the current one over when the draft has none.
+					video: data.videoUrl ?? existingListing.video ?? "",
 				},
 			});
 
@@ -359,6 +363,7 @@ export class GooglePlayProvider implements StoreProvider {
 					fullDescription?: string | null;
 					shortDescription?: string | null;
 					title?: string | null;
+					video?: string | null;
 				} = {};
 
 				try {
@@ -379,6 +384,9 @@ export class GooglePlayProvider implements StoreProvider {
 					shortDescription:
 						data.shortDesc ?? existingListing.shortDescription ?? "",
 					title: data.title ?? existingListing.title ?? "",
+					// Play replaces the whole listing, so an omitted promo video is
+					// wiped. Carry the current one over when the draft has none.
+					video: data.videoUrl ?? existingListing.video ?? "",
 				};
 
 				log.info(

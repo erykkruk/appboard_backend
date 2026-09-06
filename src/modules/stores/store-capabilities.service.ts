@@ -16,6 +16,7 @@ import { buildError } from "@/utils/errors";
 export interface ResolvedCapabilities {
 	storeType: StoreType;
 	capabilities: StoreCapabilityId[];
+	connectionMode?: string;
 }
 
 export interface CapabilityAccessEntry {
@@ -83,7 +84,11 @@ export class StoreCapabilitiesService {
 	/** Effective capabilities for the store an app belongs to. */
 	static async getForApp(appId: string): Promise<ResolvedCapabilities | null> {
 		const [row] = await db
-			.select({ capabilities: stores.capabilities, type: stores.type })
+			.select({
+				capabilities: stores.capabilities,
+				connectionMode: stores.connectionMode,
+				type: stores.type,
+			})
 			.from(apps)
 			.innerJoin(stores, eq(apps.storeId, stores.id))
 			.where(eq(apps.id, appId))
@@ -92,6 +97,7 @@ export class StoreCapabilitiesService {
 		const storeType = row.type as StoreType;
 		return {
 			capabilities: resolveStoredCapabilities(storeType, row.capabilities),
+			connectionMode: row.connectionMode,
 			storeType,
 		};
 	}
@@ -146,6 +152,11 @@ export class StoreCapabilitiesService {
 			.where(and(eq(stores.id, storeId), eq(stores.workspaceId, workspaceId)))
 			.limit(1);
 		if (!store) buildError("notFound", { info: "Store not found" });
+		if (store.connectionMode === "public") {
+			buildError("integrationRequired", {
+				info: "This is a public link connection - there are no API credentials to verify. Connect the store API to unlock publishing.",
+			});
+		}
 		if (!store.credentials) {
 			buildError("storeConnectionFailed", { info: "Store has no credentials" });
 		}

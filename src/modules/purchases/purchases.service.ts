@@ -1,7 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
-import type { StoreType } from "@/config/const";
-import { decryptCredentials } from "@/modules/vault/credentials";
-import { createProvider } from "@/providers";
+import {
+	isPublicStore,
+	resolveProviderForStore,
+} from "@/modules/stores/provider-resolver";
 import type {
 	InAppPurchaseCreateData,
 	InAppPurchaseUpdateData,
@@ -47,17 +48,13 @@ export class PurchasesService {
 
 		if (!app) buildError("notFound", { info: "App not found" });
 
-		if (!app.store.credentials) {
+		if (!isPublicStore(app.store) && !app.store.credentials) {
 			buildError("storeConnectionFailed", {
 				info: "Store has no credentials",
 			});
 		}
 
-		const credentials = decryptCredentials(
-			app.store.credentials,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForStore(app.store);
 
 		// Sync subscription groups
 		const groups = await provider.fetchSubscriptionGroups(app.app.externalId);
@@ -1462,17 +1459,13 @@ export class PurchasesService {
 
 		if (!app) buildError("notFound", { info: "App not found" });
 
-		if (!app.store.credentials) {
+		if (!isPublicStore(app.store) && !app.store.credentials) {
 			buildError("storeConnectionFailed", {
 				info: "Store has no credentials",
 			});
 		}
 
-		const credentials = decryptCredentials(
-			app.store.credentials,
-			app.store.workspaceId,
-		);
-		const provider = createProvider(app.store.type as StoreType, credentials);
+		const provider = resolveProviderForStore(app.store);
 
 		return { externalAppId: app.app.externalId, provider };
 	}

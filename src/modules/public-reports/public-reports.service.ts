@@ -19,6 +19,7 @@ export interface PublicReportInput {
 	appName?: string;
 	asoScore?: number;
 	country: string;
+	store?: "appstore" | "playstore";
 	keywords: Array<{
 		appRank?: number | null;
 		classification: string;
@@ -27,7 +28,7 @@ export interface PublicReportInput {
 		opportunity: number;
 		popularity?: number | null;
 	}>;
-	trackId: string;
+	trackId?: string;
 }
 
 /**
@@ -59,7 +60,8 @@ export class PublicReportsService {
 				country: input.country.toLowerCase(),
 				ipHash,
 				keywordCount: keywords.length,
-				trackId: input.trackId,
+				store: input.store === "playstore" ? "playstore" : "appstore",
+				trackId: input.trackId?.slice(0, 255) ?? null,
 			})
 			.returning({ id: publicAsoReports.id });
 

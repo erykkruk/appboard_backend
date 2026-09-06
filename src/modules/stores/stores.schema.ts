@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import { STORE_TYPES } from "@/config/const";
+import { PLATFORMS, STORE_TYPES } from "@/config/const";
 import { unionEnum } from "@/utils/helpers";
 
 export const connectStoreBody = t.Object({
@@ -11,6 +11,15 @@ export const connectStoreBody = t.Object({
 
 export const storeCapabilitiesBody = t.Object({
 	capabilities: t.Array(t.String()),
+});
+
+// Import an app from a public store link: either `url`, or `platform` +
+// `externalId` (Apple numeric id / Android package name) from a typeahead.
+export const importAppBody = t.Object({
+	country: t.Optional(t.String({ maxLength: 2, minLength: 2 })),
+	externalId: t.Optional(t.String({ maxLength: 255, minLength: 1 })),
+	platform: t.Optional(unionEnum(PLATFORMS)),
+	url: t.Optional(t.String({ maxLength: 2048, minLength: 1 })),
 });
 
 export const verifyAccessBody = t.Object({
