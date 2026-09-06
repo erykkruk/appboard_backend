@@ -31,6 +31,14 @@ const LISTING_FIELDS = [
 	"whatsNew",
 ] as const;
 
+type ListingRow = typeof listings.$inferSelect;
+
+type DraftBatch = {
+	draft: ListingRow;
+	changedFields: Record<string, string | undefined>;
+	remote: ListingRow | undefined;
+};
+
 // Mapping: DB column → AI field name (for translateLocalization)
 const DB_TO_AI_FIELD: Record<string, string> = {
 	fullDesc: "description",
@@ -449,10 +457,10 @@ export class ListingsService {
 		return diffs;
 	}
 
-	static async publish(appId: string) {
-		const app = await ListingsService.getAppWithStore(appId);
-		const provider = resolveProviderForApp(app);
-
+	/** Every dirty draft next to the remote row it will replace. */
+	private static async collectDirtyDrafts(
+		appId: string,
+	): Promise<DraftBatch[]> {
 		const dirtyDrafts = await db
 			.select()
 			.from(listings)
@@ -464,16 +472,7 @@ export class ListingsService {
 				),
 			);
 
-		if (dirtyDrafts.length === 0) {
-			return { published: 0 };
-		}
-
-		// Collect changes per language for batch processing
-		const batchUpdates: Array<{
-			draft: (typeof dirtyDrafts)[0];
-			changedFields: Record<string, string | undefined>;
-			remote: (typeof dirtyDrafts)[0] | undefined;
-		}> = [];
+		const batchUpdates: DraftBatch[] = [];
 
 		for (const draft of dirtyDrafts) {
 			const [remote] = await db
@@ -510,6 +509,18 @@ export class ListingsService {
 			}
 
 			batchUpdates.push({ changedFields, draft, remote });
+		}
+
+		return batchUpdates;
+	}
+
+	static async publish(appId: string) {
+		const app = await ListingsService.getAppWithStore(appId);
+		const provider = resolveProviderForApp(app);
+
+		const batchUpdates = await ListingsService.collectDirtyDrafts(appId);
+		if (batchUpdates.length === 0) {
+			return { published: 0 };
 		}
 
 		// GP: use single edit+commit for all languages
@@ -551,17 +562,51 @@ export class ListingsService {
 			await provider.publishListings(app.externalId);
 		}
 
+		return ListingsService.commitPublished(appId, batchUpdates);
+	}
+
+	/**
+	 * A draft the user carried into the store by hand. Apps added from a link
+	 * or created here have no API to publish through, but the text still
+	 * changed in the store: record the same history and chart marker as a
+	 * real publish and close the drafts, so the rank chart shows when the
+	 * text changed and the draft reminder stops asking.
+	 */
+	static async markPublished(appId: string) {
+		const app = await ListingsService.getAppWithStore(appId);
+		if (app.store.connectionMode === "api") {
+			buildError("badRequest", {
+				info: "This store is connected through its API: publish sends the changes for you",
+			});
+		}
+
+		const batchUpdates = await ListingsService.collectDirtyDrafts(appId);
+		if (batchUpdates.length === 0) {
+			return { published: 0 };
+		}
+
+		return ListingsService.commitPublished(appId, batchUpdates, {
+			manual: true,
+		});
+	}
+
+	/** History rows, the chart marker, remote rows brought up to date, drafts clean. */
+	private static async commitPublished(
+		appId: string,
+		batchUpdates: DraftBatch[],
+		options: { manual?: boolean } = {},
+	) {
 		// One event for the whole publish. Field-level detail already lands in
 		// listing_history; this is the marker that says "a release happened".
-		if (batchUpdates.length > 0) {
-			const languages = batchUpdates.map((b) => b.draft.language);
-			await AppEventsService.record(
-				appId,
-				"listing_published",
-				`Listing published (${languages.join(", ")})`,
-				{ languages },
-			);
-		}
+		const languages = batchUpdates.map((b) => b.draft.language);
+		await AppEventsService.record(
+			appId,
+			"listing_published",
+			options.manual
+				? `Listing updated in the store by hand (${languages.join(", ")})`
+				: `Listing published (${languages.join(", ")})`,
+			{ languages, manual: options.manual === true },
+		);
 
 		// Record history + update remote + mark clean
 		for (const { draft, remote } of batchUpdates) {
@@ -581,23 +626,32 @@ export class ListingsService {
 				}
 			}
 
+			const live = {
+				fullDesc: draft.fullDesc,
+				keywords: draft.keywords,
+				marketingUrl: draft.marketingUrl,
+				privacyUrl: draft.privacyUrl,
+				promoText: draft.promoText,
+				shortDesc: draft.shortDesc,
+				supportUrl: draft.supportUrl,
+				syncedAt: new Date(),
+				title: draft.title,
+				videoUrl: draft.videoUrl,
+				whatsNew: draft.whatsNew,
+			};
 			if (remote) {
-				await db
-					.update(listings)
-					.set({
-						fullDesc: draft.fullDesc,
-						keywords: draft.keywords,
-						marketingUrl: draft.marketingUrl,
-						privacyUrl: draft.privacyUrl,
-						promoText: draft.promoText,
-						shortDesc: draft.shortDesc,
-						supportUrl: draft.supportUrl,
-						syncedAt: new Date(),
-						title: draft.title,
-						videoUrl: draft.videoUrl,
-						whatsNew: draft.whatsNew,
-					})
-					.where(eq(listings.id, remote.id));
+				await db.update(listings).set(live).where(eq(listings.id, remote.id));
+			} else if (options.manual) {
+				// No store sync will ever create the remote row for an app we
+				// cannot read back, so what the user pasted becomes the baseline
+				// the next diff is measured against.
+				await db.insert(listings).values({
+					...live,
+					appId,
+					isDirty: false,
+					language: draft.language,
+					source: "remote",
+				});
 			}
 
 			await db
@@ -606,8 +660,11 @@ export class ListingsService {
 				.where(eq(listings.id, draft.id));
 		}
 
-		log.info({ appId, count: dirtyDrafts.length }, "Listings published");
-		return { published: dirtyDrafts.length };
+		log.info(
+			{ appId, count: batchUpdates.length, manual: options.manual === true },
+			"Listings published",
+		);
+		return { published: batchUpdates.length };
 	}
 
 	static generateTemplate(format: "csv" | "json"): string {

@@ -159,6 +159,21 @@ export const listingsController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.post(
+		"/:appId/listings/mark-published",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return ListingsService.markPublished(params.appId);
+		},
+		{
+			detail: {
+				description:
+					"Close the drafts of an app without a store API after the text was pasted into the store by hand",
+				tags: ["Listings"],
+			},
+			params: listingParams,
+		},
+	)
+	.post(
 		"/:appId/listings/sync",
 		async ({ params, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);

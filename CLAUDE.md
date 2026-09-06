@@ -208,6 +208,7 @@ GitHub-style version control for listing fields.
 
 - **History**: `src/modules/history/` — `GET /apps/:id/history` (filters: `language`, `field`), `POST /apps/:id/history/:historyId/rollback`. Rollback updates the draft listing and marks `isDirty`.
 - **Draft diffs**: `ListingsService.getDraftDiffs(appId)` in `listings.service.ts` + endpoint `GET /apps/:id/listings/diffs` — compares draft vs remote listings per language, returns only changed fields.
+- **Hand publish**: `POST /apps/:id/listings/mark-published` (`ListingsService.markPublished`) is the way out for apps with no store API (link import, local apps): no provider call, but the same `commitPublished` tail as a real publish - history rows, `listing_published` event with `meta.manual = true`, remote rows brought up to date (created when missing, so the next diff is measured against what the user pasted), drafts clean. 400 for API-connected stores - they use `/publish`.
 - **Underlying data**: `listingHistory` table tracks `oldValue`/`newValue` per field per language on publish.
 
 ## Anti-patterns
