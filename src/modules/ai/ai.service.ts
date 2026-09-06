@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import config from "@/config";
 import { APP_STORE_CATEGORIES } from "@/config/const";
+import { isCloud } from "@/config/deployment";
 import {
 	buildTranslationFieldRules,
 	getSettingKey,
@@ -605,10 +606,20 @@ export class AIService {
 	 * install that sets OPENROUTER_API_KEY once should get AI everywhere
 	 * without every workspace pasting the same key into Settings.
 	 */
+	/**
+	 * The instance key is a self-hosting convenience: one operator, one bill.
+	 * On the cloud deployment every workspace is a different customer, so the
+	 * env key must never quietly pay for all of them - only their own key counts.
+	 */
+	private static instanceKey(): string | null {
+		if (isCloud()) return null;
+		return config.OPENROUTER_API_KEY || null;
+	}
+
 	static async resolveApiKey(workspaceId: string): Promise<string | null> {
 		const own = await SettingsService.getRaw(workspaceId, "OPENROUTER_API_KEY");
 		if (own) return own;
-		return config.OPENROUTER_API_KEY || null;
+		return AIService.instanceKey();
 	}
 
 	/** What the panel needs to say "AI is on" or "add a key and you get...". */
@@ -620,7 +631,7 @@ export class AIService {
 		const lastError = AiErrors.get(workspaceId);
 		const own = await SettingsService.getRaw(workspaceId, "OPENROUTER_API_KEY");
 		if (own) return { configured: true, lastError, source: "workspace" };
-		if (config.OPENROUTER_API_KEY) {
+		if (AIService.instanceKey()) {
 			return { configured: true, lastError, source: "instance" };
 		}
 		return { configured: false, lastError: null, source: null };

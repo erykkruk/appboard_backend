@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
+import config from "@/config";
 import { aiController } from "@/modules/ai";
 import { AiErrors } from "@/modules/ai/ai-errors";
 import { settingsController } from "@/modules/settings";
@@ -63,6 +64,25 @@ describe("AI status", () => {
 		);
 		expect(saved.status).toBe(200);
 		expect((await status()).lastError).toBeNull();
+	});
+
+	it("never lends the instance key to workspaces on the cloud deployment", async () => {
+		await cleanupSettings(["OPENROUTER_API_KEY"]);
+		const previousMode = config.DEPLOYMENT_MODE;
+		const previousKey = config.OPENROUTER_API_KEY;
+		config.DEPLOYMENT_MODE = "cloud";
+		config.OPENROUTER_API_KEY = "sk-or-instance";
+		try {
+			expect(await status()).toMatchObject({ configured: false, source: null });
+			config.DEPLOYMENT_MODE = "selfhosted";
+			expect(await status()).toMatchObject({
+				configured: true,
+				source: "instance",
+			});
+		} finally {
+			config.DEPLOYMENT_MODE = previousMode;
+			config.OPENROUTER_API_KEY = previousKey;
+		}
 	});
 
 	it("keeps failures per workspace", async () => {

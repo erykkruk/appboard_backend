@@ -180,6 +180,10 @@ Apps can be added from a public store link WITHOUT API credentials - integration
 - `apps.rawData.storeFacts` (`{ rating, ratingsCount, version, updatedAt, releaseNotes }`) is written at import, by `syncApps`, and refreshed on every public review sync; `GET /apps/:id/reviews/stats` returns `storeRating` / `storeRatingsCount` next to the text-review average - they are different numbers and the panel shows both.
 - Local apps: `POST /apps { name, platform }` creates an app that is in no store (`rawData.notInStore = true`, `externalId = local-<uuid>` so a later real connection can never mis-bind it). The audit answers `not-in-store` immediately; every store write stays a typed 403.
 
+## AI key resolution
+
+`AIService.resolveApiKey`: the workspace's `OPENROUTER_API_KEY` setting first; the env `OPENROUTER_API_KEY` (instance key) only when `DEPLOYMENT_MODE !== "cloud"`. On the cloud deployment every workspace is a separate customer and the instance key must never pay for them - `GET /api/ai/status` reports `configured: false` there until the workspace adds its own key. Last OpenRouter failure per workspace lives in `ai-errors.ts` and is cleared when a new key is saved.
+
 ## App events + reminders (`src/modules/tracking/`)
 
 - `app_events` (`AppEventsService.record`, never throws) marks version created/submitted and listing published; `GET /apps/:id/tracking/history` merges them with `listing_history` into chart annotations (`CHART_EVENT_TYPES` only - reminder events are housekeeping).
