@@ -947,6 +947,28 @@ export const publicToolUsage = pgTable(
 	],
 );
 
+// Shared free check-up reports. The visitor's browser computes the report,
+// posts the whole snapshot once and gets a link (/aso-check/r/<id>) that
+// renders exactly this payload. Client data again: size-capped on ingest,
+// passed through a sanitizer on the panel side and never joined to workspace
+// tables.
+export const publicReportShares = pgTable(
+	"public_report_shares",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appName: varchar({ length: 255 }),
+		// "all" for a multi-market report, otherwise the storefront code.
+		country: varchar({ length: 8 }).notNull(),
+		ipHash: varchar({ length: 64 }).notNull(),
+		payload: jsonb().$type<Record<string, unknown>>().notNull(),
+		store: varchar({ length: 16 }).notNull().default("appstore"),
+		tool: varchar({ length: 32 }).notNull().default("aso-check"),
+		trackId: varchar({ length: 255 }),
+	},
+	(t) => [index().on(t.createdAt), index().on(t.trackId)],
+);
+
 // ── Apple Ads weekly datasets ───────────────────────────────────────
 // Apple's top-search-terms dataset is the same for everyone (public weekly
 // data per country/genre), synced using whichever connected workspace's
@@ -1058,6 +1080,7 @@ export const schema = {
 	keywordScoreSnapshots,
 	listingHistory,
 	listings,
+	publicReportShares,
 	purchaseLocalizations,
 	purchasePrices,
 	purchaseReviewInfo,

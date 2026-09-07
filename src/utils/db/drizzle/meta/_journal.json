@@ -231,6 +231,13 @@
       "when": 1788765208952,
       "tag": "0032_harsh_cargill",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788794632991,
+      "tag": "0033_orange_karnak",
+      "breakpoints": true
     }
   ],
   "version": "7"
