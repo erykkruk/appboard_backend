@@ -89,6 +89,79 @@ describe("audit AI review", () => {
 		expect(ai?.rewrites.keywords).toBe("teleturniej,quiz,wieczor");
 	});
 
+	it("treats a Google Play audit as a listing without a keyword field", async () => {
+		let systemPrompt = "";
+		let userPrompt = "";
+		AIService.resolveApiKey = async () => "sk-or-test";
+		AIService.complete = async (_ws, system, user) => {
+			systemPrompt = system;
+			userPrompt = user;
+			return {
+				content: JSON.stringify({
+					priorities: [],
+					rewrites: {
+						keywords: "quiz,party,tv",
+						opening: null,
+						subtitle:
+							"Gra imprezowa na telewizor: telefony to pilty, pytania na ekranie",
+						title: null,
+					},
+					summary: "Lead with the TV party angle.",
+				}),
+				model: "m",
+			};
+		};
+		const ai = await AuditAiService.analyze(
+			"ws",
+			{ ...REPORT, keywordsSupported: false },
+			{ ...LISTING, subtitle: "Quiz na telewizor" },
+		);
+		// Nowhere to paste a keyword field on Google Play.
+		expect(ai?.rewrites.keywords).toBeNull();
+		// The subtitle slot is the 80-character short description there.
+		expect(ai?.rewrites.subtitle).toBe(
+			"Gra imprezowa na telewizor: telefony to pilty, pytania na ekranie",
+		);
+		expect(systemPrompt).toContain("Store facts (Google Play)");
+		expect(systemPrompt).toContain('Return null for "keywords"');
+		expect(systemPrompt).toContain(
+			"write the summary and the priorities in English",
+		);
+		expect(systemPrompt).toContain(
+			"Write every rewrite in the listing's language",
+		);
+		expect(userPrompt).toContain("Store: Google Play.");
+		expect(userPrompt).toContain("Short description: Quiz na telewizor");
+		expect(userPrompt).toContain("not measured on Google Play");
+	});
+
+	it("gives the App Store review its keyword facts and the winnability rule", async () => {
+		let systemPrompt = "";
+		AIService.resolveApiKey = async () => "sk-or-test";
+		AIService.complete = async (_ws, system) => {
+			systemPrompt = system;
+			return {
+				content: JSON.stringify({
+					priorities: [],
+					rewrites: {
+						keywords: null,
+						opening: null,
+						subtitle: null,
+						title: null,
+					},
+					summary: "Fine as is.",
+				}),
+				model: "m",
+			};
+		};
+		await AuditAiService.analyze("ws", REPORT, LISTING);
+		expect(systemPrompt).toContain("Store facts (App Store)");
+		expect(systemPrompt).toContain("Apple 2.3.10");
+		expect(systemPrompt).toContain("Winnability");
+		expect(systemPrompt).toContain("cannot see the screenshots");
+		expect(systemPrompt).toContain("No competitor or third-party names");
+	});
+
 	it("returns null on content that is not the expected JSON", async () => {
 		AIService.resolveApiKey = async () => "sk-or-test";
 		AIService.complete = async () => ({

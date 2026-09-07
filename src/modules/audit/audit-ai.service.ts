@@ -9,6 +9,8 @@ const log = createLogger("audit-ai");
 /** Store limits the rewrites must respect, whatever the model returns. */
 const TITLE_LIMIT = 30;
 const SUBTITLE_LIMIT = 30;
+/** Google Play has no subtitle: its slot in the rewrites is the short description. */
+const SHORT_DESCRIPTION_LIMIT = 80;
 const KEYWORDS_LIMIT = 100;
 const OPENING_LIMIT = 300;
 const MAX_PRIORITIES = 4;
@@ -16,6 +18,9 @@ const MAX_PRIORITIES = 4;
 const MAX_KEYWORDS_IN_PROMPT = 18;
 const MAX_DESCRIPTION_CHARS = 1800;
 const TEMPERATURE = 0.3;
+/** Below this many ratings a keyword above medium difficulty is not winnable. */
+const SMALL_APP_RATINGS = 1000;
+const SMALL_APP_MAX_DIFFICULTY = 50;
 
 const insightsSchema = type({
 	priorities: type({ how: "string", title: "string", why: "string" }).array(),
@@ -28,18 +33,38 @@ const insightsSchema = type({
 	summary: "string",
 });
 
-const SYSTEM_PROMPT = `You are a senior App Store Optimization strategist reviewing one app listing for its developer.
+type Store = "appstore" | "play";
 
-You receive: the listing text as the store serves it, the market and language, a rules-based audit (score, issues, strengths) and a table of keywords with popularity (1-100, higher = more searches), difficulty (1-100, lower = easier to rank), the app's current rank for each, and whether the keyword is safe to recommend (from the app's own category).
+const STORE_RULES: Record<Store, string> = {
+	appstore: `Store facts (App Store):
+- Search indexes the title, the subtitle and the keyword field only; the description and promotional text are not indexed. Every word counts once across those three fields, so a word already in the title or subtitle is wasted in the keyword field.
+- Keyword field: at most ${KEYWORDS_LIMIT} characters, comma-separated, no spaces after commas, singular forms, no plurals of a word already present, no stop words, no brand names other than this app's own.
+- Apple 2.3.10: no other platforms (Android, Google Play, PC), no prices or "free", no ranking claims ("#1", "best") in the title or subtitle.`,
+	play: `Store facts (Google Play):
+- There is no keyword field: search reads the title, the short description and the full description. The "subtitle" slot below is the short description (at most ${SHORT_DESCRIPTION_LIMIT} characters), the one line shown under the title on the listing page.
+- Return null for "keywords": this store has none.
+- Google Play metadata policy: no ranking or promotional words in the title ("#1", "best", "free", "sale"), no ALL CAPS words that are not the brand, no emoji, no keyword lists in the description, no anonymous user testimonials.`,
+};
+
+function buildSystemPrompt(store: Store): string {
+	return `You are a senior App Store Optimization strategist reviewing one app listing for its developer.
+
+You receive: the listing text as the store serves it, the market and language, a rules-based audit (score, issues, strengths) and, for the App Store, a table of keywords with popularity (1-100, higher = more searches), difficulty (1-100, lower = easier to rank), the app's current rank for each ("none" = not in the top 200), and whether the keyword is safe to recommend (from the app's own category).
 
 Your job is judgement, not repetition: connect the numbers, decide what matters most, and say it plainly.
+
+${STORE_RULES[store]}
+
+Winnability: an app with fewer than ${SMALL_APP_RATINGS} ratings should chase keywords with difficulty well below ${SMALL_APP_MAX_DIFFICULTY} and real popularity; a term the app already ranks in the top 10 for is a strength to keep, not a lever; a high-popularity term with difficulty above the app's weight class is a distraction, say so instead of recommending it.
 
 Rules:
 - Recommend only keywords marked recommendable. Never invent keywords, features, numbers, awards or claims that are not in the listing or the table.
 - Keep the brand name exactly as written.
-- Write everything in the listing's language.
+- No competitor or third-party names anywhere in a rewrite, no "alternative to" phrasing: both stores reject it.
+- You cannot see the screenshots or the icon; you only know how many screenshots there are. Do not judge their content.
+- Language: write the summary and the priorities in English (the developer reads them in the panel). Write every rewrite in the listing's language, exactly as it will be pasted into the store.
 - No emoji, no typographic dashes or smart quotes: plain hyphens and straight quotes only. The stores reject emoji and the text is pasted as-is.
-- Rewrites must fit the store limits: title and subtitle at most ${TITLE_LIMIT} characters each, keywords at most ${KEYWORDS_LIMIT} characters (comma-separated, no spaces after commas, no word repeated from the title or subtitle), opening at most ${OPENING_LIMIT} characters (the first two or three lines of the description, benefit first).
+- Rewrites must fit the store limits: title at most ${TITLE_LIMIT} characters, "subtitle" at most ${store === "play" ? SHORT_DESCRIPTION_LIMIT : SUBTITLE_LIMIT} characters, opening at most ${OPENING_LIMIT} characters (the first two or three lines of the description, benefit first, in plain sentences).
 - Return null for a rewrite when the current text is already the best move; do not rewrite for the sake of it.
 - Priorities: at most ${MAX_PRIORITIES}, ordered by expected impact on installs, each concrete (which field, which word, why the numbers support it). Skip anything the developer cannot act on.
 
@@ -49,6 +74,7 @@ Return ONLY a JSON object with this exact shape and nothing else:
   "priorities": [{ "title": "short imperative", "why": "the numbers behind it", "how": "the exact change to make" }],
   "rewrites": { "title": string | null, "subtitle": string | null, "keywords": string | null, "opening": string | null }
 }`;
+}
 
 function cut(value: string | null, limit: number): string | null {
 	if (!value) return null;
@@ -65,7 +91,12 @@ function stripFences(raw: string): string {
 	return start >= 0 && end > start ? body.slice(start, end + 1) : body;
 }
 
+function storeOf(report: AppAuditReport): Store {
+	return report.keywordsSupported === false ? "play" : "appstore";
+}
+
 function buildUserPrompt(report: AppAuditReport, listing: AuditApp): string {
+	const store = storeOf(report);
 	const keywords = report.keywords
 		.filter((k) => !k.error)
 		.slice(0, MAX_KEYWORDS_IN_PROMPT)
@@ -83,12 +114,12 @@ function buildUserPrompt(report: AppAuditReport, listing: AuditApp): string {
 
 	return [
 		`Market: ${report.country.toUpperCase()}. Listing language: ${report.language}.`,
-		`Store: ${report.keywordsSupported ? "App Store" : "Google Play (no keyword difficulty data for this store - judge the text and screenshots)"}.`,
+		`Store: ${store === "play" ? "Google Play" : "App Store"}.`,
 		"",
 		`Title: ${listing.name}`,
-		`Subtitle: ${listing.subtitle ?? "(none)"}`,
+		`${store === "play" ? "Short description" : "Subtitle"}: ${listing.subtitle ?? "(none)"}`,
 		`Category: ${listing.genre || "(unknown)"}`,
-		`Rating: ${listing.rating ?? "n/a"} from ${listing.ratingsCount ?? 0} ratings. Screenshots: ${listing.screenshots}.`,
+		`Rating: ${listing.rating ?? "n/a"} from ${listing.ratingsCount ?? 0} ratings. Screenshot count: ${listing.screenshots} (content not available to you).`,
 		"",
 		"Description (opening first):",
 		description || "(empty)",
@@ -99,7 +130,9 @@ function buildUserPrompt(report: AppAuditReport, listing: AuditApp): string {
 		"",
 		keywords.length
 			? `Keywords:\n${keywords.join("\n")}`
-			: "Keywords: not scored for this store.",
+			: store === "play"
+				? "Keywords: not measured on Google Play; judge the text against the store facts."
+				: "Keywords: none scored yet.",
 	]
 		.filter((line) => line !== "")
 		.join("\n");
@@ -118,9 +151,10 @@ export class AuditAiService {
 	): Promise<AuditAiInsights | null> {
 		if (!(await AIService.resolveApiKey(workspaceId))) return null;
 
+		const store = storeOf(report);
 		const { content, model } = await AIService.complete(
 			workspaceId,
-			SYSTEM_PROMPT,
+			buildSystemPrompt(store),
 			buildUserPrompt(report, listing),
 			{ purpose: "research", temperature: TEMPERATURE },
 		);
@@ -138,15 +172,22 @@ export class AuditAiService {
 			return null;
 		}
 
+		const subtitleLimit =
+			store === "play" ? SHORT_DESCRIPTION_LIMIT : SUBTITLE_LIMIT;
 		return {
 			generatedAt: new Date().toISOString(),
 			language: report.language,
 			model,
 			priorities: validated.priorities.slice(0, MAX_PRIORITIES),
 			rewrites: {
-				keywords: cut(validated.rewrites.keywords, KEYWORDS_LIMIT),
+				// Google Play has no keyword field: whatever the model returns
+				// there has nowhere to be pasted.
+				keywords:
+					store === "play"
+						? null
+						: cut(validated.rewrites.keywords, KEYWORDS_LIMIT),
 				opening: cut(validated.rewrites.opening, OPENING_LIMIT),
-				subtitle: cut(validated.rewrites.subtitle, SUBTITLE_LIMIT),
+				subtitle: cut(validated.rewrites.subtitle, subtitleLimit),
 				title: cut(validated.rewrites.title, TITLE_LIMIT),
 			},
 			summary: validated.summary.trim(),

@@ -141,6 +141,7 @@ export const aiController = new Elysia({ prefix: "/ai" })
 				body.description,
 				body.category,
 				body.currentKeywords,
+				{ language: body.language, platform: body.platform },
 			);
 		},
 		{
@@ -197,6 +198,7 @@ export const aiController = new Elysia({ prefix: "/ai" })
 				body.appName,
 				body.version,
 				body.changes,
+				{ language: body.language, platform: body.platform },
 			);
 		},
 		{

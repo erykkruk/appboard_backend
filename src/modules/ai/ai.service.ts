@@ -1,11 +1,16 @@
 import { and, eq } from "drizzle-orm";
 import config from "@/config";
-import { APP_STORE_CATEGORIES } from "@/config/const";
+import { APP_STORE_CATEGORIES, GOOGLE_PLAY_CATEGORIES } from "@/config/const";
 import { isCloud } from "@/config/deployment";
 import {
+	buildListingSystemPrompt,
 	buildTranslationFieldRules,
+	fieldLimit,
 	getSettingKey,
+	LISTING_FIELDS,
+	PLAIN_TEXT,
 	type PromptMode,
+	type StorePlatform,
 } from "@/modules/ai/ai.prompts";
 import { AiErrors } from "@/modules/ai/ai-errors";
 import {
@@ -59,14 +64,39 @@ function truncateToLimit(value: string, limit: number, field: string): string {
 	return cut;
 }
 
+/**
+ * Drops emoji the stores reject and normalizes typographic characters the
+ * prompts forbid, without touching the line structure: a description's blank
+ * lines and bullet lines are part of what the prompt asked for.
+ */
 function stripEmoji(text: string): string {
 	return text
 		.replace(/\p{Emoji_Presentation}/gu, "")
 		.replace(/\p{Extended_Pictographic}/gu, "")
 		.replace(/\uFE0F/g, "")
 		.replace(/\u200D/g, "")
-		.replace(/\s{2,}/g, " ")
+		.replace(/[\u2013\u2014]/g, "-")
+		.replace(/[\u2018\u2019]/g, "'")
+		.replace(/[\u201C\u201D]/g, '"')
+		.replace(/\u2026/g, "...")
+		.split("\n")
+		.map((line) => line.replace(/[ \t]{2,}/g, " ").trim())
+		.join("\n")
+		.replace(/\n{3,}/g, "\n\n")
 		.trim();
+}
+
+/** The JSON object out of an answer that may wrap it in a fence or prose. */
+function extractJsonObject(raw: string): string {
+	const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+	const body = (fenced ? fenced[1] : raw).trim();
+	const start = body.indexOf("{");
+	const end = body.lastIndexOf("}");
+	return start >= 0 && end > start ? body.slice(start, end + 1) : body;
+}
+
+function storePlatform(platform: string): StorePlatform {
+	return platform === "ios" ? "ios" : "android";
 }
 
 type ListingField =
@@ -80,17 +110,6 @@ type ListingField =
 	| "whatsNew";
 
 export type { ListingField };
-
-const FIELD_CHAR_LIMITS: Record<ListingField, number> = {
-	description: 4000,
-	fullDescription: 4000,
-	keywords: 100,
-	promotionalText: 170,
-	shortDescription: 80,
-	subtitle: 30,
-	title: 30,
-	whatsNew: 4000,
-};
 
 const FIELD_LABELS: Record<ListingField, string> = {
 	description: "App Description",
@@ -190,137 +209,14 @@ function buildAsoContext(profile: {
 	return lines.join("\n");
 }
 
-function buildSystemPrompt(field: ListingField, platform: string): string {
-	const isIos = platform === "ios";
-
-	const core = `You are an expert ASO (App Store Optimization) copywriter with deep knowledge of 2025-2026 store algorithms.
-
-IMPORTANT: NEVER use emoji or special Unicode symbols in any field. App Store Connect rejects content with emoji characters.
-
-Core principles:
-- Clarity > cleverness — always prefer clear, direct language
-- Benefits > features — focus on what the user gains, not what the app does
-- Specificity > vagueness — use concrete metrics and outcomes ("Save 2 hours/week" not "Save time")
-- Natural language — algorithms penalize keyword stuffing; write for humans first
-- Address the persona directly — use "you/your", reference their specific situation
-- Conversion psychology: users decide in ~50ms; lead with strongest hook, use loss aversion ("Don't miss..."), social proof, and peak-end rule (strong opening + strong closing)`;
-
-	const platformRules = isIos
-		? `
-Platform: iOS (App Store)
-- Title + Subtitle = highest ranking weight; keyword field complements them
-- NEVER repeat words across title, subtitle, and keyword field — each word counts only once
-- Description is NOT indexed for search — write purely for conversion
-- Apple Intelligence generates review summaries shown to users — write content that feeds positive AI summaries
-- Promotional Text can be updated without review and is NOT indexed`
-		: `
-Platform: Android (Google Play)
-- Title = highest ranking weight; Short Description = second highest (heavily indexed)
-- Long Description IS indexed — weave primary keywords 3-5x naturally throughout
-- Google's Gemini AI generates listing summaries — write content that feeds positive AI summaries
-- Android Vitals (crashes, ANRs) penalize search ranking — mention stability/performance if relevant
-- No keyword field exists — all keyword strategy goes into title, short description, and long description`;
-
-	const fieldInstructions = buildFieldInstructions(field, isIos);
-
-	return `${core}\n${platformRules}\n\n${fieldInstructions}`;
-}
-
-function buildFieldInstructions(field: ListingField, isIos: boolean): string {
-	switch (field) {
-		case "title":
-			return `You are writing an APP TITLE (max 30 characters).
-Formula: [Brand] — [Primary Keyword + Benefit] or [Brand]: [What it does]
-- Must include brand name
-- Include highest-value keyword naturally
-- Do NOT use generic words like "app", "best", "free", "#1" unless part of the brand
-- Title is the STRONGEST ranking signal on both platforms`;
-
-		case "subtitle":
-			return `You are writing an iOS APP SUBTITLE (max 30 characters).
-The subtitle is the SECOND strongest ranking factor on iOS.
-Formula: [Action Verb] + [Specific Outcome] or [Key Benefit Statement]
-- NEVER repeat words from the title — each word is indexed independently
-- Use this to capture keywords that didn't fit in the title
-- Complement the title's promise with specificity
-- Front-load the most important keyword`;
-
-		case "shortDescription":
-			return `You are writing an Android SHORT DESCRIPTION (max 80 characters).
-This is the SECOND strongest ranking factor on Google Play — heavily indexed by the algorithm.
-Formula: [Action Verb] + [Core Benefit] + [Key Differentiator]
-- Front-load the primary keyword within the first 3-4 words
-- Must be compelling enough to stop scrolling (visible before "Read More")
-- Include 1-2 high-value keywords naturally
-- NEVER just repeat the title — expand on it with complementary keywords`;
-
-		case "description": {
-			const platformDesc = isIos
-				? `This description is NOT indexed for search on iOS — focus 100% on conversion.`
-				: `This description IS indexed on Google Play — weave primary keywords 3-5x naturally.
-Balance SEO (keyword placement) with conversion (compelling copy). Front-load keywords in the first paragraph.`;
-
-			return `You are writing an APP DESCRIPTION (max 4000 characters).
-${platformDesc}
-
-Structure (HOOK-BENEFIT-PROOF-CTA):
-1. HOOK (first 3 lines, visible before "Read More"):
-   - Address the reader's pain point directly.
-   - Include primary keyword naturally.
-2. BENEFIT BLOCK:
-   - 4-6 key benefits with bullet points
-   - Each bullet: [Benefit] — [how it works briefly]
-3. WHAT MAKES IT UNIQUE:
-   - 2-3 differentiators competitors lack
-4. SOCIAL PROOF (if data available):
-   - Download counts, ratings, awards, press quotes
-5. CTA:
-   - Clear call to action.
-
-No keyword stuffing — max 3-5 natural repetitions of main keyword.`;
-		}
-
-		case "keywords":
-			return `You are writing iOS APP STORE KEYWORDS (max 100 characters).
-This field is iOS-only and is a powerful ranking signal.
-- NEVER repeat words already in the title or subtitle
-- Singular forms only (Apple handles plural matching)
-- No spaces after commas (maximize character usage)
-- Separate with commas, no hashtags or special characters
-- Mix high-volume head terms with specific long-tail terms
-- Prioritize by: relevance > search volume > competition`;
-
-		case "promotionalText":
-			return `You are writing iOS PROMOTIONAL TEXT (max 170 characters).
-This appears above the description on iOS. NOT indexed for search.
-Purpose: Drive conversions and highlight timely information.
-Formula: [What's New/Special] + [Benefit to User]
-- Can be updated anytime without app review
-- Focus on urgency or excitement`;
-
-		case "whatsNew":
-			return `You are writing WHAT'S NEW / RELEASE NOTES (max 4000 characters).
-Release notes influence AI-generated review summaries (Apple Intelligence / Gemini).
-- Lead with the most exciting new feature or improvement
-- List changes as bullet points
-- Each bullet: [What changed] — [benefit to user]
-- Mention bug fixes briefly
-- End with a CTA: invite users to rate/review
-- Positive framing: "Now 2x faster" not "Fixed slow loading"`;
-
-		// fullDescription is resolved to "description" by resolveFieldForPlatform,
-		// so this case should not be reached, but TypeScript requires exhaustiveness
-		case "fullDescription":
-			return buildFieldInstructions("description", false);
-	}
-}
-
 async function resolvePrompt(
 	field: ListingField,
 	mode: PromptMode,
 	platform: string,
 	workspaceId: string,
 	appId?: string,
+	/** The field the overrides are stored under (fullDescription on Play). */
+	settingsField: ListingField = field,
 ): Promise<string> {
 	// 1. Per-app custom prompt
 	if (appId) {
@@ -330,7 +226,7 @@ async function resolvePrompt(
 			.where(
 				and(
 					eq(appAiPrompts.appId, appId),
-					eq(appAiPrompts.field, field),
+					eq(appAiPrompts.field, settingsField),
 					eq(appAiPrompts.mode, mode),
 				),
 			)
@@ -339,12 +235,52 @@ async function resolvePrompt(
 	}
 
 	// 2. Global custom prompt from settings
-	const settingKey = getSettingKey(field, mode);
+	const settingKey = getSettingKey(settingsField, mode);
 	const globalPrompt = await SettingsService.getRaw(workspaceId, settingKey);
 	if (globalPrompt) return globalPrompt;
 
-	// 3. Built-in default (platform-aware)
-	return buildSystemPrompt(field, platform);
+	// 3. Built-in default: the same text Settings shows as "default", for the
+	// store the app is on.
+	return buildListingSystemPrompt(field, mode, storePlatform(platform));
+}
+
+interface ListingContext {
+	title?: string | null;
+	subtitle?: string | null;
+	keywords?: string | null;
+	description?: string | null;
+}
+
+const CONTEXT_DESCRIPTION_CHARS = 1500;
+
+/** What is already in the store for this language: the words to avoid repeating. */
+function listingContextBlock(
+	context: ListingContext | null | undefined,
+	platform: string,
+): string {
+	if (!context || (!context.title && !context.subtitle && !context.keywords)) {
+		return "Current listing: unknown. Avoid repeating only the brand name.\n";
+	}
+	const lines = [
+		`Current title: ${context.title ?? "(empty)"}`,
+		`Current ${platform === "ios" ? "subtitle" : "short description"}: ${context.subtitle ?? "(empty)"}`,
+	];
+	if (platform === "ios") {
+		lines.push(`Current keyword field: ${context.keywords ?? "(empty)"}`);
+		lines.push(
+			"App Store: a word already in the title or subtitle must not appear in the field you write.",
+		);
+	} else {
+		lines.push(
+			"Google Play: reuse the core search term from the title, never the whole title.",
+		);
+	}
+	if (context.description) {
+		lines.push(
+			`Current description (opening): ${context.description.slice(0, CONTEXT_DESCRIPTION_CHARS)}`,
+		);
+	}
+	return `${lines.join("\n")}\n`;
 }
 
 function buildUserPrompt(
@@ -359,23 +295,24 @@ function buildUserPrompt(
 		targetAudience?: string | null;
 		userLanguage?: string | null;
 	} | null,
+	options: { brief?: string; listing?: ListingContext | null } = {},
 ): string {
-	const charLimit = FIELD_CHAR_LIMITS[field];
+	const charLimit = fieldLimit(field, storePlatform(platform));
 	const fieldLabel = FIELD_LABELS[field];
 	const isRephrase = !!currentValue;
 
 	let prompt = `App name: ${appName}
 Platform: ${platform === "ios" ? "iOS (App Store)" : "Android (Google Play)"}
-Language: ${language}
-Field: ${fieldLabel}
-Maximum characters: ${charLimit}
+Language: ${language} (write in this language; if the current text is in another language, rewrite it into this one)
+Field: ${fieldLabel} (limit ${charLimit} characters)
 
+${listingContextBlock(options.listing, platform)}
 ASO Profile:
-${asoContext || "No ASO profile provided — use the app name and general best practices."}
+${asoContext || "No brief was provided. Write only what the app name and the current text support; leave out features, numbers and proof you do not have, and keep the copy short rather than fill it."}
 `;
 
 	if (asoProfile?.targetAudience || asoProfile?.painPoints?.length) {
-		prompt += "\nPersona Instructions:\n";
+		prompt += "\nPersona:\n";
 		if (asoProfile.targetAudience) {
 			prompt += `- Address the reader as if they are: ${asoProfile.targetAudience}\n`;
 			prompt +=
@@ -389,21 +326,27 @@ ${asoContext || "No ASO profile provided — use the app name and general best p
 		}
 	}
 
-	if (isRephrase) {
+	if (options.brief) {
+		prompt += `
+Changes that shipped (developer notes, may be terse):
+"""
+${options.brief}
+"""
+TASK: Write the ${fieldLabel} from these changes.`;
+	} else if (isRephrase) {
 		prompt += `
 Current text to rephrase:
 """
 ${currentValue}
 """
-
-TASK: Rephrase the text above to improve its ASO effectiveness while keeping the same core meaning and information. Write in the SAME LANGUAGE as the current text. Stay within ${charLimit} characters.`;
+TASK: Rephrase the text above so it follows every rule, keeping the facts and the meaning; store rules win over keeping the wording.`;
 	} else {
 		prompt += `
-TASK: Generate ${fieldLabel} for this app. Write in ${language} language. Stay within ${charLimit} characters.`;
+TASK: Write the ${fieldLabel} for this app.`;
 	}
 
 	prompt +=
-		"\n\nIMPORTANT: Return ONLY the generated text, no explanations, no quotes, no labels. Just the raw content. Do NOT include any emoji or special Unicode symbols.";
+		"\n\nReturn ONLY the finished text: no explanations, no quotes, no labels. No emoji, no typographic dashes or curly quotes.";
 
 	return prompt;
 }
@@ -421,29 +364,37 @@ function buildKeywordDescriptionPrompt(
 	charLimit: number,
 ): string {
 	const fieldLabel = FIELD_LABELS.description;
+	const isIos = platform === "ios";
+	const list = keywords.map((keyword) => `- ${keyword}`).join("\n");
 	const keywordBlock = keywords.length
-		? `Target keywords, most important first. Work each one in naturally (the first ones early in the text) and never as a bare list:
-${keywords.map((keyword) => `- ${keyword}`).join("\n")}
+		? `${
+				isIos
+					? "Phrases readers use when they look for an app like this (the App Store does not index the description, so use them only where they make the copy clearer):"
+					: "Target keywords, most important first. Work each one in naturally (the first ones early in the text) and never as a bare list:"
+			}
+${list}
+Store rules override this list: skip any entry that is the name of another app, a company or a trademark (other than this app's own brand), an "alternative to" phrase, a promotional or ranking word (best, #1, top, free, sale, download now) or anything the app does not actually do. Do not mention that you skipped it.
 
 `
 		: "";
 	const task = keywords.length
-		? `Write a new ${fieldLabel} for this app built around the target keywords.`
+		? isIos
+			? `Write a new ${fieldLabel} that speaks in these phrases where they help the reader.`
+			: `Write a new ${fieldLabel} for this app built around the target keywords.`
 		: `Write a new ${fieldLabel} for this app.`;
 
 	return `App name: ${appName}
-Platform: ${platform === "ios" ? "iOS (App Store)" : "Android (Google Play)"}
-Field: ${fieldLabel}
-Maximum characters: ${charLimit}
+Platform: ${isIos ? "iOS (App Store)" : "Android (Google Play)"}
+Field: ${fieldLabel} (limit ${charLimit} characters)
 
 What the app does (current store text or a short brief):
 """
 ${brief}
 """
 
-${keywordBlock}TASK: ${task} Keep every claim grounded in the text above. Write in the SAME LANGUAGE as that text. Open with the strongest benefit. Stay within ${charLimit} characters.
+${keywordBlock}TASK: ${task} Keep every claim grounded in the text above. Write in the same language as that text. Open with the strongest benefit.
 
-IMPORTANT: Return ONLY the generated text, no explanations, no quotes, no labels. Just the raw content. Do NOT include any emoji or special Unicode symbols.`;
+Return ONLY the finished text: no explanations, no quotes, no labels. No emoji, no typographic dashes or curly quotes.`;
 }
 
 function resolveFieldForPlatform(
@@ -883,6 +834,27 @@ export class AIService {
 		return { model, result };
 	}
 
+	/** The draft (or the store copy) for one language: title, subtitle, keywords. */
+	private static async listingContext(
+		appId: string,
+		language: string,
+	): Promise<ListingContext | null> {
+		const rows = await db
+			.select()
+			.from(listings)
+			.where(and(eq(listings.appId, appId), eq(listings.language, language)));
+		const row =
+			rows.find((r) => r.source === "draft") ??
+			rows.find((r) => r.source === "remote");
+		if (!row) return null;
+		return {
+			description: row.fullDesc,
+			keywords: row.keywords,
+			subtitle: row.shortDesc,
+			title: row.title,
+		};
+	}
+
 	static async generateListingField(
 		workspaceId: string,
 		field: ListingField,
@@ -891,11 +863,23 @@ export class AIService {
 		platform: string,
 		language: string,
 		currentValue?: string,
+		options: { brief?: string } = {},
 	): Promise<{ model: string; result: string }> {
 		const resolvedField = resolveFieldForPlatform(field, platform);
+		// Overrides live under the field Settings shows: a Play description is
+		// edited as "fullDescription" there, while the built-in default is the
+		// resolved field on the app's store.
+		const settingsField: ListingField =
+			field === "fullDescription" ||
+			(platform !== "ios" && field === "description")
+				? "fullDescription"
+				: resolvedField;
 
-		const asoProfile = await AIService.resolveAsoProfile(appId);
+		const asoProfile = appId ? await AIService.resolveAsoProfile(appId) : null;
 		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
+		const listing = appId
+			? await AIService.listingContext(appId, language)
+			: null;
 
 		const mode: PromptMode = currentValue ? "rephrase" : "generate";
 		const systemPrompt = await resolvePrompt(
@@ -904,6 +888,7 @@ export class AIService {
 			platform,
 			workspaceId,
 			appId || undefined,
+			settingsField,
 		);
 		const userPrompt = buildUserPrompt(
 			resolvedField,
@@ -913,6 +898,7 @@ export class AIService {
 			asoContext,
 			currentValue,
 			asoProfile,
+			{ brief: options.brief, listing },
 		);
 
 		log.info(
@@ -929,7 +915,7 @@ export class AIService {
 		);
 
 		const cleaned = stripEmoji(content);
-		const charLimit = FIELD_CHAR_LIMITS[resolvedField];
+		const charLimit = fieldLimit(resolvedField, storePlatform(platform));
 		const trimmedContent =
 			cleaned.length > charLimit
 				? truncateToLimit(cleaned, charLimit, resolvedField)
@@ -943,16 +929,11 @@ export class AIService {
 		text: string,
 		targetLanguages: string[],
 	) {
-		const systemPrompt = `You are a professional ASO translator specializing in app store content.
-
-Your job is market adaptation, NOT literal translation. The translated text must:
-- Sound natural and fluent — as if originally written in the target language
-- Maintain marketing tone and ASO effectiveness
-- Make sense contextually — never produce nonsensical literal translations
-- Adapt idioms, cultural references, and marketing phrases to what resonates in the target market
-- Preserve the intent and emotional impact of the original
-
-IMPORTANT: NEVER use emoji or special Unicode symbols.`;
+		const systemPrompt = `You localize app store copy. A localization is a rewrite for another market, not a word-for-word translation:
+- It reads as if written in the target language first: natural phrasing, the register that market expects.
+- It keeps the meaning, the facts, the brand name and the marketing intent of the original.
+- Idioms, examples and cultural references are adapted to what the target market knows; anything that does not exist there is replaced, not translated literally.
+- Store policies still apply: no emoji, no decorative symbols, no typographic dashes or curly quotes, no promotional words the stores flag.`;
 		const userPrompt = `Translate the following app store text to these languages: ${targetLanguages.join(", ")}
 
 Text:
@@ -970,7 +951,10 @@ Return a JSON object where keys are language codes and values are translations. 
 		);
 
 		try {
-			const translations = JSON.parse(content) as Record<string, string>;
+			const translations = JSON.parse(extractJsonObject(content)) as Record<
+				string,
+				string
+			>;
 			return { model, translations };
 		} catch {
 			log.error({ content }, "Failed to parse translation response");
@@ -997,7 +981,10 @@ Return a JSON object where keys are language codes and values are translations. 
 			!platform || platform === "ios" || platform === "app_store"
 				? "ios"
 				: "android";
-		const charLimit = FIELD_CHAR_LIMITS.description;
+		const charLimit = fieldLimit(
+			"description",
+			storePlatform(resolvedPlatform),
+		);
 		const targetKeywords = (keywords ?? [])
 			.map((keyword) => keyword.trim())
 			.filter((keyword) => keyword.length > 0);
@@ -1028,15 +1015,7 @@ Return a JSON object where keys are language codes and values are translations. 
 			"generate",
 		);
 
-		// Line by line so paragraph breaks survive: stripEmoji folds every run
-		// of whitespace, which would turn a 4000-character description into
-		// one block.
-		const cleaned = content
-			.split("\n")
-			.map((line) => stripEmoji(line))
-			.join("\n")
-			.replace(/\n{3,}/g, "\n\n")
-			.trim();
+		const cleaned = stripEmoji(content);
 		const description =
 			cleaned.length > charLimit
 				? truncateToLimit(cleaned, charLimit, "description")
@@ -1053,33 +1032,40 @@ Return a JSON object where keys are language codes and values are translations. 
 		description?: string,
 		category?: string,
 		currentKeywords?: string[],
+		options: { language?: string; platform?: string } = {},
 	) {
-		const systemPrompt = `You are an ASO keyword research expert with deep knowledge of app store search algorithms (2025-2026).
+		const systemPrompt = `You are an ASO keyword researcher. You propose the search terms a person would type into the App Store or Google Play to find this app - terms for tracking and for the listing's own words, not a wish list.
 
-Keyword Strategy:
-- Organize keywords into semantic clusters for comprehensive coverage
-- Mix head terms (high volume, competitive) with long-tail (specific, lower competition)
-- Consider user intent: what would someone search to find this app?
-- Include action verbs, problem descriptions, and solution terms
-- Singular forms preferred (stores handle pluralization)
-- Consider competitor names and alternative phrasings
-- Think about adjacent categories and use cases`;
+How to choose:
+- Start from what the app actually does and the problem it solves; every term must be something this app can honestly rank for.
+- Think in searches, not features: store searches are one to three word noun phrases ("habit tracker", "sleep sounds", "invoice maker"), never sentences or questions; phrase the need the way it is typed, not spoken.
+- Mix short, high-demand terms with specific two- or three-word phrases that face less competition.
+- Singular forms, lower case, no punctuation, no "app".
+- Competitor names go only into the "competitors" cluster, for rank tracking; they are never used as listing text (store policy). No celebrity or public-figure names, no offensive terms, no trademarks other than the app's own brand in the other clusters.
+- Do not repeat a term across clusters; no near-duplicates ("budget app", "budgeting app").`;
 
+		const storeLabel =
+			options.platform === "ios"
+				? "App Store"
+				: options.platform === "android"
+					? "Google Play"
+					: "App Store and Google Play";
 		const userPrompt = `App: ${appName}
+Store: ${storeLabel}
+Market language: ${options.language ?? "the language of the description"}
 ${description ? `Description: ${description}` : ""}
 ${category ? `Category: ${category}` : ""}
-${currentKeywords?.length ? `Current keywords: ${currentKeywords.join(", ")}` : ""}
+${currentKeywords?.length ? `Current keywords (already used - do not repeat them, propose what is missing): ${currentKeywords.join(", ")}` : ""}
 
-Suggest keywords organized into semantic clusters. Return ONLY a JSON object with this exact structure:
+Propose keywords in the market language, grouped by what the searcher has in mind. Return ONLY a JSON object with this exact structure and nothing else:
 {
-  "feature": ["keywords describing app features"],
-  "problem": ["keywords describing problems the app solves"],
-  "category": ["category and niche keywords"],
-  "alternative": ["competitor alternatives and comparison terms"],
-  "longTail": ["specific multi-word phrases users might search"]
+  "feature": ["what the app does, as people search for it"],
+  "problem": ["the need or problem, as people phrase it in a search"],
+  "category": ["the category and niche terms"],
+  "competitors": ["names of rival apps people search for - for rank tracking only, never listing text"],
+  "longTail": ["specific two- or three-word phrases with a clear intent"]
 }
-
-Each cluster should have 3-5 keywords. Total ~15-20 keywords.`;
+Three to five terms per cluster, about fifteen to twenty in total, most relevant first.`;
 
 		const { content, model } = await AIService.callOpenRouter(
 			workspaceId,
@@ -1089,12 +1075,34 @@ Each cluster should have 3-5 keywords. Total ~15-20 keywords.`;
 		);
 
 		try {
-			const clusters = JSON.parse(content) as Record<string, string[]>;
-			const keywords = Object.values(clusters).flat();
-			return { clusters, keywords, model };
+			const clusters = JSON.parse(extractJsonObject(content)) as Record<
+				string,
+				string[]
+			>;
+			// Rival names are for tracking; they must never reach a listing
+			// field, so the flat list the panel turns into chips leaves them out.
+			const {
+				competitors = [],
+				alternative = [],
+				...listingClusters
+			} = clusters;
+			const keywords = Object.values(listingClusters)
+				.flat()
+				.filter((k): k is string => typeof k === "string" && k.trim() !== "");
+			return {
+				clusters: listingClusters,
+				keywords,
+				model,
+				trackingOnly: [...competitors, ...alternative],
+			};
 		} catch {
-			const keywords = content.split(",").map((k: string) => k.trim());
-			return { clusters: { uncategorized: keywords }, keywords, model };
+			log.warn(
+				{ content: content.slice(0, 200) },
+				"Keyword suggestion was not JSON",
+			);
+			buildError("somethingWentWrong", {
+				info: "AI returned keywords in an unexpected format. Try again.",
+			});
 		}
 	}
 
@@ -1105,19 +1113,23 @@ Each cluster should have 3-5 keywords. Total ~15-20 keywords.`;
 		authorName: string,
 		tone?: string,
 	) {
-		const systemPrompt = `You are a customer support specialist writing app store review replies. Use the AAAA+I empathy framework:
+		const systemPrompt = `You write the developer's public replies to app store reviews. Every reply is read by the reviewer and by everyone deciding whether to install, and it is published under the developer's name.
 
-1. ACKNOWLEDGE — Validate the user's experience.
-2. APPRECIATE — Thank them for taking time to write feedback.
-3. ADDRESS — Respond to their specific issue or praise with concrete details.
-4. ACT — State what you're doing about it (for issues) or what's coming next (for praise).
-5. INVITE — End with an invitation for further contact or to update their review.
+Shape of a reply:
+1. Acknowledge the specific experience in the review - the actual detail, not a template line.
+2. Thank them briefly.
+3. Address the point: for a problem, what you are doing about it or how to fix it now (a concrete step, a setting, a support path); for praise, one specific thing worth their attention next.
+4. Invite: for a problem, a way to reach support; after a fix you may invite them once, without pressure, to try again and update their review if it now works. Never offer anything in exchange for a rating and never make the rating a condition - both stores forbid incentives.
+- Support contact: use only a channel given in the task; otherwise write "reach us through the support link on the store page". Never invent an email address, phone number or URL.
 
-Key principles:
-- Personalize: use the reviewer's name, reference specific details from their review
-- Be concise: 2-4 sentences max
-- Never be defensive or dismissive, even for unfair reviews
-- Professional but warm tone`;
+Rules:
+- Two to four sentences, at most 350 characters so it fits Google Play's limit and reads well on the App Store.
+- Write in the language of the review.
+- Use the reviewer's name only if it is a real name, never a handle like "user123".
+- Never defensive, never sarcastic, never blaming the reviewer, even when the review is unfair or wrong; correct facts calmly.
+- No personal data, no account details, no promises you cannot keep, no marketing.
+- Plain text: no emoji, no typographic dashes or curly quotes.
+- Return only the reply text.`;
 
 		const isPositive = rating >= 4;
 		const userPrompt = `Review by ${authorName} (${rating}/5 stars):
@@ -1125,7 +1137,7 @@ Key principles:
 
 ${tone ? `Desired tone: ${tone}` : ""}
 
-Write a ${isPositive ? "thankful, encouraging reply that reinforces their positive experience" : "empathetic, solution-oriented reply following the AAAA+I framework"}. Keep it concise (2-4 sentences). Return ONLY the reply text.`;
+Write a ${isPositive ? "warm reply that thanks them for the specific thing they praised" : "calm, solution-oriented reply that addresses the specific problem they describe"}, in the language of the review, two to four sentences, under 350 characters. Return ONLY the reply text.`;
 
 		const { content, model } = await AIService.callOpenRouter(
 			workspaceId,
@@ -1170,7 +1182,7 @@ Valid purposes: "analytics", "app_functionality", "developers_advertising", "oth
 Rules:
 - "linked" = true if the data is linked to the user's identity (e.g. via login)
 - "tracking" = true if the data is used for tracking across apps/websites (ATT relevant)
-- Be realistic and thorough — include all data types implied by the description
+- Be realistic and thorough - include all data types implied by the description
 - Include diagnostics (crash data) by default unless the description explicitly says no analytics
 - Return a JSON array, no markdown, no explanations`;
 
@@ -1206,7 +1218,7 @@ Rules:
 - "shared" = true if the app shares this data with third parties
 - "ephemeral" = true if data is processed ephemerally (not stored)
 - "required" = true if users cannot use the app without providing this data
-- Be realistic and thorough — include all data types implied by the description
+- Be realistic and thorough - include all data types implied by the description
 - Include app_info_performance (crash logs) by default unless explicitly excluded
 - Return a JSON array, no markdown, no explanations`;
 
@@ -1267,69 +1279,50 @@ Generate the ${isAndroid ? "data safety" : "privacy declaration"} JSON array.`;
 			return { model: DEFAULT_MODEL, translations: {} };
 		}
 
-		const fieldLimits: Record<string, number> = {
-			description: 4000,
-			fullDescription: 4000,
-			keywords: 100,
-			promotionalText: 170,
-			shortDescription: 80,
-			subtitle: 30,
-			title: 30,
-			whatsNew: 4000,
-		};
+		const isIos = platform === "ios";
+		const limitFor = (key: string): number =>
+			(LISTING_FIELDS as string[]).includes(key)
+				? fieldLimit(key as ListingField, storePlatform(platform))
+				: 4000;
 
 		const fieldsBlock = fieldEntries
 			.map(([key, value]) => {
-				const limit = fieldLimits[key] ?? 4000;
 				const rules = buildTranslationFieldRules(key);
-				return `"${key}" (max ${limit} chars):\n${rules ? `[Rules: ${rules}]\n` : ""}"""${value}"""`;
+				return `"${key}":\n${rules ? `[Rules: ${rules}]\n` : `[Limit: ${limitFor(key)} characters]\n`}"""${value}"""`;
 			})
 			.join("\n\n");
-
-		const isIos = platform === "ios";
 		const platformLabel = isIos ? "iOS (App Store)" : "Android (Google Play)";
 
 		const asoProfile = appId ? await AsoProfileService.get(appId) : null;
 		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
 
 		const platformRules = isIos
-			? `Platform-specific:
-- Title + Subtitle + Keywords are indexed separately — NEVER repeat words across them
-- Description is NOT indexed — optimize translated description purely for conversion
-- Keywords field: find high-volume search terms in the target language, not literal translations`
-			: `Platform-specific:
-- Title + Short Description + Long Description are ALL indexed
-- Weave primary keywords 3-5x naturally in the translated description
-- No keyword field exists — all keyword strategy goes into title, short description, and description`;
+			? `Store facts - Apple App Store:
+- The title, subtitle and keyword field are indexed together; a word used in one must not appear in another.
+- The description and promotional text are not indexed: translate them for conversion.
+- The keyword field is a list of what people in the target market search for, not a translation of the source list.
+- A storefront indexes several localizations at once (the US indexes English (U.S.) and Spanish (Mexico); most European storefronts index the local language and English (U.K.)). When the target is a secondary localization of a storefront, its title phrase, subtitle and keyword field are extra budget for that storefront: fill them with searched terms the primary localization does not already cover.`
+			: `Store facts - Google Play:
+- The title, short description and full description are all indexed; the short description weighs most after the title.
+- The market's primary phrase belongs in the first sentence of the full description and may recur naturally three to five times, never as a list.
+- There is no keyword field: the searched phrases live in the title, short description and full description.`;
 
-		let systemPrompt = `You are an expert ASO (App Store Optimization) translator with deep knowledge of 2025-2026 store algorithms.
+		let systemPrompt = `You are a senior App Store Optimization localizer. A localization is a rewrite for another market: the same store limits and policies, the phrases people there actually search for, and copy that reads as if it had been written in that language first.
 
-Your job is NOT literal translation — it is MARKET ADAPTATION. You translate app store content so it ranks well and converts in the target market.
+Character limits are hard limits:
+- Every field states its limit. Count the characters of your translation; if it is over, shorten by cutting words - never truncate mid-sentence.
+- For 30-character fields (title, subtitle) every character counts: prefer one strong phrase to two weak ones.
 
-IMPORTANT: NEVER use emoji or special Unicode symbols in any field.
+Market adaptation:
+- Search terms differ by market. Use the phrase people in the target market type into the store, even when it is not the literal translation of the source (a literal "Audio Guides & Discoveries" in Polish is not what a Polish user searches for).
+- Adapt idioms, humor, examples, formality and urgency to the target culture; drop a reference that does not exist there instead of translating it literally.
+- Keep the brand name exactly as it is; keep bullet lines, line breaks and the structure (opening, benefits, proof, close).
+- Benefits before features, active voice, the register the target market expects.
+- Every field must stand on its own as native marketing copy.
 
-CRITICAL — CHARACTER LIMITS:
-- Each field has a strict character limit shown in parentheses (e.g. "max 30 chars")
-- You MUST count characters and ensure EVERY translated value fits within its limit
-- If a direct translation is too long, shorten it — use fewer words, abbreviate, or rephrase more concisely
-- NEVER exceed the character limit. A shorter, complete translation is always better than a truncated one
-- For 30-char fields (title, subtitle): every character is precious — be concise and impactful
+When the target is another locale of the same language (en-GB, en-AU, pt-BR, es-MX, fr-CA), do not return the source unchanged: adapt spelling, vocabulary, units, prices and above all the search terms to that market ("holiday" not "vacation" for en-GB, "celular" for pt-BR). The keyword field is rebuilt around what that market searches.
 
-Core principles:
-- Find what users in the target market ACTUALLY search for — do NOT just translate source keywords word-for-word
-- The translated text MUST make sense as natural, fluent copy in the target language — never sound like machine translation
-- Adapt marketing tone and cultural references to the target audience
-- Preserve ASO structure (hooks, benefits, CTAs) while making it natural in the target language
-- Preserve formatting (bullet points, line breaks)
-- Benefits over features — focus on what the user gains, not what the app does
-- Active voice — use action verbs natural in the target language
-- Each field must work as standalone marketing copy — it should sound like it was originally written in the target language
-
-Localization is NOT just translation:
-- Users search differently in every language — adapt keywords to local search behavior
-- Cultural adaptation: humor, idioms, urgency level, formality — all vary by market
-- Some concepts do not translate directly — find the equivalent that resonates locally
-- Example: "Audio Guides & Discoveries" translated literally to Polish sounds nonsensical — instead adapt to what Polish users would search for and understand
+Store policies apply to translations as much as to the source: no competitor or third-party brand names in the title, subtitle, short description or keyword field; no promotional or ranking words in titles ("best", "#1", "free", "top"); no other platforms named in App Store metadata; no anonymous user testimonials on Google Play. ${PLAIN_TEXT}
 
 ${platformRules}`;
 
@@ -1341,14 +1334,14 @@ ${asoContext}`;
 		}
 
 		if (asoProfile?.wordsToInclude?.length) {
-			systemPrompt += `\n\nWords/phrases to include where natural: ${asoProfile.wordsToInclude.join(", ")}`;
+			systemPrompt += `\n\nWords/phrases to include where natural (never a brand or trademark, never a promotional word): ${asoProfile.wordsToInclude.join(", ")}`;
 		}
 		if (asoProfile?.wordsToAvoid?.length) {
 			systemPrompt += `\nWords/phrases to AVOID: ${asoProfile.wordsToAvoid.join(", ")}`;
 		}
 
 		if (instructions?.trim()) {
-			systemPrompt += `\n\nAdditional translation instructions from the user (follow these STRICTLY, they override defaults where they conflict):\n${instructions.trim()}`;
+			systemPrompt += `\n\nAdditional instructions from the user. Follow them for terminology, tone, register and phrasing; they override the style defaults above. They never override the character limits or the store policies (no competitor or third-party names, no promotional or ranking words, no emoji or symbols, no other platforms, nothing untrue) - if an instruction conflicts with those, keep the store rule.\n${instructions.trim()}`;
 		}
 
 		systemPrompt +=
@@ -1379,19 +1372,20 @@ Return ONLY a JSON object with the same keys and translated values.`;
 			"generate",
 		);
 
-		let cleaned = content.trim();
-		if (cleaned.startsWith("```")) {
-			cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-		}
-
 		try {
-			const translations = JSON.parse(cleaned) as Record<string, string>;
+			const translations = JSON.parse(extractJsonObject(content)) as Record<
+				string,
+				string
+			>;
 
 			for (const [key, value] of Object.entries(translations)) {
-				const limit = fieldLimits[key];
-				if (limit && value.length > limit) {
-					translations[key] = truncateToLimit(value, limit, key);
-				}
+				if (typeof value !== "string") continue;
+				const normalized = stripEmoji(value);
+				const limit = limitFor(key);
+				translations[key] =
+					normalized.length > limit
+						? truncateToLimit(normalized, limit, key)
+						: normalized;
 			}
 
 			return { model, translations };
@@ -1408,15 +1402,19 @@ Return ONLY a JSON object with the same keys and translated values.`;
 		appName: string,
 		_version: string,
 		changes: string[],
+		options: { language?: string; platform?: string } = {},
 	) {
+		// Generate mode with the changes as the brief: rephrase mode would tell
+		// the model to keep a raw change list as it is.
 		const { model, result } = await AIService.generateListingField(
 			workspaceId,
 			"whatsNew",
 			"",
 			appName,
-			"ios",
-			"en-US",
-			changes.join("\n"),
+			options.platform ?? "ios",
+			options.language ?? "en-US",
+			undefined,
+			{ brief: changes.join("\n") },
 		);
 		return { model, releaseNotes: result };
 	}
@@ -1436,19 +1434,26 @@ Return ONLY a JSON object with the same keys and translated values.`;
 		const asoProfile = appId ? await AsoProfileService.get(appId) : null;
 		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
 
-		const categoryList = APP_STORE_CATEGORIES.map(
-			(c) => `${c.id} (${c.name})`,
-		).join(", ");
+		const isIos = platform === "ios";
+		const categories: ReadonlyArray<{ id: string; name: string }> = isIos
+			? APP_STORE_CATEGORIES
+			: GOOGLE_PLAY_CATEGORIES;
+		const categoryList = categories
+			.map((c) => `${c.id} (${c.name})`)
+			.join(", ");
+		const validIds = new Set(categories.map((c) => c.id));
 
-		const systemPrompt = `You are an ASO expert specializing in app categorization. Your job is to suggest the best primary and secondary App Store categories for an app.
+		const systemPrompt = `You are an ASO strategist choosing store categories. The category decides which charts an app competes in and which "you might also like" rails it appears on, so the choice is about where the app can rank, not only what it is.
 
-Available categories: ${categoryList}
+Store: ${isIos ? "Apple App Store" : "Google Play"}
+Available categories (use these ids exactly): ${categoryList}
 
 Rules:
-- Primary category should be the most relevant to the app's core functionality
-- Secondary category should capture a secondary use case (or null if none fits well)
-- Consider both discoverability (where users would search) and competition (less crowded categories rank higher)
-- Return ONLY valid JSON with this exact structure: {"primary": "CATEGORY_ID", "secondary": "CATEGORY_ID" or null, "reasoning": "brief explanation"}`;
+- The primary category is where people looking for this app browse and where its direct competitors sit; pick the category the app's core use case belongs to.
+- ${isIos ? "The secondary category covers a real second use case; return null when none fits honestly. For games choose GAMES and name the two most fitting game subcategories in the reasoning." : "Google Play has one application category and no secondary: always return secondary: null. Mention up to five relevant Play tags in the reasoning."}
+- Prefer the category the app genuinely belongs to over a less crowded one: a mis-filed app loses "similar apps" traffic and can be rejected in review.
+- Do not choose Kids or Medical unless the description makes the app clearly a children's app or a medical tool; both carry extra review requirements (Apple 5.1.4 and 1.4.1, Play Families policy).
+- Return ONLY valid JSON with this exact structure: {"primary": "CATEGORY_ID", "secondary": "CATEGORY_ID" or null, "reasoning": "one or two sentences"}`;
 
 		const userPrompt = `App name: ${appName}
 Platform: ${platform === "ios" ? "iOS (App Store)" : "Android (Google Play)"}
@@ -1466,18 +1471,13 @@ Suggest the best primary and secondary category. Return ONLY the JSON.`;
 			"research",
 		);
 
-		let cleaned = content.trim();
-		if (cleaned.startsWith("```")) {
-			cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
-		}
-
+		let result: {
+			primary: string;
+			reasoning: string;
+			secondary: string | null;
+		};
 		try {
-			const result = JSON.parse(cleaned) as {
-				primary: string;
-				reasoning: string;
-				secondary: string | null;
-			};
-			return { model, ...result };
+			result = JSON.parse(extractJsonObject(content)) as typeof result;
 		} catch {
 			log.error(
 				{ content },
@@ -1487,6 +1487,26 @@ Suggest the best primary and secondary category. Return ONLY the JSON.`;
 				info: "AI returned invalid category suggestion format",
 			});
 		}
+		// The ids go straight into a store form: an id the store does not have
+		// is worse than no answer.
+		if (!validIds.has(result.primary)) {
+			buildError("somethingWentWrong", {
+				info: `AI proposed a category this store does not have: ${result.primary}`,
+			});
+		}
+		const secondary =
+			isIos &&
+			result.secondary &&
+			validIds.has(result.secondary) &&
+			result.secondary !== result.primary
+				? result.secondary
+				: null;
+		return {
+			model,
+			primary: result.primary,
+			reasoning: String(result.reasoning ?? ""),
+			secondary,
+		};
 	}
 
 	static async generateAgeRating(
@@ -1581,7 +1601,7 @@ For Google Play, provide these fields:
 - contains_ads: boolean
 
 Rules:
-- Be conservative — when in doubt, rate higher rather than lower
+- Be conservative - when in doubt, rate higher rather than lower
 - Productivity, utility, and educational apps with no objectionable content should be "everyone"
 - Social apps with user-generated content need appropriate UGC and messaging flags
 - Games should carefully evaluate violence, loot boxes, and gambling elements

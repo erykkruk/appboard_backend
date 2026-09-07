@@ -29,7 +29,7 @@ const MAX_COMPARE_REVIEWS = 120;
 const MAX_VISUAL_IMAGES = 6;
 const TEMPERATURE = 0.2;
 // Reasoning models (e.g. GLM 5.x) spend output tokens on thinking before the
-// JSON answer — a low cap truncates the JSON mid-array ("Expected ']'").
+// JSON answer - a low cap truncates the JSON mid-array ("Expected ']'").
 const MAX_TOKENS = 24000;
 
 const analysisSchema = type({
@@ -71,8 +71,16 @@ const compareSchema = type({
 	weDoBetter: "string[]",
 });
 
+/**
+ * One language rule for the whole report: the developer reads it in English;
+ * only what will be typed into a store search or pasted into a listing stays
+ * in the market's language.
+ */
+const LANGUAGE_RULE =
+	"Language: write every text in English, except asoKeywords (the language of the app's market, as people search there) and the exact wording proposed inside metadataTips (the listing's language, as it would be pasted into the store).";
+
 const ANALYSIS_JSON_SPEC = (catIds: string) => `{
-  "summary": "3-5 sentences in English: the overall picture — what hurts users the most, what they praise, what the trend is",
+  "summary": "3-5 sentences in English: the overall picture - what hurts users the most, what they praise, what the trend is",
   "sentiment": { "positive": <number of 4-5★ reviews>, "neutral": <3★>, "negative": <1-2★> },
   "categories": [
     {
@@ -89,11 +97,11 @@ const ANALYSIS_JSON_SPEC = (catIds: string) => `{
   "featuresHated": [
     { "name": "<specific app feature>", "mentions": <how many times criticized>, "insight": "what exactly is annoying about it (in English)" }
   ],
-  "topIrritations": ["5-8 things that annoy users the most, from the most frequent — in English, specific"],
+  "topIrritations": ["5-8 things that annoy users the most, from the most frequent - in English, specific"],
   "quickWins": ["3-6 specific, technical recommendations in English, sorted by impact/effort"],
-  "metadataTips": ["2-4 ASO tips regarding the app's title/subtitle/description in English (e.g. a missing phrase in the title, a proposal for a better subtitle — remember the 30-character limit)"],
+  "metadataTips": ["2-4 concrete ASO changes to the title, subtitle/short description or description in English, each naming the field and the exact wording, within store limits (title and subtitle 30 characters, short description 80), without competitor names, promotional words or emoji, and grounded in what these reviews praise or miss"],
   "asoKeywords": [
-    { "keyword": "<1-3 word phrase in the language of the app's market>", "reason": "why" }
+    { "keyword": "<1-3 word phrase in the language of the app's market, as users actually search - singular, lower case, no brand names>", "reason": "which reviews or features justify it" }
   ]
 }`;
 
@@ -109,7 +117,7 @@ function reviewLines(reviews: ResearchReview[], limit: number): string {
 		.slice(0, limit)
 		.map(
 			(r, i) =>
-				`${i + 1}. [${r.store === "appstore" ? "iOS" : "Android"}] ${r.stars}★ ${r.title ? `${r.title} — ` : ""}${r.text.slice(0, MAX_REVIEW_CHARS)}`,
+				`${i + 1}. [${r.store === "appstore" ? "iOS" : "Android"}] ${r.stars}★ ${r.title ? `${r.title} - ` : ""}${r.text.slice(0, MAX_REVIEW_CHARS)}`,
 		)
 		.join("\n");
 }
@@ -118,7 +126,7 @@ function metaBlock(meta: ResearchAppMeta[]): string {
 	return meta
 		.map(
 			(m) =>
-				`${m.store === "appstore" ? "App Store" : "Google Play"}: "${m.title}" (${m.developer}), rating ${m.rating?.toFixed(2) ?? "?"} from ${m.ratingsCount ?? "?"} ratings, version ${m.version ?? "?"}.\nDescription (excerpt): ${(m.description ?? "").slice(0, 600)}`,
+				`${m.store === "appstore" ? "App Store" : "Google Play"}, market ${m.country.toUpperCase()}: "${m.title}" (${m.developer}), rating ${m.rating?.toFixed(2) ?? "?"} from ${m.ratingsCount ?? "?"} ratings, version ${m.version ?? "?"}.\nDescription (excerpt): ${(m.description ?? "").slice(0, 600)}`,
 		)
 		.join("\n\n");
 }
@@ -267,13 +275,14 @@ ${metaBlock(meta)}
 REVIEWS (${Math.min(reviews.length, MAX_REVIEWS_SINGLE_PASS)} most recent):
 ${reviewLines(reviews, MAX_REVIEWS_SINGLE_PASS)}
 
-TASK — return ONLY valid JSON (no markdown) with the structure:
+TASK - return ONLY valid JSON (no markdown) with the structure:
 ${ANALYSIS_JSON_SPEC(catIds)}
 
 Categories:
 ${catList}
 
-Rules: skip categories with count=0; a review can belong to multiple categories; featuresLoved/featuresHated are SPECIFIC product features (e.g. "receipt scanning", "offline mode"), not generalities; asoKeywords: 8-14 phrases.`;
+Rules: skip categories with count=0; a review can belong to multiple categories; featuresLoved/featuresHated are SPECIFIC product features (e.g. "receipt scanning", "offline mode"), not generalities; asoKeywords: 8-14 phrases.
+${LANGUAGE_RULE}`;
 		return parseAnalysis(await callModel(apiKey, model, prompt));
 	}
 
@@ -301,7 +310,7 @@ Rules: skip categories with count=0; a review can belong to multiple categories;
   "categories": { "<id from: ${catIds}>": <number of reviews with this problem> },
   "featuresLoved": [{ "name": "<specific feature>", "mentions": <how many times praised> }],
   "featuresHated": [{ "name": "<specific feature>", "mentions": <how many times criticized> }],
-  "irritations": ["what specifically annoys users — in English, max 6 items"],
+  "irritations": ["what specifically annoys users - in English, max 6 items"],
   "quotes": ["max 5 most telling short quotes (verbatim)"]
 }
 
@@ -372,8 +381,9 @@ AGGREGATE:
 - irritations (raw, with duplicates): ${JSON.stringify(irritations.slice(0, 60))}
 - quotes: ${JSON.stringify(quotes.slice(0, 40))}
 
-TASK — synthesize the final report. Merge duplicate features/irritations (sum different names for the same thing). Use the sentiment from the aggregate unchanged. Return ONLY JSON:
-${ANALYSIS_JSON_SPEC(catIds)}`;
+TASK - synthesize the final report. Merge duplicate features/irritations (sum different names for the same thing). Use the sentiment from the aggregate unchanged. Return ONLY JSON:
+${ANALYSIS_JSON_SPEC(catIds)}
+${LANGUAGE_RULE}`;
 		return parseAnalysis(await callModel(apiKey, model, reducePrompt));
 	}
 
@@ -397,7 +407,7 @@ ${ANALYSIS_JSON_SPEC(catIds)}`;
 				text: `You are an ASO expert on store-page conversion. The first image is the ICON of the app "${meta.title}" (${meta.genre ?? ""}), the following ones are screenshots from the store page. Evaluate them in terms of install conversion. Return ONLY JSON:
 {
   "iconVerdict": "icon evaluation in English: legibility at small size, distinctiveness against the category, 2-3 sentences",
-  "screenshotFindings": ["evaluation of each screenshot in order: what it communicates, what to improve — in English"],
+  "screenshotFindings": ["evaluation of each screenshot in order: what it communicates, what to improve - in English"],
   "conversionTips": ["3-6 specific recommendations to increase store-page conversion, from the most important"]
 }`,
 				type: "text",
@@ -430,11 +440,11 @@ ${ANALYSIS_JSON_SPEC(catIds)}`;
 		const model = await resolveModel(workspaceId, options.model);
 		const prompt = `Compare two competing mobile apps based on user reviews.
 
-OUR APP: "${ourMeta.title}" — rating ${ourMeta.rating?.toFixed(2)}
+OUR APP: "${ourMeta.title}" - rating ${ourMeta.rating?.toFixed(2)}
 OUR REVIEWS (${Math.min(ourReviews.length, MAX_COMPARE_REVIEWS)}):
 ${reviewLines(ourReviews, MAX_COMPARE_REVIEWS)}
 
-COMPETITOR: "${compMeta.title}" (${compMeta.developer}) — rating ${compMeta.rating?.toFixed(2)}
+COMPETITOR: "${compMeta.title}" (${compMeta.developer}) - rating ${compMeta.rating?.toFixed(2)}
 COMPETITOR REVIEWS (${Math.min(compReviews.length, MAX_COMPARE_REVIEWS)}):
 ${reviewLines(compReviews, MAX_COMPARE_REVIEWS)}
 
