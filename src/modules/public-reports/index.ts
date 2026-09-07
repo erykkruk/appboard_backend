@@ -3,16 +3,28 @@ import Elysia, { t } from "elysia";
 import { buildError } from "@/utils/errors";
 import { checkRateLimit, rateLimitEnabled } from "@/utils/rate-limit";
 import { PlayProxyService } from "./play-proxy.service";
-import { PublicReportsService } from "./public-reports.service";
+import { PublicReportsService, SHARE_TOOLS } from "./public-reports.service";
 import {
 	FREE_TOOLS,
 	type FreeTool,
 	FreeToolQuotaService,
 } from "./quota.service";
 
-const MAX_REPORTS_PER_HOUR = 10;
-const MAX_PLAY_LOOKUPS_PER_HOUR = 20;
-const MAX_PLAY_KEYWORD_CALLS_PER_HOUR = 120;
+// An all-markets check-up ingests one observation set per storefront (up to
+// 30) and looks the app up once per storefront, so the per-address budgets
+// cover two such runs an hour plus keyword checks.
+const MAX_REPORTS_PER_HOUR = 100;
+const MAX_PLAY_LOOKUPS_PER_HOUR = 100;
+const MAX_PLAY_KEYWORD_CALLS_PER_HOUR = 500;
+const MAX_SHARES_PER_HOUR = 20;
+const MAX_SHARE_READS_PER_HOUR = 300;
+/**
+ * One shared report as JSON. A 30-market check-up with 8 keywords per market
+ * and 10 rivals each stays well under 1 MB; the cap only stops abuse.
+ */
+const MAX_SHARE_PAYLOAD_BYTES = 4 * 1024 * 1024;
+const UUID_PATTERN =
+	"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 const MAX_PLAY_SEARCHES_PER_HOUR = 60;
 const MAX_IMAGE_PROXY_PER_HOUR = 600;
 // Google's image CDN is blocked by some privacy blockers, so Play artwork is
@@ -92,6 +104,25 @@ const reportBody = t.Object(
 	{ additionalProperties: false },
 );
 
+const shareBody = t.Object(
+	{
+		appName: t.Optional(t.String({ maxLength: 255 })),
+		country: t.String({
+			maxLength: 8,
+			minLength: 2,
+			pattern: "^(all|[A-Za-z]{2})$",
+		}),
+		// The snapshot format is the panel's; only its envelope is checked here.
+		payload: t.Object({ version: t.Number() }, { additionalProperties: true }),
+		store: t.Optional(t.Union([t.Literal("appstore"), t.Literal("playstore")])),
+		tool: t.Union(SHARE_TOOLS.map((tool) => t.Literal(tool))),
+		trackId: t.Optional(
+			t.String({ maxLength: 255, minLength: 1, pattern: APP_OR_PACKAGE_ID }),
+		),
+	},
+	{ additionalProperties: false },
+);
+
 /**
  * Public (pre-auth-guard) ingest for the free browser-side ASO check-up.
  * The visitor's browser fetches iTunes data itself, runs the shared scoring
@@ -126,6 +157,65 @@ export const publicReportsController = new Elysia({
 					"Store an anonymous browser-computed ASO check-up (free tool ingest)",
 				tags: ["Public"],
 			},
+		},
+	)
+	.post(
+		"/aso-reports/share",
+		async ({ body, request }) => {
+			const ip = clientIp(request);
+			if (
+				rateLimitEnabled() &&
+				!checkRateLimit(`aso-share:${ip}`, MAX_SHARES_PER_HOUR, WINDOW_MS)
+			) {
+				buildError("rateLimitExceeded", {
+					info: "Too many shared reports from this address. Try again in an hour.",
+				});
+			}
+			if (
+				Buffer.byteLength(JSON.stringify(body.payload)) >
+				MAX_SHARE_PAYLOAD_BYTES
+			) {
+				buildError("badRequest", {
+					info: "This report is too large to share.",
+				});
+			}
+			return PublicReportsService.share(body, hashIp(ip));
+		},
+		{
+			body: shareBody,
+			detail: {
+				description:
+					"Keep a finished free-tool report so it can be opened from a link (free tool share)",
+				tags: ["Public"],
+			},
+		},
+	)
+	.get(
+		"/aso-reports/share/:id",
+		async ({ params, request, set }) => {
+			const ip = clientIp(request);
+			if (
+				rateLimitEnabled() &&
+				!checkRateLimit(
+					`aso-share-read:${ip}`,
+					MAX_SHARE_READS_PER_HOUR,
+					WINDOW_MS,
+				)
+			) {
+				buildError("rateLimitExceeded", {
+					info: "Too many report reads from this address. Try again later.",
+				});
+			}
+			const share = await PublicReportsService.getShare(params.id);
+			set.headers["cache-control"] = "public, max-age=300";
+			return share;
+		},
+		{
+			detail: {
+				description: "Read a shared free-tool report by its link id",
+				tags: ["Public"],
+			},
+			params: t.Object({ id: t.String({ pattern: UUID_PATTERN }) }),
 		},
 	)
 	.post(

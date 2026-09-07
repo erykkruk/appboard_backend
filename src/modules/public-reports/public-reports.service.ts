@@ -1,5 +1,11 @@
+import { eq, lt } from "drizzle-orm";
 import { db } from "@/utils/db";
-import { publicAsoReports, publicKeywordObservations } from "@/utils/db/schema";
+import {
+	publicAsoReports,
+	publicKeywordObservations,
+	publicReportShares,
+} from "@/utils/db/schema";
+import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 
 const log = createLogger("public-reports");
@@ -14,6 +20,23 @@ const VALID_CLASSIFICATIONS = new Set([
 	"avoid",
 	"unknown",
 ]);
+
+/** Free tools whose finished report can be turned into a link. */
+export const SHARE_TOOLS = ["aso-check", "keyword-check"] as const;
+export type ShareTool = (typeof SHARE_TOOLS)[number];
+
+/** A shared link stops answering after this; the row is dropped by the scheduler. */
+const SHARE_RETENTION_DAYS = 365;
+
+export interface PublicShareInput {
+	appName?: string;
+	/** "all" for a multi-market report, otherwise the storefront code. */
+	country: string;
+	payload: Record<string, unknown>;
+	store?: "appstore" | "playstore";
+	tool: ShareTool;
+	trackId?: string;
+}
 
 export interface PublicReportInput {
 	appName?: string;
@@ -88,5 +111,66 @@ export class PublicReportsService {
 			"Public ASO check-up stored",
 		);
 		return { keywordsStored: keywords.length, success: true };
+	}
+
+	/**
+	 * Keep one finished report so its link can be opened by anyone. The
+	 * payload is the browser's own snapshot (untrusted): stored as-is and
+	 * rendered only through the panel's sanitizer.
+	 */
+	static async share(input: PublicShareInput, ipHash: string) {
+		const [row] = await db
+			.insert(publicReportShares)
+			.values({
+				appName: input.appName?.slice(0, 255) ?? null,
+				country: input.country.toLowerCase(),
+				ipHash,
+				payload: input.payload,
+				store: input.store === "playstore" ? "playstore" : "appstore",
+				tool: input.tool,
+				trackId: input.trackId?.slice(0, 255) ?? null,
+			})
+			.returning({ id: publicReportShares.id });
+		log.info(
+			{ country: input.country, id: row.id, tool: input.tool },
+			"Public report shared",
+		);
+		return { id: row.id };
+	}
+
+	static async getShare(id: string) {
+		const [row] = await db
+			.select({
+				appName: publicReportShares.appName,
+				country: publicReportShares.country,
+				createdAt: publicReportShares.createdAt,
+				id: publicReportShares.id,
+				payload: publicReportShares.payload,
+				store: publicReportShares.store,
+				tool: publicReportShares.tool,
+				trackId: publicReportShares.trackId,
+			})
+			.from(publicReportShares)
+			.where(eq(publicReportShares.id, id))
+			.limit(1);
+		if (!row) {
+			buildError("notFound", {
+				info: "This shared report does not exist or has expired.",
+			});
+		}
+		return row;
+	}
+
+	/** Drop shared reports older than the retention window. */
+	static async cleanupShares(): Promise<number> {
+		const cutoff = new Date(Date.now() - SHARE_RETENTION_DAYS * 86_400_000);
+		const removed = await db
+			.delete(publicReportShares)
+			.where(lt(publicReportShares.createdAt, cutoff))
+			.returning({ id: publicReportShares.id });
+		if (removed.length) {
+			log.info({ removed: removed.length }, "Shared report cleanup");
+		}
+		return removed.length;
 	}
 }
