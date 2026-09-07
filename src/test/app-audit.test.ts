@@ -324,4 +324,67 @@ describe("app audit", () => {
 		);
 		await waitForReady(appId);
 	});
+
+	it("says that a measurement failed instead of measuring forever", async () => {
+		// The store has never heard of this app: lookup returns nothing.
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url.includes("/lookup")) {
+				return new Response(JSON.stringify({ resultCount: 0, results: [] }), {
+					headers: { "content-type": "application/json" },
+				});
+			}
+			return new Response(JSON.stringify(searchPayload()), {
+				headers: { "content-type": "application/json" },
+			});
+		}) as typeof fetch;
+		const seeded = await seedApp(getTestWorkspaceId());
+		storeIds.push(seeded.storeId);
+
+		const first = await app.handle(
+			authRequest(`http://localhost/api/apps/${seeded.appId}/audit`),
+		);
+		expect(((await first.json()) as { status: string }).status).toBe(
+			"measuring",
+		);
+
+		const deadline = Date.now() + 20_000;
+		let row: { status: string; lastError: string | null } | undefined;
+		while (Date.now() < deadline) {
+			[row] = await db
+				.select({ lastError: appAudits.lastError, status: appAudits.status })
+				.from(appAudits)
+				.where(eq(appAudits.appId, seeded.appId))
+				.limit(1);
+			if (row?.status === "failed") break;
+			await new Promise((r) => setTimeout(r, 100));
+		}
+		expect(row?.status).toBe("failed");
+		expect(row?.lastError).toBeTruthy();
+
+		const second = await app.handle(
+			authRequest(`http://localhost/api/apps/${seeded.appId}/audit`),
+		);
+		const body = (await second.json()) as {
+			error?: string;
+			refreshing: boolean;
+			report: unknown;
+			status: string;
+		};
+		expect(body.status).toBe("failed");
+		expect(body.refreshing).toBe(false);
+		expect(body.report).toBeNull();
+		expect(body.error).toBe(row?.lastError as string);
+
+		// Re-check is still allowed to try again right away.
+		const again = await app.handle(
+			authRequest(
+				`http://localhost/api/apps/${seeded.appId}/audit?refresh=true`,
+			),
+		);
+		expect(((await again.json()) as { status: string }).status).toBe(
+			"measuring",
+		);
+		await new Promise((r) => setTimeout(r, 800));
+	});
 });

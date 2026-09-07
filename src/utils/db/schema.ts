@@ -532,6 +532,8 @@ export const appAudits = pgTable(
 			.references(() => apps.id, { onDelete: "cascade" }),
 		country: varchar({ length: 2 }).notNull(),
 		draftScore: integer(),
+		/** Why the last run failed, so the panel can say it instead of spinning. */
+		lastError: text(),
 		/** Full report; NULL while the first measurement is still running. */
 		report: jsonb().$type<AppAuditReport>(),
 		startedAt: timestamp(),
