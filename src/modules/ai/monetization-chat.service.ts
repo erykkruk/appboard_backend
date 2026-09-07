@@ -294,12 +294,12 @@ When creating or editing groups/subscriptions, ALWAYS include localizations with
 IMPORTANT RULES FOR GROUPS:
 - ALWAYS prefer using EXISTING groups. If groups already exist, add new subscriptions to them using "groups" WITH "id" set to the existing group's UUID or name.
 - NEVER create a new group if an existing group could serve the same purpose. Only create a new group when the user EXPLICITLY asks for a new/separate group.
-- To ADD subscriptions to an EXISTING group: use "groups" WITH "id" field — you can use either the UUID or the exact group name from EXISTING PRODUCTS.
+- To ADD subscriptions to an EXISTING group: use "groups" WITH "id" field - you can use either the UUID or the exact group name from EXISTING PRODUCTS.
 - To CREATE a new group (ONLY when explicitly requested): use "groups" WITHOUT "id" field.
 - To RENAME an existing group: use "groupEdits" with the group UUID or name.
 - To DELETE an existing subscription group: use "groupDeletes" with the group UUID or name.
 - To EDIT an existing subscription (price, name, localizations): use "edits" with the subscription's UUID, name, or productId.
-- You can reference existing products by their UUID, name, or productId — the system will resolve them automatically.
+- You can reference existing products by their UUID, name, or productId - the system will resolve them automatically.
 - When the user mentions a product by name (e.g. a "Premium" group, "Pro Weekly" subscription), match it to the EXISTING PRODUCTS list above and use the corresponding identifier.
 
 Include ONLY the sections that apply (omit empty arrays). Reference existing product UUIDs in "edits", "deletes", "groupEdits", and "groupDeletes".
@@ -357,11 +357,11 @@ function buildFocusContextBlock(focus: FocusContext): string {
 	}
 
 	lines.push(
-		"\nYou have ALL the information you need — the item's UUID, name, prices, and localizations are listed above.",
+		"\nYou have ALL the information you need - the item's UUID, name, prices, and localizations are listed above.",
 		"DO NOT ask the user for any of this information. Act immediately on the instruction.",
 		'Apply the instruction to this item. If adding subscriptions, use this group (set "id" to the UUID above).',
 		'If the instruction mentions other items or "all", handle accordingly.',
-		"Output a monetization_plan block immediately — no questions needed.",
+		"Output a monetization_plan block immediately - no questions needed.",
 	);
 
 	return lines.join("\n");
@@ -765,7 +765,7 @@ export class MonetizationChatService {
 
 					const resolvedGroupId = resolveGroupId(groupData.id, groupData.name);
 					if (resolvedGroupId) {
-						// Use existing group — just add subscriptions to it
+						// Use existing group - just add subscriptions to it
 						groupId = resolvedGroupId;
 					} else if (groupData.name) {
 						// Create new group
@@ -843,7 +843,7 @@ export class MonetizationChatService {
 				const resolvedId = resolveGroupId(editData.groupId, undefined);
 				if (!resolvedId) {
 					results.failed.push({
-						error: `Could not resolve group: "${editData.groupId}" — not a valid UUID and no matching group name found`,
+						error: `Could not resolve group: "${editData.groupId}" - not a valid UUID and no matching group name found`,
 						item: `edit group ${editData.groupId}`,
 					});
 					continue;
@@ -917,7 +917,7 @@ export class MonetizationChatService {
 				const resolvedId = resolvePurchaseId(editData.purchaseId);
 				if (!resolvedId) {
 					results.failed.push({
-						error: `Could not resolve purchase: "${editData.purchaseId}" — not a valid UUID and no matching name/productId found`,
+						error: `Could not resolve purchase: "${editData.purchaseId}" - not a valid UUID and no matching name/productId found`,
 						item: `edit purchase ${editData.purchaseId}`,
 					});
 					continue;
@@ -956,7 +956,7 @@ export class MonetizationChatService {
 				const resolvedId = resolvePurchaseId(purchaseId);
 				if (!resolvedId) {
 					results.failed.push({
-						error: `Could not resolve purchase: "${purchaseId}" — not a valid UUID and no matching name/productId found`,
+						error: `Could not resolve purchase: "${purchaseId}" - not a valid UUID and no matching name/productId found`,
 						item: `delete purchase ${purchaseId}`,
 					});
 					continue;
@@ -981,7 +981,7 @@ export class MonetizationChatService {
 				const resolvedId = resolveGroupId(groupId, undefined);
 				if (!resolvedId) {
 					results.failed.push({
-						error: `Could not resolve group: "${groupId}" — not a valid UUID and no matching group name found`,
+						error: `Could not resolve group: "${groupId}" - not a valid UUID and no matching group name found`,
 						item: `delete group ${groupId}`,
 					});
 					continue;

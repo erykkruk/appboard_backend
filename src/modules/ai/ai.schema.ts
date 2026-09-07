@@ -17,6 +17,9 @@ export const suggestKeywordsBody = t.Object({
 	category: t.Optional(t.String()),
 	currentKeywords: t.Optional(t.Array(t.String())),
 	description: t.Optional(t.String()),
+	/** Market language the terms must be in; defaults to the description's. */
+	language: t.Optional(t.String()),
+	platform: t.Optional(t.String()),
 });
 
 export const draftReplyBody = t.Object({
@@ -29,6 +32,10 @@ export const draftReplyBody = t.Object({
 export const generateReleaseNotesBody = t.Object({
 	appName: t.String({ minLength: 1 }),
 	changes: t.Array(t.String({ minLength: 1 })),
+	/** Listing language of the notes; defaults to en-US. */
+	language: t.Optional(t.String()),
+	/** "ios" or "android": Google Play caps release notes at 500 characters. */
+	platform: t.Optional(t.String()),
 	version: t.String({ minLength: 1 }),
 });
 

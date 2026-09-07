@@ -54,7 +54,10 @@ export interface AuditAiRewrites {
 
 export interface AuditAiInsights {
 	generatedAt: string;
-	/** Language the review is written in (the audited listing's language). */
+	/**
+	 * Language of the rewrites (the audited listing's language). The summary
+	 * and priorities are written in English, the panel's language.
+	 */
 	language: string;
 	model: string;
 	summary: string;

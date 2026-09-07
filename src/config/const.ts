@@ -238,6 +238,62 @@ export const PURCHASE_PRODUCT_TYPES = [
 ] as const;
 export type PurchaseProductType = (typeof PURCHASE_PRODUCT_TYPES)[number];
 
+/**
+ * Google Play application and game categories as Play Console lists them.
+ * Play has one category per app (no secondary) plus up to five tags.
+ */
+export const GOOGLE_PLAY_CATEGORIES = [
+	{ id: "ART_AND_DESIGN", name: "Art & Design" },
+	{ id: "AUTO_AND_VEHICLES", name: "Auto & Vehicles" },
+	{ id: "BEAUTY", name: "Beauty" },
+	{ id: "BOOKS_AND_REFERENCE", name: "Books & Reference" },
+	{ id: "BUSINESS", name: "Business" },
+	{ id: "COMICS", name: "Comics" },
+	{ id: "COMMUNICATION", name: "Communication" },
+	{ id: "DATING", name: "Dating" },
+	{ id: "EDUCATION", name: "Education" },
+	{ id: "ENTERTAINMENT", name: "Entertainment" },
+	{ id: "EVENTS", name: "Events" },
+	{ id: "FINANCE", name: "Finance" },
+	{ id: "FOOD_AND_DRINK", name: "Food & Drink" },
+	{ id: "HEALTH_AND_FITNESS", name: "Health & Fitness" },
+	{ id: "HOUSE_AND_HOME", name: "House & Home" },
+	{ id: "LIBRARIES_AND_DEMO", name: "Libraries & Demo" },
+	{ id: "LIFESTYLE", name: "Lifestyle" },
+	{ id: "MAPS_AND_NAVIGATION", name: "Maps & Navigation" },
+	{ id: "MEDICAL", name: "Medical" },
+	{ id: "MUSIC_AND_AUDIO", name: "Music & Audio" },
+	{ id: "NEWS_AND_MAGAZINES", name: "News & Magazines" },
+	{ id: "PARENTING", name: "Parenting" },
+	{ id: "PERSONALIZATION", name: "Personalization" },
+	{ id: "PHOTOGRAPHY", name: "Photography" },
+	{ id: "PRODUCTIVITY", name: "Productivity" },
+	{ id: "SHOPPING", name: "Shopping" },
+	{ id: "SOCIAL", name: "Social" },
+	{ id: "SPORTS", name: "Sports" },
+	{ id: "TOOLS", name: "Tools" },
+	{ id: "TRAVEL_AND_LOCAL", name: "Travel & Local" },
+	{ id: "VIDEO_PLAYERS", name: "Video Players & Editors" },
+	{ id: "WEATHER", name: "Weather" },
+	{ id: "GAME_ACTION", name: "Games: Action" },
+	{ id: "GAME_ADVENTURE", name: "Games: Adventure" },
+	{ id: "GAME_ARCADE", name: "Games: Arcade" },
+	{ id: "GAME_BOARD", name: "Games: Board" },
+	{ id: "GAME_CARD", name: "Games: Card" },
+	{ id: "GAME_CASINO", name: "Games: Casino" },
+	{ id: "GAME_CASUAL", name: "Games: Casual" },
+	{ id: "GAME_EDUCATIONAL", name: "Games: Educational" },
+	{ id: "GAME_MUSIC", name: "Games: Music" },
+	{ id: "GAME_PUZZLE", name: "Games: Puzzle" },
+	{ id: "GAME_RACING", name: "Games: Racing" },
+	{ id: "GAME_ROLE_PLAYING", name: "Games: Role Playing" },
+	{ id: "GAME_SIMULATION", name: "Games: Simulation" },
+	{ id: "GAME_SPORTS", name: "Games: Sports" },
+	{ id: "GAME_STRATEGY", name: "Games: Strategy" },
+	{ id: "GAME_TRIVIA", name: "Games: Trivia" },
+	{ id: "GAME_WORD", name: "Games: Word" },
+] as const;
+
 export const PURCHASE_STATUSES = [
 	"approved",
 	"draft",
