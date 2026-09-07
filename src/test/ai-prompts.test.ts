@@ -11,7 +11,7 @@ import {
 } from "@/modules/ai/ai.prompts";
 
 /** Characters the stores reject and the house style bans in generated text. */
-const TYPOGRAPHIC = /[–—‘’“”…]/;
+const TYPOGRAPHIC = /[\u2013\u2014\u2018\u2019\u201C\u201D\u2026]/;
 
 /** Every file that holds prompt text: what the model reads must be clean too. */
 const PROMPT_SOURCES = [

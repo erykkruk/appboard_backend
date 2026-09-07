@@ -153,7 +153,7 @@ describe("AI service prompts and parsing", () => {
 	describe("generated text clean-up", () => {
 		it("keeps paragraph breaks and normalizes typographic characters", async () => {
 			stubModel(
-				"Plan your week — fast ✅\n\n“Every task” in one place…\n- Offline mode\n- Reminders\n\n\n\nStart today.",
+				"Plan your week \u2014 fast \u2705\n\n\u201CEvery task\u201D in one place\u2026\n- Offline mode\n- Reminders\n\n\n\nStart today.",
 			);
 			const { result } = await AIService.generateDescription(
 				workspaceId,

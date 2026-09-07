@@ -47,6 +47,18 @@ const MAX_COMPETITOR_KEYWORDS = 6;
 const FAILED_RETRY_MS = 60 * 60 * 1000;
 /** Pause between apps in the weekly sweep - the store calls are the cost. */
 const WEEKLY_SWEEP_PAUSE_MS = 2000;
+/** Stored failure reason; long stack traces help nobody in a card. */
+const MAX_ERROR_CHARS = 300;
+
+/** The human sentence out of whatever the store client threw. */
+function describeError(error: unknown): string {
+	const err = error as { info?: unknown; message?: unknown } | null;
+	const text =
+		(typeof err?.info === "string" && err.info) ||
+		(typeof err?.message === "string" && err.message) ||
+		String(error);
+	return text.slice(0, MAX_ERROR_CHARS);
+}
 /** A run that has not finished in this long is treated as dead, not running. */
 const RUN_TIMEOUT_MS = 5 * 60 * 1000;
 /** Terms seeded into nightly tracking after the first audit of a country. */
@@ -116,7 +128,7 @@ export class AuditService {
 			!row ||
 			options.refresh === true ||
 			deadRun ||
-			(!hasReport && row.status !== "measuring") ||
+			(!hasReport && row.status === "ready") ||
 			(!hasReport && failedLongAgo);
 
 		if (needsRun) {
@@ -125,11 +137,24 @@ export class AuditService {
 			void AuditService.refresh(appId, workspaceId, country, options.language);
 		}
 
+		// A run that failed before ever producing a report is not "measuring":
+		// saying so would spin forever. Say what happened and offer Re-check.
+		if (!hasReport && row?.status === "failed" && !needsRun) {
+			return {
+				error: row.lastError ?? "The last measurement failed.",
+				refreshing: false,
+				report: null,
+				status: "failed",
+			};
+		}
 		if (!hasReport) {
 			return { refreshing: true, report: null, status: "measuring" };
 		}
 		return {
-			error: row?.status === "failed" ? "last-run-failed" : undefined,
+			error:
+				row?.status === "failed"
+					? (row.lastError ?? "last-run-failed")
+					: undefined,
 			refreshing: needsRun,
 			report,
 			status: "ready",
@@ -346,6 +371,7 @@ export class AuditService {
 					appId,
 					country,
 					draftScore: report.draft?.asoScore ?? null,
+					lastError: null,
 					report,
 					status: "ready",
 					storeScore: report.store.asoScore,
@@ -353,6 +379,7 @@ export class AuditService {
 				.onConflictDoUpdate({
 					set: {
 						draftScore: report.draft?.asoScore ?? null,
+						lastError: null,
 						report,
 						startedAt: null,
 						status: "ready",
@@ -372,7 +399,11 @@ export class AuditService {
 			// wipe a good number off the user's screen.
 			await db
 				.update(appAudits)
-				.set({ startedAt: null, status: "failed" })
+				.set({
+					lastError: describeError(error),
+					startedAt: null,
+					status: "failed",
+				})
 				.where(and(eq(appAudits.appId, appId), eq(appAudits.country, country)));
 		}
 	}
