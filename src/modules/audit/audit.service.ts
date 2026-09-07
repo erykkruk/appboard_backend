@@ -6,6 +6,7 @@ import {
 } from "@/modules/research/appstore.client";
 import {
 	type AuditApp,
+	type AuditOptions,
 	type AuditResult,
 	buildAudit,
 	extractCompetitorCandidates,
@@ -16,8 +17,9 @@ import {
 	buildSuggestions,
 	type Suggestion,
 } from "@/modules/research/listing-suggestions";
-import { langFor } from "@/modules/research/playstore.client";
+import { langFor, playstoreMeta } from "@/modules/research/playstore.client";
 import { ResearchService } from "@/modules/research/research.service";
+import type { ResearchAppMeta } from "@/modules/research/research.types";
 import type { KeywordScore } from "@/modules/research/scoring-types";
 import { TrackingService } from "@/modules/tracking/tracking.service";
 import { db } from "@/utils/db";
@@ -25,6 +27,7 @@ import { appAudits, apps, assets, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import type { AppAuditReport, AppAuditResponse } from "./audit.types";
+import { AuditAiService } from "./audit-ai.service";
 
 const log = createLogger("audit-service");
 
@@ -37,8 +40,13 @@ const MAX_AUDIT_KEYWORDS = 10;
  * own vocabulary, not to enumerate the category.
  */
 const MAX_COMPETITOR_KEYWORDS = 6;
-/** How long a stored report stays fresh before a background refresh. */
-const FRESH_FOR_MS = 12 * 60 * 60 * 1000;
+/**
+ * A failed run is retried on the next read only after this long, so an app
+ * the store no longer serves does not burn a minute of calls per visit.
+ */
+const FAILED_RETRY_MS = 60 * 60 * 1000;
+/** Pause between apps in the weekly sweep - the store calls are the cost. */
+const WEEKLY_SWEEP_PAUSE_MS = 2000;
 /** A run that has not finished in this long is treated as dead, not running. */
 const RUN_TIMEOUT_MS = 5 * 60 * 1000;
 /** Terms seeded into nightly tracking after the first audit of a country. */
@@ -93,13 +101,25 @@ export class AuditService {
 		}
 
 		const report = row?.report ?? null;
-		const hasReport = !!report && row?.status !== "measuring";
-		const stale =
+		const hasReport = !!report;
+
+		// A stored report stays until the weekly sweep or an explicit re-check.
+		// Measuring on every visit was a minute of store calls per page view
+		// and a number that moved under the reader's feet. Work starts only
+		// when there is nothing to show, when the last run died or failed a
+		// while ago, or when the caller asked for it.
+		const deadRun = row?.status === "measuring" && !running;
+		const failedLongAgo =
+			row?.status === "failed" &&
+			Date.now() - row.updatedAt.getTime() > FAILED_RETRY_MS;
+		const needsRun =
 			!row ||
 			options.refresh === true ||
-			Date.now() - row.updatedAt.getTime() > FRESH_FOR_MS;
+			deadRun ||
+			(!hasReport && row.status !== "measuring") ||
+			(!hasReport && failedLongAgo);
 
-		if (stale) {
+		if (needsRun) {
 			await AuditService.markRunning(appId, country, row?.id);
 			// Deliberately not awaited: the caller gets whatever we already have.
 			void AuditService.refresh(appId, workspaceId, country, options.language);
@@ -110,7 +130,7 @@ export class AuditService {
 		}
 		return {
 			error: row?.status === "failed" ? "last-run-failed" : undefined,
-			refreshing: stale,
+			refreshing: needsRun,
 			report,
 			status: "ready",
 		};
@@ -264,6 +284,40 @@ export class AuditService {
 	}
 
 	/** Runs the real computation and stores it. Never throws at the caller. */
+	/**
+	 * Every stored audit, measured again. Runs from the scheduler once a week
+	 * at a quiet hour, so a report is never older than that without anyone
+	 * pressing Re-check - and never re-measured just because a page opened.
+	 */
+	static async refreshAll(): Promise<number> {
+		const rows = await db
+			.select({
+				appId: appAudits.appId,
+				country: appAudits.country,
+				id: appAudits.id,
+				workspaceId: stores.workspaceId,
+			})
+			.from(appAudits)
+			.innerJoin(apps, eq(appAudits.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id));
+
+		let refreshed = 0;
+		for (const row of rows) {
+			try {
+				await AuditService.markRunning(row.appId, row.country, row.id);
+				await AuditService.refresh(row.appId, row.workspaceId, row.country);
+				refreshed++;
+			} catch (err) {
+				log.warn({ appId: row.appId, err }, "Weekly audit refresh failed");
+			}
+			await new Promise((resolve) =>
+				setTimeout(resolve, WEEKLY_SWEEP_PAUSE_MS),
+			);
+		}
+		log.info({ refreshed, total: rows.length }, "Weekly audit sweep done");
+		return refreshed;
+	}
+
 	private static async refresh(
 		appId: string,
 		workspaceId: string,
@@ -271,9 +325,20 @@ export class AuditService {
 		language?: string,
 	): Promise<void> {
 		try {
-			const report = await AuditService.forApp(appId, workspaceId, {
-				country,
-				language,
+			const { listing, report } = await AuditService.computeAudit(
+				appId,
+				workspaceId,
+				{ country, language },
+			);
+			// The model's reading is a layer on top: with a key it adds
+			// judgement, without one nothing is missing from the numbers.
+			report.ai = await AuditAiService.analyze(
+				workspaceId,
+				report,
+				listing,
+			).catch((err) => {
+				log.warn({ appId, err }, "Audit AI review failed");
+				return null;
 			});
 			await db
 				.insert(appAudits)
@@ -322,6 +387,24 @@ export class AuditService {
 		workspaceId: string,
 		options: { country?: string; language?: string } = {},
 	): Promise<AppAuditReport> {
+		return (await AuditService.computeAudit(appId, workspaceId, options))
+			.report;
+	}
+
+	/**
+	 * Google Play metadata reader, replaceable in tests: the scraper talks to
+	 * the real store and cannot be stubbed through fetch.
+	 */
+	static playMeta: (
+		packageName: string,
+		country: string,
+	) => Promise<ResearchAppMeta> = playstoreMeta;
+
+	private static async computeAudit(
+		appId: string,
+		workspaceId: string,
+		options: { country?: string; language?: string } = {},
+	): Promise<{ listing: AuditApp; report: AppAuditReport }> {
 		const [row] = await db
 			.select({
 				connectionMode: stores.connectionMode,
@@ -347,16 +430,22 @@ export class AuditService {
 			});
 		}
 
-		if (app.platform !== "ios") {
-			buildError("badRequest", {
-				info: "Keyword difficulty is App Store only, so the audit currently runs for iOS apps. Google Play support is tracked separately.",
-			});
-		}
-
 		const country =
 			options.country ??
 			(app.rawData?.publicCountry as string | undefined) ??
 			DEFAULT_COUNTRY;
+
+		// Google Play has no keyword difficulty data, so the audit there is the
+		// text and screenshot rules on what the store serves - a real score for
+		// a real listing, minus the rules that would only report missing data.
+		if (app.platform !== "ios") {
+			return AuditService.computePlayAudit(
+				appId,
+				app,
+				country,
+				options.language,
+			);
+		}
 
 		// The store score must come from what the store actually serves, not
 		// from our last sync - otherwise "in the store" silently means "in our
@@ -432,7 +521,7 @@ export class AuditService {
 			storeApp,
 			keywords,
 			auditLanguage,
-			recommendable,
+			{ recommendable },
 		);
 
 		log.info(
@@ -446,25 +535,94 @@ export class AuditService {
 		);
 
 		return {
-			appId,
+			listing: storeApp,
+			report: {
+				ai: null,
+				appId,
+				country,
+				draft: draft
+					? {
+							asoScore: draft.asoScore,
+							changedFields: draft.changedFields,
+							issues: draft.issues,
+							strengths: draft.strengths,
+							themes: draft.themes,
+						}
+					: null,
+				keywords,
+				keywordsSupported: true,
+				// The report speaks the language of the market it measured. Falling
+				// back to en-US here would hand Polish keyword proposals to the
+				// English listing.
+				language: draft?.language ?? auditLanguage,
+				measuredAt: new Date().toISOString(),
+				recommendable,
+				store,
+			},
+		};
+	}
+
+	private static async computePlayAudit(
+		appId: string,
+		app: AppRow,
+		country: string,
+		language?: string,
+	): Promise<{ listing: AuditApp; report: AppAuditReport }> {
+		const auditLanguage = language ?? langFor(country);
+		const meta = await AuditService.playMeta(app.externalId, country);
+		const storeApp: AuditApp = {
 			country,
-			draft: draft
-				? {
-						asoScore: draft.asoScore,
-						changedFields: draft.changedFields,
-						issues: draft.issues,
-						strengths: draft.strengths,
-						themes: draft.themes,
-					}
-				: null,
-			keywords,
-			// The report speaks the language of the market it measured. Falling
-			// back to en-US here would hand Polish keyword proposals to the
-			// English listing.
-			language: draft?.language ?? auditLanguage,
-			measuredAt: new Date().toISOString(),
-			recommendable,
-			store,
+			description: meta.description ?? "",
+			genre: meta.genre ?? app.primaryCategory ?? "",
+			name: meta.title,
+			rating: meta.rating,
+			ratingsCount: meta.ratingsCount,
+			screenshots: meta.screenshotCount ?? meta.screenshots?.length ?? 0,
+			subtitle: meta.summary ?? undefined,
+			updated: meta.lastUpdate,
+		};
+		const options = { keywordsUnavailable: true, recommendable: [] };
+		const store = buildAudit(storeApp, [], options);
+		const draft = await AuditService.draftAudit(
+			appId,
+			storeApp,
+			[],
+			auditLanguage,
+			options,
+		);
+
+		log.info(
+			{
+				appId,
+				country,
+				draftScore: draft?.asoScore,
+				storeScore: store.asoScore,
+			},
+			"Play audit computed (text rules only)",
+		);
+
+		return {
+			listing: storeApp,
+			report: {
+				ai: null,
+				appId,
+				country,
+				draft: draft
+					? {
+							asoScore: draft.asoScore,
+							changedFields: draft.changedFields,
+							issues: draft.issues,
+							strengths: draft.strengths,
+							themes: draft.themes,
+						}
+					: null,
+				keywords: [],
+				keywordsSupported: false,
+				language: draft?.language ?? auditLanguage,
+				measuredAt: new Date().toISOString(),
+				recommendable: [],
+				store,
+			},
 		};
 	}
 
@@ -478,7 +636,7 @@ export class AuditService {
 		storeApp: AuditApp,
 		keywords: KeywordScore[],
 		language?: string,
-		recommendable?: string[],
+		options: AuditOptions = {},
 	): Promise<
 		(AuditResult & { changedFields: string[]; language: string }) | null
 	> {
@@ -510,7 +668,7 @@ export class AuditService {
 		};
 
 		return {
-			...buildAudit(draftApp, keywords, { recommendable }),
+			...buildAudit(draftApp, keywords, options),
 			changedFields,
 			language: draftRow.language,
 		};

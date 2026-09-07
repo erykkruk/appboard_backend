@@ -351,7 +351,26 @@ export interface AuditOptions {
 	 * results. Omit to allow every scored term.
 	 */
 	recommendable?: string[];
+	/**
+	 * True when no keyword scores exist for this store (Google Play has no
+	 * difficulty data). The text and screenshot rules still apply; every rule
+	 * that would otherwise say "you rank for nothing" is skipped, because the
+	 * absence of data is not a finding.
+	 */
+	keywordsUnavailable?: boolean;
 }
+
+/** Rules that only mean something when keywords were actually scored. */
+const KEYWORD_RULE_IDS = new Set([
+	"brand-only-ranks",
+	"category-mismatch",
+	"missing-winnable-terms",
+	"no-ranks",
+	"ranks-below-fold",
+	"title-keywords",
+	"title-unwinnable",
+	"title-upgrade",
+]);
 
 /** Rules-based listing audit; the ASO score is BASE minus penalties. */
 export function buildAudit(
@@ -660,6 +679,11 @@ export function buildAudit(
 				title: `Your category may be wrong: rivals sit in "${label}"`,
 			});
 		}
+	}
+
+	if (options.keywordsUnavailable) {
+		const kept = issues.filter((issue) => !KEYWORD_RULE_IDS.has(issue.id));
+		issues.splice(0, issues.length, ...kept);
 	}
 
 	const penalty = issues.reduce((sum, issue) => sum + issue.scorePenalty, 0);
