@@ -569,7 +569,47 @@ function buildPurchaseUserPrompt(
 	return prompt;
 }
 
-type AiPurpose = "generate" | "rephrase" | "research";
+export type AiPurpose = "generate" | "rephrase" | "research";
+
+const DEFAULT_TEMPERATURE = 0.7;
+const MODELS_URL = "https://openrouter.ai/api/v1/models";
+const MODELS_TTL_MS = 6 * 60 * 60 * 1000;
+
+export interface AiModel {
+	id: string;
+	name: string;
+	provider: string;
+	contextLength: number | null;
+	/** USD per token as OpenRouter reports it. */
+	pricing: { prompt: number; completion: number };
+}
+
+interface OpenRouterCatalogModel {
+	id: string;
+	name?: string;
+	context_length?: number;
+	pricing?: { prompt?: string; completion?: string };
+	architecture?: {
+		modality?: string;
+		input_modalities?: string[];
+		output_modalities?: string[];
+	};
+}
+
+let modelsCache: { at: number; models: AiModel[] } | null = null;
+
+/** Only models that read and write text can run a prompt. */
+function isTextModel(model: OpenRouterCatalogModel): boolean {
+	const arch = model.architecture;
+	if (!arch) return true;
+	const inputs =
+		arch.input_modalities ?? arch.modality?.split("->")[0]?.split("+") ?? [];
+	const outputs =
+		arch.output_modalities ?? arch.modality?.split("->")[1]?.split("+") ?? [];
+	const reads = inputs.length === 0 || inputs.includes("text");
+	const writes = outputs.length === 0 || outputs.includes("text");
+	return reads && writes;
+}
 
 const PURPOSE_SETTING_KEYS: Record<AiPurpose, string> = {
 	generate: "AI_MODEL_GENERATE",
@@ -637,11 +677,70 @@ export class AIService {
 		return { configured: false, lastError: null, source: null };
 	}
 
+	/**
+	 * One completion with the workspace's key and the model it chose for
+	 * `purpose` in Settings. The public entry point for features that live
+	 * outside this module (the audit review, for one) so they never build
+	 * their own OpenRouter call.
+	 */
+	static async complete(
+		workspaceId: string,
+		systemPrompt: string,
+		userPrompt: string,
+		options: { purpose?: AiPurpose; temperature?: number } = {},
+	): Promise<{ content: string; model: string }> {
+		return AIService.callOpenRouter(
+			workspaceId,
+			systemPrompt,
+			userPrompt,
+			options.purpose ?? "generate",
+			options.temperature,
+		);
+	}
+
+	/**
+	 * The OpenRouter catalog, text models only, cached for a while: the
+	 * Settings picker should offer whatever exists today instead of a list we
+	 * typed once and forgot to update.
+	 */
+	static async listModels(): Promise<AiModel[]> {
+		if (modelsCache && Date.now() - modelsCache.at < MODELS_TTL_MS) {
+			return modelsCache.models;
+		}
+		const response = await fetch(MODELS_URL);
+		if (!response.ok) {
+			buildError("storeApiError", {
+				info: `OpenRouter model catalog unavailable: ${response.status}`,
+			});
+		}
+		const data = (await response.json()) as { data?: OpenRouterCatalogModel[] };
+		const models = (data.data ?? [])
+			.filter((m) => isTextModel(m) && !m.id.endsWith(":batch"))
+			.map((m) => ({
+				contextLength: m.context_length ?? null,
+				id: m.id,
+				name: m.name ?? m.id,
+				pricing: {
+					completion: Number(m.pricing?.completion ?? 0),
+					prompt: Number(m.pricing?.prompt ?? 0),
+				},
+				provider: m.id.split("/")[0] ?? "",
+			}))
+			.sort((a, b) =>
+				a.provider === b.provider
+					? a.name.localeCompare(b.name)
+					: a.provider.localeCompare(b.provider),
+			);
+		modelsCache = { at: Date.now(), models };
+		return models;
+	}
+
 	private static async callOpenRouter(
 		workspaceId: string,
 		systemPrompt: string,
 		userPrompt: string,
 		purpose: AiPurpose = "generate",
+		temperature: number = DEFAULT_TEMPERATURE,
 	): Promise<{ content: string; model: string }> {
 		const apiKey = await AIService.resolveApiKey(workspaceId);
 		if (!apiKey) {
@@ -659,7 +758,7 @@ export class AIService {
 					{ content: userPrompt, role: "user" },
 				],
 				model: selectedModel,
-				temperature: 0.7,
+				temperature,
 			}),
 			headers: {
 				Authorization: `Bearer ${apiKey}`,

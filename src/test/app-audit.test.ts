@@ -2,6 +2,8 @@ import { afterAll, afterEach, describe, expect, it } from "bun:test";
 import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { auditController } from "@/modules/audit";
+import { AuditService } from "@/modules/audit/audit.service";
+import type { AppAuditReport } from "@/modules/audit/audit.types";
 import { db } from "@/utils/db";
 import { appAudits, apps, stores } from "@/utils/db/schema";
 import { errorHandler } from "@/utils/errors/errorHandler";
@@ -219,43 +221,107 @@ describe("app audit", () => {
 		expect(getTestWorkspaceIdB()).not.toBe(getTestWorkspaceId());
 	});
 
-	it("refuses a Google Play app instead of inventing difficulty", async () => {
+	it("audits a Google Play app on its text and screenshots, without keyword rules", async () => {
 		stubItunes();
-		const [store] = await db
-			.insert(stores)
-			.values({
-				connectionMode: "public",
-				name: "Google Play (public)",
-				status: "connected",
-				type: "google_play",
-				workspaceId: getTestWorkspaceId(),
-			})
-			.returning();
-		storeIds.push(store.id);
-		const [appRow] = await db
-			.insert(apps)
-			.values({
-				bundleId: "com.example.play",
-				externalId: "com.example.play",
-				name: "Play App",
-				platform: "android",
-				rawData: { publicCountry: "us" },
-				storeId: store.id,
-			})
-			.returning();
+		const realPlayMeta = AuditService.playMeta;
+		AuditService.playMeta = async () => ({
+			country: "us",
+			description: "Short blurb.",
+			developer: "Example",
+			genre: "Trivia",
+			id: "com.example.play",
+			rating: 4.2,
+			ratingsCount: 120,
+			screenshotCount: 2,
+			screenshots: [],
+			store: "playstore",
+			summary: "Quiz night with friends",
+			title: "Play App: Party Quiz",
+			url: "https://play.google.com/store/apps/details?id=com.example.play",
+		});
+		try {
+			const [store] = await db
+				.insert(stores)
+				.values({
+					connectionMode: "public",
+					name: "Google Play (public)",
+					status: "connected",
+					type: "google_play",
+					workspaceId: getTestWorkspaceId(),
+				})
+				.returning();
+			storeIds.push(store.id);
+			const [appRow] = await db
+				.insert(apps)
+				.values({
+					bundleId: "com.example.play",
+					externalId: "com.example.play",
+					name: "Play App",
+					platform: "android",
+					rawData: { publicCountry: "us" },
+					storeId: store.id,
+				})
+				.returning();
 
+			const first = await app.handle(
+				authRequest(`http://localhost/api/apps/${appRow.id}/audit`),
+			);
+			expect(((await first.json()) as { status: string }).status).toBe(
+				"measuring",
+			);
+			const row = await waitForReady(appRow.id);
+			const report = row.report as AppAuditReport;
+			expect(report.keywordsSupported).toBe(false);
+			expect(report.keywords).toEqual([]);
+			const ids = report.store.issues.map((i) => i.id);
+			// Two screenshots and a two-word description are findings; "you rank
+			// for nothing" is not, because nothing was scored.
+			expect(ids).toContain("screenshots");
+			expect(ids).toContain("description-short");
+			expect(
+				ids.some((id) => id.startsWith("title-") || id.includes("ranks")),
+			).toBe(false);
+			expect(report.store.asoScore).toBeGreaterThan(0);
+		} finally {
+			AuditService.playMeta = realPlayMeta;
+		}
+	});
+
+	it("keeps a stored report instead of measuring again on every read", async () => {
+		stubItunes();
+		const { appId, storeId } = await seedApp(getTestWorkspaceId());
+		storeIds.push(storeId);
+		await app.handle(authRequest(`http://localhost/api/apps/${appId}/audit`));
+		await waitForReady(appId);
+
+		// Three days old is well past the old 12 h refresh window; a read must
+		// still answer from the store and start nothing - the weekly sweep and
+		// Re-check own freshness now.
+		await db
+			.update(appAudits)
+			.set({ updatedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) })
+			.where(eq(appAudits.appId, appId));
 		const res = await app.handle(
-			authRequest(`http://localhost/api/apps/${appRow.id}/audit`),
+			authRequest(`http://localhost/api/apps/${appId}/audit`),
 		);
-		// Reads are cache-first, so the refusal surfaces once the run executes.
-		const body = (await res.json()) as { status: string };
-		expect(body.status).toBe("measuring");
-		await new Promise((r) => setTimeout(r, 800));
+		const body = (await res.json()) as { refreshing: boolean; status: string };
+		expect(body.status).toBe("ready");
+		expect(body.refreshing).toBe(false);
 		const [row] = await db
 			.select()
 			.from(appAudits)
-			.where(eq(appAudits.appId, appRow.id))
+			.where(eq(appAudits.appId, appId))
 			.limit(1);
-		expect(row?.status).toBe("failed");
+		expect(row?.status).toBe("ready");
+		expect(row?.startedAt).toBeNull();
+
+		// An explicit re-check still starts a run.
+		const again = await app.handle(
+			authRequest(`http://localhost/api/apps/${appId}/audit?refresh=true`),
+		);
+		expect(((await again.json()) as { refreshing: boolean }).refreshing).toBe(
+			true,
+		);
+		await waitForReady(appId);
 	});
 });

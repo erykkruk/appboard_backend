@@ -1,6 +1,7 @@
 import config from "@/config";
 import { AppleAdsService } from "@/modules/apple-ads/apple-ads.service";
 import { AppsService } from "@/modules/apps/apps.service";
+import { AuditService } from "@/modules/audit/audit.service";
 import { FreeToolQuotaService } from "@/modules/public-reports/quota.service";
 import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
@@ -33,6 +34,9 @@ const SCORE_REFRESH_HOUR = 1;
 const APPLE_SYNC_HOUR = 2;
 /** Morning, local time: a nudge about a draft nobody published. */
 const DRAFT_REMINDER_HOUR = 9;
+/** Weekly listing audit sweep: Monday, a quiet hour, all stored audits. */
+const AUDIT_REFRESH_WEEKDAY = 1;
+const AUDIT_REFRESH_HOUR = 3;
 const MIN_SCORE_REFRESH_GAP_MS = 20 * 60 * 60 * 1000;
 const SCORE_KEYWORDS_PER_CALL = 10;
 const FREQUENCY_DAYS: Record<AutoResearchFrequency, number> = {
@@ -67,6 +71,25 @@ export function localHourMinute(
 	// Intl renders midnight as "24" in some locales — normalize to 0.
 	const hour = get("hour") % 24;
 	return { hour, minute: get("minute") };
+}
+
+/** Local day of week (0 = Sunday) in the scheduler timezone. */
+export function localWeekday(now: Date, tz: string): number {
+	const name = new Intl.DateTimeFormat("en-US", {
+		timeZone: tz,
+		weekday: "short",
+	}).format(now);
+	return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(name);
+}
+
+/** Stored audits are re-measured once a week, never on page views. */
+export function isAuditRefreshDue(now: Date, tz: string): boolean {
+	const { hour, minute } = localHourMinute(now, tz);
+	return (
+		localWeekday(now, tz) === AUDIT_REFRESH_WEEKDAY &&
+		hour === AUDIT_REFRESH_HOUR &&
+		minute === 0
+	);
 }
 
 export function isRankCheckDue(
@@ -261,6 +284,11 @@ async function runTick(now: Date, tz: string) {
 		if (hour === APPLE_SYNC_HOUR && minute === 0) {
 			await AppleAdsService.runScheduledSync().catch((err) => {
 				log.error({ err }, "Apple Ads scheduled sync failed");
+			});
+		}
+		if (isAuditRefreshDue(now, tz)) {
+			await AuditService.refreshAll().catch((err) => {
+				log.error({ err }, "Weekly audit sweep failed");
 			});
 		}
 	} catch (err) {

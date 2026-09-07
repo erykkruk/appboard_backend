@@ -24,6 +24,13 @@ export const aiController = new Elysia({ prefix: "/ai" })
 			tags: ["AI"],
 		},
 	})
+	.get("/models", async () => ({ models: await AIService.listModels() }), {
+		detail: {
+			description:
+				"OpenRouter's current text-model catalog (id, name, provider, context, pricing), cached server-side - the Settings picker offers what exists today.",
+			tags: ["AI"],
+		},
+	})
 	.post(
 		"/generate-listing-field",
 		async ({ body, workspaceId }) => {

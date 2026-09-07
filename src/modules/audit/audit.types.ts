@@ -25,6 +25,41 @@ export interface AppAuditReport {
 	 * calling those terms "opportunities" would be advice, not data.
 	 */
 	recommendable: string[];
+	/**
+	 * False on Google Play: there is no keyword difficulty for it, so the
+	 * report carries the text and screenshot rules only and the panel must not
+	 * render an empty keyword table as "you rank for nothing".
+	 */
+	keywordsSupported: boolean;
+	/**
+	 * What the model made of the same numbers, when the workspace has a
+	 * working OpenRouter key. Null otherwise; the deterministic report never
+	 * depends on it.
+	 */
+	ai?: AuditAiInsights | null;
+}
+
+export interface AuditAiPriority {
+	title: string;
+	why: string;
+	how: string;
+}
+
+export interface AuditAiRewrites {
+	title: string | null;
+	subtitle: string | null;
+	keywords: string | null;
+	opening: string | null;
+}
+
+export interface AuditAiInsights {
+	generatedAt: string;
+	/** Language the review is written in (the audited listing's language). */
+	language: string;
+	model: string;
+	summary: string;
+	priorities: AuditAiPriority[];
+	rewrites: AuditAiRewrites;
 }
 
 export interface AppAuditResponse {
