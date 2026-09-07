@@ -91,9 +91,9 @@ const ANALYSIS_JSON_SPEC = (catIds: string) => `{
   ],
   "topIrritations": ["5-8 things that annoy users the most, from the most frequent — in English, specific"],
   "quickWins": ["3-6 specific, technical recommendations in English, sorted by impact/effort"],
-  "metadataTips": ["2-4 ASO tips regarding the app's title/subtitle/description in English (e.g. a missing phrase in the title, a proposal for a better subtitle — remember the 30-character limit)"],
+  "metadataTips": ["2-4 concrete ASO changes to the title, subtitle/short description or description in English, each naming the field and the exact wording, within store limits (title and subtitle 30 characters, short description 80), without competitor names, promotional words or emoji, and grounded in what these reviews praise or miss"],
   "asoKeywords": [
-    { "keyword": "<1-3 word phrase in the language of the app's market>", "reason": "why" }
+    { "keyword": "<1-3 word phrase in the language of the app's market, as users actually search - singular, lower case, no brand names>", "reason": "which reviews or features justify it" }
   ]
 }`;
 

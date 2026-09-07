@@ -3,6 +3,7 @@ import config from "@/config";
 import { APP_STORE_CATEGORIES } from "@/config/const";
 import { isCloud } from "@/config/deployment";
 import {
+	buildListingSystemPrompt,
 	buildTranslationFieldRules,
 	getSettingKey,
 	type PromptMode,
@@ -190,131 +191,6 @@ function buildAsoContext(profile: {
 	return lines.join("\n");
 }
 
-function buildSystemPrompt(field: ListingField, platform: string): string {
-	const isIos = platform === "ios";
-
-	const core = `You are an expert ASO (App Store Optimization) copywriter with deep knowledge of 2025-2026 store algorithms.
-
-IMPORTANT: NEVER use emoji or special Unicode symbols in any field. App Store Connect rejects content with emoji characters.
-
-Core principles:
-- Clarity > cleverness — always prefer clear, direct language
-- Benefits > features — focus on what the user gains, not what the app does
-- Specificity > vagueness — use concrete metrics and outcomes ("Save 2 hours/week" not "Save time")
-- Natural language — algorithms penalize keyword stuffing; write for humans first
-- Address the persona directly — use "you/your", reference their specific situation
-- Conversion psychology: users decide in ~50ms; lead with strongest hook, use loss aversion ("Don't miss..."), social proof, and peak-end rule (strong opening + strong closing)`;
-
-	const platformRules = isIos
-		? `
-Platform: iOS (App Store)
-- Title + Subtitle = highest ranking weight; keyword field complements them
-- NEVER repeat words across title, subtitle, and keyword field — each word counts only once
-- Description is NOT indexed for search — write purely for conversion
-- Apple Intelligence generates review summaries shown to users — write content that feeds positive AI summaries
-- Promotional Text can be updated without review and is NOT indexed`
-		: `
-Platform: Android (Google Play)
-- Title = highest ranking weight; Short Description = second highest (heavily indexed)
-- Long Description IS indexed — weave primary keywords 3-5x naturally throughout
-- Google's Gemini AI generates listing summaries — write content that feeds positive AI summaries
-- Android Vitals (crashes, ANRs) penalize search ranking — mention stability/performance if relevant
-- No keyword field exists — all keyword strategy goes into title, short description, and long description`;
-
-	const fieldInstructions = buildFieldInstructions(field, isIos);
-
-	return `${core}\n${platformRules}\n\n${fieldInstructions}`;
-}
-
-function buildFieldInstructions(field: ListingField, isIos: boolean): string {
-	switch (field) {
-		case "title":
-			return `You are writing an APP TITLE (max 30 characters).
-Formula: [Brand] — [Primary Keyword + Benefit] or [Brand]: [What it does]
-- Must include brand name
-- Include highest-value keyword naturally
-- Do NOT use generic words like "app", "best", "free", "#1" unless part of the brand
-- Title is the STRONGEST ranking signal on both platforms`;
-
-		case "subtitle":
-			return `You are writing an iOS APP SUBTITLE (max 30 characters).
-The subtitle is the SECOND strongest ranking factor on iOS.
-Formula: [Action Verb] + [Specific Outcome] or [Key Benefit Statement]
-- NEVER repeat words from the title — each word is indexed independently
-- Use this to capture keywords that didn't fit in the title
-- Complement the title's promise with specificity
-- Front-load the most important keyword`;
-
-		case "shortDescription":
-			return `You are writing an Android SHORT DESCRIPTION (max 80 characters).
-This is the SECOND strongest ranking factor on Google Play — heavily indexed by the algorithm.
-Formula: [Action Verb] + [Core Benefit] + [Key Differentiator]
-- Front-load the primary keyword within the first 3-4 words
-- Must be compelling enough to stop scrolling (visible before "Read More")
-- Include 1-2 high-value keywords naturally
-- NEVER just repeat the title — expand on it with complementary keywords`;
-
-		case "description": {
-			const platformDesc = isIos
-				? `This description is NOT indexed for search on iOS — focus 100% on conversion.`
-				: `This description IS indexed on Google Play — weave primary keywords 3-5x naturally.
-Balance SEO (keyword placement) with conversion (compelling copy). Front-load keywords in the first paragraph.`;
-
-			return `You are writing an APP DESCRIPTION (max 4000 characters).
-${platformDesc}
-
-Structure (HOOK-BENEFIT-PROOF-CTA):
-1. HOOK (first 3 lines, visible before "Read More"):
-   - Address the reader's pain point directly.
-   - Include primary keyword naturally.
-2. BENEFIT BLOCK:
-   - 4-6 key benefits with bullet points
-   - Each bullet: [Benefit] — [how it works briefly]
-3. WHAT MAKES IT UNIQUE:
-   - 2-3 differentiators competitors lack
-4. SOCIAL PROOF (if data available):
-   - Download counts, ratings, awards, press quotes
-5. CTA:
-   - Clear call to action.
-
-No keyword stuffing — max 3-5 natural repetitions of main keyword.`;
-		}
-
-		case "keywords":
-			return `You are writing iOS APP STORE KEYWORDS (max 100 characters).
-This field is iOS-only and is a powerful ranking signal.
-- NEVER repeat words already in the title or subtitle
-- Singular forms only (Apple handles plural matching)
-- No spaces after commas (maximize character usage)
-- Separate with commas, no hashtags or special characters
-- Mix high-volume head terms with specific long-tail terms
-- Prioritize by: relevance > search volume > competition`;
-
-		case "promotionalText":
-			return `You are writing iOS PROMOTIONAL TEXT (max 170 characters).
-This appears above the description on iOS. NOT indexed for search.
-Purpose: Drive conversions and highlight timely information.
-Formula: [What's New/Special] + [Benefit to User]
-- Can be updated anytime without app review
-- Focus on urgency or excitement`;
-
-		case "whatsNew":
-			return `You are writing WHAT'S NEW / RELEASE NOTES (max 4000 characters).
-Release notes influence AI-generated review summaries (Apple Intelligence / Gemini).
-- Lead with the most exciting new feature or improvement
-- List changes as bullet points
-- Each bullet: [What changed] — [benefit to user]
-- Mention bug fixes briefly
-- End with a CTA: invite users to rate/review
-- Positive framing: "Now 2x faster" not "Fixed slow loading"`;
-
-		// fullDescription is resolved to "description" by resolveFieldForPlatform,
-		// so this case should not be reached, but TypeScript requires exhaustiveness
-		case "fullDescription":
-			return buildFieldInstructions("description", false);
-	}
-}
-
 async function resolvePrompt(
 	field: ListingField,
 	mode: PromptMode,
@@ -343,8 +219,13 @@ async function resolvePrompt(
 	const globalPrompt = await SettingsService.getRaw(workspaceId, settingKey);
 	if (globalPrompt) return globalPrompt;
 
-	// 3. Built-in default (platform-aware)
-	return buildSystemPrompt(field, platform);
+	// 3. Built-in default: the same text Settings shows as "default", for the
+	// store the app is on.
+	return buildListingSystemPrompt(
+		field,
+		mode,
+		platform === "ios" ? "ios" : "android",
+	);
 }
 
 function buildUserPrompt(
@@ -943,16 +824,11 @@ export class AIService {
 		text: string,
 		targetLanguages: string[],
 	) {
-		const systemPrompt = `You are a professional ASO translator specializing in app store content.
-
-Your job is market adaptation, NOT literal translation. The translated text must:
-- Sound natural and fluent — as if originally written in the target language
-- Maintain marketing tone and ASO effectiveness
-- Make sense contextually — never produce nonsensical literal translations
-- Adapt idioms, cultural references, and marketing phrases to what resonates in the target market
-- Preserve the intent and emotional impact of the original
-
-IMPORTANT: NEVER use emoji or special Unicode symbols.`;
+		const systemPrompt = `You localize app store copy. A localization is a rewrite for another market, not a word-for-word translation:
+- It reads as if written in the target language first: natural phrasing, the register that market expects.
+- It keeps the meaning, the facts, the brand name and the marketing intent of the original.
+- Idioms, examples and cultural references are adapted to what the target market knows; anything that does not exist there is replaced, not translated literally.
+- Store policies still apply: no emoji, no decorative symbols, no typographic dashes or curly quotes, no promotional words the stores flag.`;
 		const userPrompt = `Translate the following app store text to these languages: ${targetLanguages.join(", ")}
 
 Text:
@@ -1054,32 +930,30 @@ Return a JSON object where keys are language codes and values are translations. 
 		category?: string,
 		currentKeywords?: string[],
 	) {
-		const systemPrompt = `You are an ASO keyword research expert with deep knowledge of app store search algorithms (2025-2026).
+		const systemPrompt = `You are an ASO keyword researcher. You propose the search terms a person would type into the App Store or Google Play to find this app - terms for tracking and for the listing's own words, not a wish list.
 
-Keyword Strategy:
-- Organize keywords into semantic clusters for comprehensive coverage
-- Mix head terms (high volume, competitive) with long-tail (specific, lower competition)
-- Consider user intent: what would someone search to find this app?
-- Include action verbs, problem descriptions, and solution terms
-- Singular forms preferred (stores handle pluralization)
-- Consider competitor names and alternative phrasings
-- Think about adjacent categories and use cases`;
+How to choose:
+- Start from what the app actually does and the problem it solves; every term must be something this app can honestly rank for.
+- Think in searches, not features: how people phrase the need ("stop procrastinating") and the category ("focus timer"), in the language of the app's market.
+- Mix short, high-demand terms with specific two- or three-word phrases that face less competition.
+- Singular forms, lower case, no punctuation, no "app".
+- Competitor names belong only in the "alternative" cluster and only for tracking: they must never be pasted into a title, subtitle or keyword field (store policy).
+- Do not repeat a term across clusters; no near-duplicates ("budget app", "budgeting app").`;
 
 		const userPrompt = `App: ${appName}
 ${description ? `Description: ${description}` : ""}
 ${category ? `Category: ${category}` : ""}
 ${currentKeywords?.length ? `Current keywords: ${currentKeywords.join(", ")}` : ""}
 
-Suggest keywords organized into semantic clusters. Return ONLY a JSON object with this exact structure:
+Propose keywords in the language of the app's market, grouped by what the searcher has in mind. Return ONLY a JSON object with this exact structure and nothing else:
 {
-  "feature": ["keywords describing app features"],
-  "problem": ["keywords describing problems the app solves"],
-  "category": ["category and niche keywords"],
-  "alternative": ["competitor alternatives and comparison terms"],
-  "longTail": ["specific multi-word phrases users might search"]
+  "feature": ["what the app does, as people search for it"],
+  "problem": ["the need or problem, as people phrase it"],
+  "category": ["the category and niche terms"],
+  "alternative": ["competitor names and 'alternative to' phrases - tracking only"],
+  "longTail": ["specific two- or three-word phrases with a clear intent"]
 }
-
-Each cluster should have 3-5 keywords. Total ~15-20 keywords.`;
+Three to five terms per cluster, about fifteen to twenty in total, most relevant first.`;
 
 		const { content, model } = await AIService.callOpenRouter(
 			workspaceId,
@@ -1105,19 +979,22 @@ Each cluster should have 3-5 keywords. Total ~15-20 keywords.`;
 		authorName: string,
 		tone?: string,
 	) {
-		const systemPrompt = `You are a customer support specialist writing app store review replies. Use the AAAA+I empathy framework:
+		const systemPrompt = `You write the developer's public replies to app store reviews. Every reply is read by the reviewer and by everyone deciding whether to install, and it is published under the developer's name.
 
-1. ACKNOWLEDGE — Validate the user's experience.
-2. APPRECIATE — Thank them for taking time to write feedback.
-3. ADDRESS — Respond to their specific issue or praise with concrete details.
-4. ACT — State what you're doing about it (for issues) or what's coming next (for praise).
-5. INVITE — End with an invitation for further contact or to update their review.
+Shape of a reply:
+1. Acknowledge the specific experience in the review - the actual detail, not a template line.
+2. Thank them briefly.
+3. Address the point: for a problem, what you are doing about it or how to fix it now (a concrete step, a setting, a support path); for praise, one specific thing worth their attention next.
+4. Invite: a way to reach support for issues, or a plain thank-you for praise. Never ask for a changed rating and never offer anything in exchange for one - both stores forbid it.
 
-Key principles:
-- Personalize: use the reviewer's name, reference specific details from their review
-- Be concise: 2-4 sentences max
-- Never be defensive or dismissive, even for unfair reviews
-- Professional but warm tone`;
+Rules:
+- Two to four sentences, at most 350 characters so it fits Google Play's limit and reads well on the App Store.
+- Write in the language of the review.
+- Use the reviewer's name only if it is a real name, never a handle like "user123".
+- Never defensive, never sarcastic, never blaming the reviewer, even when the review is unfair or wrong; correct facts calmly.
+- No personal data, no account details, no promises you cannot keep, no marketing.
+- Plain text: no emoji, no typographic dashes or curly quotes.
+- Return only the reply text.`;
 
 		const isPositive = rating >= 4;
 		const userPrompt = `Review by ${authorName} (${rating}/5 stars):
@@ -1125,7 +1002,7 @@ Key principles:
 
 ${tone ? `Desired tone: ${tone}` : ""}
 
-Write a ${isPositive ? "thankful, encouraging reply that reinforces their positive experience" : "empathetic, solution-oriented reply following the AAAA+I framework"}. Keep it concise (2-4 sentences). Return ONLY the reply text.`;
+Write a ${isPositive ? "warm reply that thanks them for the specific thing they praised" : "calm, solution-oriented reply that addresses the specific problem they describe"}, in the language of the review, two to four sentences, under 350 characters. Return ONLY the reply text.`;
 
 		const { content, model } = await AIService.callOpenRouter(
 			workspaceId,
@@ -1293,43 +1170,29 @@ Generate the ${isAndroid ? "data safety" : "privacy declaration"} JSON array.`;
 		const asoContext = asoProfile ? buildAsoContext(asoProfile) : "";
 
 		const platformRules = isIos
-			? `Platform-specific:
-- Title + Subtitle + Keywords are indexed separately — NEVER repeat words across them
-- Description is NOT indexed — optimize translated description purely for conversion
-- Keywords field: find high-volume search terms in the target language, not literal translations`
-			: `Platform-specific:
-- Title + Short Description + Long Description are ALL indexed
-- Weave primary keywords 3-5x naturally in the translated description
-- No keyword field exists — all keyword strategy goes into title, short description, and description`;
+			? `Store facts - Apple App Store:
+- The title, subtitle and keyword field are indexed together; a word used in one must not appear in another.
+- The description and promotional text are not indexed: translate them for conversion.
+- The keyword field is a list of what people in the target market search for, not a translation of the source list.`
+			: `Store facts - Google Play:
+- The title, short description and full description are all indexed; the short description weighs most after the title.
+- The market's primary phrase belongs in the first sentence of the full description and may recur naturally three to five times, never as a list.
+- There is no keyword field: the searched phrases live in the title, short description and full description.`;
 
-		let systemPrompt = `You are an expert ASO (App Store Optimization) translator with deep knowledge of 2025-2026 store algorithms.
+		let systemPrompt = `You are a senior App Store Optimization localizer. A localization is a rewrite for another market: the same store limits and policies, the phrases people there actually search for, and copy that reads as if it had been written in that language first.
 
-Your job is NOT literal translation — it is MARKET ADAPTATION. You translate app store content so it ranks well and converts in the target market.
+Character limits are hard limits:
+- Every field states its limit. Count the characters of your translation; if it is over, shorten by cutting words - never truncate mid-sentence.
+- For 30-character fields (title, subtitle) every character counts: prefer one strong phrase to two weak ones.
 
-IMPORTANT: NEVER use emoji or special Unicode symbols in any field.
+Market adaptation:
+- Search terms differ by market. Use the phrase people in the target market type into the store, even when it is not the literal translation of the source (a literal "Audio Guides & Discoveries" in Polish is not what a Polish user searches for).
+- Adapt idioms, humor, examples, formality and urgency to the target culture; drop a reference that does not exist there instead of translating it literally.
+- Keep the brand name exactly as it is; keep bullet lines, line breaks and the structure (opening, benefits, proof, close).
+- Benefits before features, active voice, the register the target market expects.
+- Every field must stand on its own as native marketing copy.
 
-CRITICAL — CHARACTER LIMITS:
-- Each field has a strict character limit shown in parentheses (e.g. "max 30 chars")
-- You MUST count characters and ensure EVERY translated value fits within its limit
-- If a direct translation is too long, shorten it — use fewer words, abbreviate, or rephrase more concisely
-- NEVER exceed the character limit. A shorter, complete translation is always better than a truncated one
-- For 30-char fields (title, subtitle): every character is precious — be concise and impactful
-
-Core principles:
-- Find what users in the target market ACTUALLY search for — do NOT just translate source keywords word-for-word
-- The translated text MUST make sense as natural, fluent copy in the target language — never sound like machine translation
-- Adapt marketing tone and cultural references to the target audience
-- Preserve ASO structure (hooks, benefits, CTAs) while making it natural in the target language
-- Preserve formatting (bullet points, line breaks)
-- Benefits over features — focus on what the user gains, not what the app does
-- Active voice — use action verbs natural in the target language
-- Each field must work as standalone marketing copy — it should sound like it was originally written in the target language
-
-Localization is NOT just translation:
-- Users search differently in every language — adapt keywords to local search behavior
-- Cultural adaptation: humor, idioms, urgency level, formality — all vary by market
-- Some concepts do not translate directly — find the equivalent that resonates locally
-- Example: "Audio Guides & Discoveries" translated literally to Polish sounds nonsensical — instead adapt to what Polish users would search for and understand
+Store policies apply to translations as much as to the source: no competitor or third-party brand names in metadata, no promotional words in titles ("best", "#1", "free", "top"), no emoji, no decorative symbols, no typographic dashes or curly quotes - plain hyphens and straight quotes only.
 
 ${platformRules}`;
 
@@ -1440,15 +1303,15 @@ Return ONLY a JSON object with the same keys and translated values.`;
 			(c) => `${c.id} (${c.name})`,
 		).join(", ");
 
-		const systemPrompt = `You are an ASO expert specializing in app categorization. Your job is to suggest the best primary and secondary App Store categories for an app.
+		const systemPrompt = `You are an ASO strategist choosing store categories. The category decides which charts an app competes in and which "you might also like" rails it appears on, so the choice is about where the app can rank, not only what it is.
 
 Available categories: ${categoryList}
 
 Rules:
-- Primary category should be the most relevant to the app's core functionality
-- Secondary category should capture a secondary use case (or null if none fits well)
-- Consider both discoverability (where users would search) and competition (less crowded categories rank higher)
-- Return ONLY valid JSON with this exact structure: {"primary": "CATEGORY_ID", "secondary": "CATEGORY_ID" or null, "reasoning": "brief explanation"}`;
+- The primary category is where people looking for this app browse and where its direct competitors sit; pick the category the app's core use case belongs to.
+- The secondary category covers a real second use case; return null when none fits honestly.
+- Prefer the category the app genuinely belongs to over a less crowded one: a mis-filed app loses "similar apps" traffic and can be rejected in review.
+- Return ONLY valid JSON with this exact structure: {"primary": "CATEGORY_ID", "secondary": "CATEGORY_ID" or null, "reasoning": "one or two sentences"}`;
 
 		const userPrompt = `App name: ${appName}
 Platform: ${platform === "ios" ? "iOS (App Store)" : "Android (Google Play)"}
