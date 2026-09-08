@@ -22,6 +22,24 @@ export const auditController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.get(
+		"/:appId/audit/history",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return await AuditService.history(params.appId, query.country);
+		},
+		{
+			detail: {
+				description:
+					"Listing score over time plus the listing edits made since the previous measurement. The series starts at the first audit run recorded for this app, so a fresh app has one point, not a backfilled curve.",
+				tags: ["Audit"],
+			},
+			params: t.Object({ appId: t.String({ format: "uuid" }) }),
+			query: t.Object({
+				country: t.Optional(t.String({ maxLength: 2, minLength: 2 })),
+			}),
+		},
+	)
+	.get(
 		"/:appId/audit",
 		async ({ params, query, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);

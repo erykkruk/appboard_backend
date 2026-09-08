@@ -195,6 +195,19 @@ Decisions baked into the prompts (2026-09-07 refactor, backend 0.16.3): `fieldLi
 
 `AIService.resolveApiKey`: the workspace's `OPENROUTER_API_KEY` setting first; the env `OPENROUTER_API_KEY` (instance key) only when `DEPLOYMENT_MODE !== "cloud"`. On the cloud deployment every workspace is a separate customer and the instance key must never pay for them - `GET /api/ai/status` reports `configured: false` there until the workspace adds its own key. Last OpenRouter failure per workspace lives in `ai-errors.ts` and is cleared when a new key is saved.
 
+## Tracker board (`GET /apps/:id/tracking/board`)
+
+One call behind the whole tracker view for a single market - the panel cannot line up three separate responses per keyword without guessing. `TrackingBoardService.getBoard` (`tracking/board.service.ts`) joins, per (keyword, country): position + previous + delta + best (from `rank_snapshots`), the latest daily score with its difficulty delta (from `keyword_score_snapshots`, workspace-scoped), the leader of the phrase (`payload.competitors[0]`, fetched ONLY for each keyword's newest day - carrying every payload would be tens of MB), rank and difficulty sparkline series (last 30 points), and which indexed listing fields already carry the term.
+
+- **Runs** are `rank_snapshots` grouped by UTC day (same day key the score snapshots use); two checks a day means the later one wins the day. Per run: measured / ranked / top10 / average difficulty.
+- **Movement** compares the two most recent run days. `entered` and `dropped` are their own kinds - turning "outside the scan" into a number would invent a position nobody measured.
+- **`metadataGap`** = terms our own title / subtitle / keyword field targets while the store does not rank us; **`metadataUntracked`** = keyword-field terms with no tracking at all (candidates, not gaps). Metadata is read from the LIVE listing of the market's language (`source = "remote"` first): a draft nobody can search for cannot explain a ranking.
+- Keywords that were measured but are no longer tracked stay on the board - dropping them would erase their history. Horizon: 180 days.
+
+## Audit history (`GET /apps/:id/audit/history`)
+
+`app_audits` only ever holds the latest report, so every successful audit also records an `audit_scored` app event (`{ country, storeScore, draftScore, issues }`). `AuditService.history` reads those into an oldest-first score timeline plus the listing edits made since the PREVIOUS measurement (`since`), which is the window that explains the last move. `audit_scored` is deliberately NOT in `CHART_EVENT_TYPES`: measuring a listing does not change it. There is no backfill - the series starts at the first run recorded after this shipped.
+
 ## App events + reminders (`src/modules/tracking/`)
 
 - `app_events` (`AppEventsService.record`, never throws) marks version created/submitted and listing published; `GET /apps/:id/tracking/history` merges them with `listing_history` into chart annotations (`CHART_EVENT_TYPES` only - reminder events are housekeeping).

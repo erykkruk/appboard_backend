@@ -29,6 +29,10 @@ export const addKeywordsBody = t.Object({
 	keywords: t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
 });
 
+export const boardQuery = t.Object({
+	country: t.Optional(country),
+});
+
 export const historyQuery = t.Object({
 	country: t.Optional(t.String()),
 	keyword: t.Optional(t.String()),

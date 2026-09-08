@@ -74,3 +74,28 @@ export interface AppAuditResponse {
 	/** Why the last run failed, when it did. */
 	error?: string;
 }
+
+/** One measurement on the listing-score timeline. */
+export interface AuditHistoryPoint {
+	country: string;
+	date: string;
+	storeScore: number;
+	draftScore: number | null;
+	issues: number | null;
+}
+
+export interface AuditHistoryChange {
+	date: string;
+	field: string;
+	language: string;
+	newValue: string | null;
+	oldValue: string | null;
+}
+
+export interface AuditHistory {
+	points: AuditHistoryPoint[];
+	/** Listing edits made after the previous measurement. */
+	changes: AuditHistoryChange[];
+	/** The measurement `changes` is counted from; NULL on a first audit. */
+	since: string | null;
+}

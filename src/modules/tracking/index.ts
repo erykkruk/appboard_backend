@@ -2,9 +2,11 @@ import Elysia from "elysia";
 import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
+import { TrackingBoardService } from "./board.service";
 import {
 	addKeywordsBody,
 	appIdParams,
+	boardQuery,
 	configPatchBody,
 	historyQuery,
 	keywordParams,
@@ -122,6 +124,24 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 				tags: ["Tracking"],
 			},
 			params: appIdParams,
+		},
+	)
+	.get(
+		"/:appId/tracking/board",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return TrackingBoardService.getBoard(params.appId, workspaceId!, {
+				country: query.country,
+			});
+		},
+		{
+			detail: {
+				description:
+					"Everything the tracker view shows for one market in a single call: per keyword the position, its score and trend, the leader of the phrase and which listing fields already carry it; plus what moved since the previous run, the runs themselves, our listing changes and the terms our metadata targets without ranking.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: boardQuery,
 		},
 	)
 	.get(
