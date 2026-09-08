@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
+import { HistoryService } from "@/modules/history/history.service";
 import {
 	appstoreMeta,
 	isoForListingLanguage,
@@ -21,12 +22,18 @@ import { langFor, playstoreMeta } from "@/modules/research/playstore.client";
 import { ResearchService } from "@/modules/research/research.service";
 import type { ResearchAppMeta } from "@/modules/research/research.types";
 import type { KeywordScore } from "@/modules/research/scoring-types";
+import { AppEventsService } from "@/modules/tracking/app-events.service";
 import { TrackingService } from "@/modules/tracking/tracking.service";
 import { db } from "@/utils/db";
 import { appAudits, apps, assets, listings, stores } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
-import type { AppAuditReport, AppAuditResponse } from "./audit.types";
+import type {
+	AppAuditReport,
+	AppAuditResponse,
+	AuditHistory,
+	AuditHistoryPoint,
+} from "./audit.types";
 import { AuditAiService } from "./audit-ai.service";
 
 const log = createLogger("audit-service");
@@ -73,6 +80,55 @@ interface AppRow {
 }
 
 export class AuditService {
+	/**
+	 * The score over time, plus what we changed since the previous measurement.
+	 * Points come from "audit_scored" events, so the series starts the first
+	 * time an audit ran after this shipped - there is no way to backfill a
+	 * score for a listing that no longer exists, and inventing one would be
+	 * worse than a short history.
+	 */
+	static async history(appId: string, country?: string): Promise<AuditHistory> {
+		const events = await AppEventsService.list(appId);
+		const wanted = country?.toLowerCase();
+		const points: AuditHistoryPoint[] = events
+			.filter((e) => e.type === "audit_scored")
+			.map((e) => {
+				const meta = (e.meta ?? {}) as Record<string, unknown>;
+				return {
+					country: String(meta.country ?? ""),
+					date: e.occurredAt.toISOString(),
+					draftScore:
+						meta.draftScore === null || meta.draftScore === undefined
+							? null
+							: Number(meta.draftScore),
+					issues:
+						meta.issues === null || meta.issues === undefined
+							? null
+							: Number(meta.issues),
+					storeScore: Number(meta.storeScore ?? 0),
+				};
+			})
+			.filter((p) => !wanted || p.country.toLowerCase() === wanted)
+			// Events come back newest-first; a chart reads oldest-first.
+			.reverse();
+
+		// "Since the previous audit" is the window that explains the last move,
+		// so the comparison point is the second-to-last measurement, not the last.
+		const since = points.at(-2)?.date ?? null;
+		const history = await HistoryService.getHistory(appId);
+		const changes = history
+			.map((h) => ({
+				date: (h.publishedAt ?? h.createdAt).toISOString(),
+				field: h.field,
+				language: h.language,
+				newValue: h.newValue,
+				oldValue: h.oldValue,
+			}))
+			.filter((c) => !since || c.date > since);
+
+		return { changes, points, since };
+	}
+
 	/**
 	 * Cache-first read. Computing an audit costs a minute of live store calls,
 	 * so the panel never waits on it: a stored report comes back immediately
@@ -388,6 +444,20 @@ export class AuditService {
 					},
 					target: [appAudits.appId, appAudits.country],
 				});
+			// One point on the score timeline per successful measurement. The
+			// stored report only ever holds the latest run, so without this row
+			// "is the listing getting better?" has no answer at all.
+			await AppEventsService.record(
+				appId,
+				"audit_scored",
+				`Listing scored ${report.store.asoScore}/100 (${country.toUpperCase()})`,
+				{
+					country,
+					draftScore: report.draft?.asoScore ?? null,
+					issues: report.store.issues.length,
+					storeScore: report.store.asoScore,
+				},
+			);
 			// Nightly positions should start without anyone clicking "track":
 			// the audit already knows which terms matter, so seed them once.
 			await AuditService.autoTrack(appId, workspaceId, country, report).catch(

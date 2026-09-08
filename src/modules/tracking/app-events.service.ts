@@ -11,9 +11,14 @@ export type AppEventType =
 	| "version_submitted"
 	| "listing_published"
 	| "screenshots_published"
-	| "draft_reminder_sent";
+	| "draft_reminder_sent"
+	| "audit_scored";
 
-/** Events that can plausibly move rankings, and so belong on the chart. */
+/**
+ * Events that can plausibly move rankings, and so belong on the chart.
+ * Deliberately excludes "audit_scored": measuring a listing does not change
+ * it, and a marker for every weekly sweep would bury the real changes.
+ */
 export const CHART_EVENT_TYPES: ReadonlySet<string> = new Set([
 	"version_created",
 	"version_submitted",
