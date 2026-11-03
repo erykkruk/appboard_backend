@@ -12,6 +12,7 @@ import { createLogger } from "@/utils/logger";
 import { sendMail } from "@/utils/mailer";
 import { DraftReminderService } from "./draft-reminder.service";
 import { RankCheckJobs } from "./rank-check.jobs";
+import { throttledStoreCall } from "./rank-lookup";
 import { ReportService } from "./report.service";
 import { TrackingService } from "./tracking.service";
 import {
@@ -189,8 +190,10 @@ export async function runScheduledRankCheck(cfg: {
  * Refresh keyword-score snapshots for every tracked keyword of an app, one
  * country at a time. iOS apps also get their rank refreshed via the app's
  * store id. The scoring path persists snapshots itself (workspaceId given).
+ * Every iTunes request goes through the same process-wide throttle and retry
+ * policy as rank checks, so a few hundred keywords never burst the store.
  */
-async function runScheduledScoreRefresh(cfg: {
+export async function runScheduledScoreRefresh(cfg: {
 	appId: string;
 	workspaceId: string;
 }) {
@@ -215,6 +218,7 @@ async function runScheduledScoreRefresh(cfg: {
 				country,
 				appstoreId,
 				cfg.workspaceId,
+				{ pace: (call) => throttledStoreCall("appstore", call) },
 			);
 		}
 	}
@@ -252,6 +256,22 @@ async function runScheduledAutoResearch(cfg: {
 	await sendMail({ ...message, to: email });
 }
 
+/** Apps whose detached keyword-score refresh is still running. */
+const scoreRefreshing = new Set<string>();
+
+async function runDailyCleanups(refreshed: boolean[]) {
+	if (!refreshed.some(Boolean)) return;
+	await KeywordScoresHistoryService.cleanup().catch((err) => {
+		log.error({ err }, "Keyword score cleanup failed");
+	});
+	await FreeToolQuotaService.cleanup().catch((err) => {
+		log.error({ err }, "Free-tool quota cleanup failed");
+	});
+	await PublicReportsService.cleanupShares().catch((err) => {
+		log.error({ err }, "Shared report cleanup failed");
+	});
+}
+
 // Prevents overlapping ticks: a slow tick (many keywords × network latency)
 // could otherwise still be running when the next interval fires, and both
 // would pass the due-checks against the not-yet-updated timestamps — causing
@@ -285,26 +305,26 @@ async function runTick(now: Date, tz: string) {
 			}
 		}
 
-		let scoresRefreshed = false;
-		for (const cfg of rankConfigs) {
-			if (!isScoreRefreshDue(cfg, now, tz)) continue;
-			try {
-				await runScheduledScoreRefresh(cfg);
-				scoresRefreshed = true;
-			} catch (err) {
-				log.error({ appId: cfg.appId, err }, "Scheduled score refresh failed");
-			}
-		}
-		if (scoresRefreshed) {
-			await KeywordScoresHistoryService.cleanup().catch((err) => {
-				log.error({ err }, "Keyword score cleanup failed");
+		const refreshes = rankConfigs
+			.filter((cfg) => isScoreRefreshDue(cfg, now, tz))
+			.filter((cfg) => !scoreRefreshing.has(cfg.appId))
+			.map((cfg) => {
+				scoreRefreshing.add(cfg.appId);
+				return runScheduledScoreRefresh(cfg)
+					.then(() => true)
+					.catch((err) => {
+						log.error(
+							{ appId: cfg.appId, err },
+							"Scheduled score refresh failed",
+						);
+						return false;
+					})
+					.finally(() => scoreRefreshing.delete(cfg.appId));
 			});
-			await FreeToolQuotaService.cleanup().catch((err) => {
-				log.error({ err }, "Free-tool quota cleanup failed");
-			});
-			await PublicReportsService.cleanupShares().catch((err) => {
-				log.error({ err }, "Shared report cleanup failed");
-			});
+		// Throttled refreshes take tens of minutes for large keyword sets, so
+		// they run detached; the cleanups follow once they are all done.
+		if (refreshes.length) {
+			void Promise.all(refreshes).then(runDailyCleanups);
 		}
 
 		const { hour, minute } = localHourMinute(now, tz);

@@ -42,7 +42,11 @@ interface ItunesLookupResult {
 async function itunesFetch(url: string): Promise<Record<string, unknown>> {
 	const res = await fetch(url, { headers: UA });
 	if (!res.ok) {
-		buildError("storeApiError", { info: `iTunes API HTTP ${res.status}` });
+		buildError("storeApiError", {
+			info: `iTunes API HTTP ${res.status}`,
+			retryAfter: res.headers.get("retry-after"),
+			status: res.status,
+		});
 	}
 	return (await res.json()) as Record<string, unknown>;
 }
@@ -323,6 +327,24 @@ export async function appstoreKeywordSearch(
 }
 
 /**
+ * Rank in the top 200 of iTunes search. Throws when iTunes refuses the
+ * search, so a throttled caller can retry instead of reading "not ranked".
+ */
+export async function appstoreKeywordRankStrict(
+	keyword: string,
+	trackId: string,
+	country: string,
+): Promise<number | null> {
+	const data = await itunesFetch(
+		`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=200`,
+	);
+	const idx = (
+		(data.results as ItunesLookupResult[] | undefined) ?? []
+	).findIndex((r) => String(r.trackId) === trackId);
+	return idx >= 0 ? idx + 1 : null;
+}
+
+/**
  * Rank of an app in keyword search results, checking the top 200 (iTunes API
  * maximum). Falls back to the SSR ordered id list when the API is down.
  */
@@ -332,13 +354,7 @@ export async function appstoreKeywordRank(
 	country: string,
 ): Promise<number | null> {
 	try {
-		const data = await itunesFetch(
-			`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=200`,
-		);
-		const idx = (
-			(data.results as ItunesLookupResult[] | undefined) ?? []
-		).findIndex((r) => String(r.trackId) === trackId);
-		return idx >= 0 ? idx + 1 : null;
+		return await appstoreKeywordRankStrict(keyword, trackId, country);
 	} catch {
 		// Lightweight fallback: position within the SSR ordered id list.
 		try {

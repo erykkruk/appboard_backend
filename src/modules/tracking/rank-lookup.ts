@@ -208,6 +208,74 @@ export function rankBackoffMs(attempt: number): number {
 	);
 }
 
+type ThrottledOutcome<T> =
+	| { attempts: number; ok: true; value: T }
+	| { attempts: number; detail: StoreErrorDetail; error: unknown; ok: false };
+
+/**
+ * One store request through the process-wide throttle: wait for a slot,
+ * retry refused or failed requests with backoff, slow the whole store down on
+ * 403/429. Shared by rank lookups and the nightly keyword-score refresh, so
+ * the two never add up to a burst against the same store IP.
+ */
+async function callThrottled<T>(
+	store: ResearchStore,
+	call: () => Promise<T>,
+	rt: RankLookupRuntime,
+): Promise<ThrottledOutcome<T>> {
+	const throttle = rt.throttles[store];
+	let lastError: unknown = null;
+	let last: StoreErrorDetail = {
+		message: "Store lookup failed",
+		retryAfterMs: null,
+		status: null,
+	};
+	for (let attempt = 1; attempt <= RANK_LOOKUP_MAX_ATTEMPTS; attempt++) {
+		await throttle.acquire();
+		try {
+			const value = await call();
+			throttle.recordSuccess();
+			return { attempts: attempt, ok: true, value };
+		} catch (err) {
+			lastError = err;
+			last = describeStoreError(err);
+			if (
+				!isRetryableLookup(last.status) ||
+				attempt === RANK_LOOKUP_MAX_ATTEMPTS
+			) {
+				return { attempts: attempt, detail: last, error: err, ok: false };
+			}
+			// The whole store backs off, not only this run: the limit is per IP.
+			if (isThrottleStatus(last.status)) {
+				throttle.throttled(last.retryAfterMs ?? RANK_LOOKUP_THROTTLE_PAUSE_MS);
+			} else {
+				throttle.penalize(last.retryAfterMs ?? rankBackoffMs(attempt));
+			}
+		}
+	}
+	return {
+		attempts: RANK_LOOKUP_MAX_ATTEMPTS,
+		detail: last,
+		error: lastError,
+		ok: false,
+	};
+}
+
+/**
+ * Run any request against a store under the shared throttle and retry
+ * policy. Resolves with the call's value; rethrows the last error once every
+ * attempt failed, so callers keep their own error handling.
+ */
+export async function throttledStoreCall<T>(
+	store: ResearchStore,
+	call: () => Promise<T>,
+	rt: RankLookupRuntime = runtime,
+): Promise<T> {
+	const outcome = await callThrottled(store, call, rt);
+	if (outcome.ok) return outcome.value;
+	throw outcome.error;
+}
+
 /**
  * One keyword's position, throttled per store and retried with backoff.
  * `ok: true` with `position: null` means the store answered and we are not in
@@ -221,48 +289,18 @@ export async function lookupRank(
 	country: string,
 	rt: RankLookupRuntime = runtime,
 ): Promise<RankLookupOutcome> {
-	const throttle = rt.throttles[store];
-	let last: StoreErrorDetail = {
-		message: "Store lookup failed",
-		retryAfterMs: null,
-		status: null,
-	};
-	for (let attempt = 1; attempt <= RANK_LOOKUP_MAX_ATTEMPTS; attempt++) {
-		await throttle.acquire();
-		try {
-			const position = await rt.fetchPosition(
-				store,
-				keyword,
-				externalId,
-				country,
-			);
-			throttle.recordSuccess();
-			return { attempts: attempt, ok: true, position };
-		} catch (err) {
-			last = describeStoreError(err);
-			if (
-				!isRetryableLookup(last.status) ||
-				attempt === RANK_LOOKUP_MAX_ATTEMPTS
-			) {
-				return {
-					attempts: attempt,
-					error: last.message,
-					ok: false,
-					status: last.status,
-				};
-			}
-			// The whole store backs off, not only this run: the limit is per IP.
-			if (isThrottleStatus(last.status)) {
-				throttle.throttled(last.retryAfterMs ?? RANK_LOOKUP_THROTTLE_PAUSE_MS);
-			} else {
-				throttle.penalize(last.retryAfterMs ?? rankBackoffMs(attempt));
-			}
-		}
+	const outcome = await callThrottled(
+		store,
+		() => rt.fetchPosition(store, keyword, externalId, country),
+		rt,
+	);
+	if (outcome.ok) {
+		return { attempts: outcome.attempts, ok: true, position: outcome.value };
 	}
 	return {
-		attempts: RANK_LOOKUP_MAX_ATTEMPTS,
-		error: last.message,
+		attempts: outcome.attempts,
+		error: outcome.detail.message,
 		ok: false,
-		status: last.status,
+		status: outcome.detail.status,
 	};
 }

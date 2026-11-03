@@ -7,6 +7,7 @@ import { createLogger } from "@/utils/logger";
 import {
 	appstoreCompetitors,
 	appstoreKeywordRank,
+	appstoreKeywordRankStrict,
 	appstoreKeywordSearch,
 	appstoreMeta,
 	appstoreReviews,
@@ -60,6 +61,29 @@ const SCORING_COMPETITORS_RETURNED = 10;
 const SCORING_DELAY_BASE_MS = 300;
 const SCORING_DELAY_MAX_MS = 3_000;
 const SCORING_DELAY_GROWTH = 2;
+
+/** Wraps one store request, e.g. in the process-wide rank-lookup throttle. */
+export type StorePacer = <T>(call: () => Promise<T>) => Promise<T>;
+
+/**
+ * Top-200 rank through the pacer. A lookup the store still refuses after the
+ * pacer's retries is logged and read as unknown (null), as before.
+ */
+async function pacedKeywordRank(
+	pace: StorePacer,
+	keyword: string,
+	appstoreId: string,
+	country: string,
+): Promise<number | null> {
+	try {
+		return await pace(() =>
+			appstoreKeywordRankStrict(keyword, appstoreId, country),
+		);
+	} catch (err) {
+		log.warn({ country, err, keyword }, "Keyword rank lookup failed");
+		return null;
+	}
+}
 
 export type SearchScope = "both" | "appstore" | "playstore";
 
@@ -196,13 +220,18 @@ export class ResearchService {
 	 * Failures are reported per keyword so a batch survives partial outages.
 	 * When a workspaceId is given, successful scores are also persisted as
 	 * today's history snapshots (best-effort).
+	 * `pace` routes every App Store request through a caller-supplied
+	 * throttle (the scheduler passes the process-wide store throttle) and
+	 * replaces the local per-batch delay.
 	 */
 	static async keywordScores(
 		keywords: string[],
 		country: string,
 		appstoreId?: string,
 		workspaceId?: string,
+		options: { pace?: StorePacer } = {},
 	): Promise<KeywordScore[]> {
+		const { pace } = options;
 		const unique = [
 			...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)),
 		].slice(0, MAX_SCORED_KEYWORDS);
@@ -220,15 +249,13 @@ export class ResearchService {
 		const scores: KeywordScore[] = [];
 		let delayMs = SCORING_DELAY_BASE_MS;
 		for (const keyword of unique) {
-			if (scores.length > 0) {
+			if (scores.length > 0 && !pace) {
 				await new Promise((r) => setTimeout(r, delayMs));
 			}
 			try {
-				const competitors = await appstoreKeywordSearch(
-					keyword,
-					country,
-					SCORING_SEARCH_LIMIT,
-				);
+				const search = () =>
+					appstoreKeywordSearch(keyword, country, SCORING_SEARCH_LIMIT);
+				const competitors = pace ? await pace(search) : await search();
 				const internalPopularity = estimatePopularity(competitors, keyword);
 				const applePopularity = apple?.values.get(keyword) ?? null;
 				const appleGenre = inferAppleGenre(competitors);
@@ -255,7 +282,9 @@ export class ResearchService {
 
 				const difficulty = calculateDifficulty(competitors, keyword);
 				const appRank = appstoreId
-					? await appstoreKeywordRank(keyword, appstoreId, country)
+					? pace
+						? await pacedKeywordRank(pace, keyword, appstoreId, country)
+						: await appstoreKeywordRank(keyword, appstoreId, country)
 					: undefined;
 				scores.push({
 					appleGenre,
