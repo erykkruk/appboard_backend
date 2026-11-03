@@ -130,7 +130,9 @@ Loading hundreds of phrases across dozens of markets and measuring them:
    and 12:00 server time).
 4. `tracking_run_check`, then poll `tracking_check_status` until `status` is
    `completed`. Lookups are spaced about 3.5 s apart on the App Store and 1.5 s
-   on Google Play, so 700 App Store keywords take roughly 40 minutes. A lookup
+   on Google Play, so 700 App Store keywords take roughly 40 minutes. When a
+   store answers 403/429 the check slows that store down and pauses it for
+   5 minutes, so a throttled run takes longer instead of failing. A lookup
    the store refuses (403/429/5xx after retries) is listed under `failures`
    and is never recorded as "not ranked".
 5. `tracking_get_markets` for the overview, `tracking_get_board` per country.

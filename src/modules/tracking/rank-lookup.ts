@@ -22,34 +22,71 @@ export const RANK_LOOKUP_BACKOFF_MAX_MS = 60_000;
 export const RANK_LOOKUP_RETRYABLE_STATUSES: readonly number[] = [
 	403, 429, 500, 502, 503, 504,
 ];
+/** Statuses that mean "you are too fast" rather than "the store is down". */
+export const RANK_LOOKUP_THROTTLE_STATUSES: readonly number[] = [403, 429];
+/** Pause for the whole store after a throttle answer without Retry-After. */
+export const RANK_LOOKUP_THROTTLE_PAUSE_MS = 5 * 60_000;
+/** A throttled store never slows below base spacing times this. */
+export const RANK_LOOKUP_MAX_SLOWDOWN = 4;
+/** Consecutive successes before a slowed store speeds back up one step. */
+export const RANK_LOOKUP_RECOVERY_STREAK = 20;
 
 export type Sleeper = (ms: number) => Promise<void>;
 export type Clock = () => number;
 
 /**
- * Hands out lookup slots at a fixed spacing. Callers queue behind each other
- * even when they belong to different runs, so two apps checked at once cannot
- * double the request rate against the same store IP.
+ * Hands out lookup slots per store. Callers queue behind each other even when
+ * they belong to different runs, so two apps checked at once cannot double the
+ * request rate against the same store IP. The spacing adapts: a throttle
+ * answer halves the rate (up to RANK_LOOKUP_MAX_SLOWDOWN), and every
+ * RANK_LOOKUP_RECOVERY_STREAK successes undo one halving, never going faster
+ * than the base spacing measured as safe.
  */
 export class StoreThrottle {
 	private nextSlotAt = 0;
+	private gapMs: number;
+	private okStreak = 0;
 
 	constructor(
 		private readonly spacingMs: number,
 		private readonly now: Clock,
 		private readonly wait: Sleeper,
-	) {}
+	) {
+		this.gapMs = spacingMs;
+	}
+
+	get currentSpacingMs(): number {
+		return this.gapMs;
+	}
 
 	async acquire(): Promise<void> {
 		const now = this.now();
 		const slot = Math.max(now, this.nextSlotAt);
-		this.nextSlotAt = slot + this.spacingMs;
+		this.nextSlotAt = slot + this.gapMs;
 		if (slot > now) await this.wait(slot - now);
 	}
 
 	/** Push every queued caller back after the store refused a request. */
 	penalize(ms: number): void {
 		this.nextSlotAt = Math.max(this.nextSlotAt, this.now() + ms);
+	}
+
+	/** The store said "too fast": halve the rate and pause the whole store. */
+	throttled(pauseMs: number): void {
+		this.okStreak = 0;
+		this.gapMs = Math.min(
+			this.gapMs * 2,
+			this.spacingMs * RANK_LOOKUP_MAX_SLOWDOWN,
+		);
+		this.penalize(pauseMs);
+	}
+
+	recordSuccess(): void {
+		if (this.gapMs <= this.spacingMs) return;
+		this.okStreak++;
+		if (this.okStreak < RANK_LOOKUP_RECOVERY_STREAK) return;
+		this.okStreak = 0;
+		this.gapMs = Math.max(this.spacingMs, this.gapMs / 2);
 	}
 }
 
@@ -160,6 +197,10 @@ export function isRetryableLookup(status: number | null): boolean {
 	return status === null || RANK_LOOKUP_RETRYABLE_STATUSES.includes(status);
 }
 
+export function isThrottleStatus(status: number | null): boolean {
+	return status !== null && RANK_LOOKUP_THROTTLE_STATUSES.includes(status);
+}
+
 export function rankBackoffMs(attempt: number): number {
 	return Math.min(
 		RANK_LOOKUP_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1),
@@ -195,6 +236,7 @@ export async function lookupRank(
 				externalId,
 				country,
 			);
+			throttle.recordSuccess();
 			return { attempts: attempt, ok: true, position };
 		} catch (err) {
 			last = describeStoreError(err);
@@ -209,9 +251,12 @@ export async function lookupRank(
 					status: last.status,
 				};
 			}
-			const delay = last.retryAfterMs ?? rankBackoffMs(attempt);
 			// The whole store backs off, not only this run: the limit is per IP.
-			throttle.penalize(delay);
+			if (isThrottleStatus(last.status)) {
+				throttle.throttled(last.retryAfterMs ?? RANK_LOOKUP_THROTTLE_PAUSE_MS);
+			} else {
+				throttle.penalize(last.retryAfterMs ?? rankBackoffMs(attempt));
+			}
 		}
 	}
 	return {

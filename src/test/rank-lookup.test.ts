@@ -3,9 +3,13 @@ import {
 	configureRankLookup,
 	describeStoreError,
 	isRetryableLookup,
+	isThrottleStatus,
 	lookupRank,
 	RANK_LOOKUP_MAX_ATTEMPTS,
+	RANK_LOOKUP_MAX_SLOWDOWN,
+	RANK_LOOKUP_RECOVERY_STREAK,
 	RANK_LOOKUP_SPACING_MS,
+	RANK_LOOKUP_THROTTLE_PAUSE_MS,
 	rankBackoffMs,
 	StoreThrottle,
 } from "@/modules/tracking/rank-lookup";
@@ -84,6 +88,47 @@ describe("StoreThrottle", () => {
 		expect(time.waits).toEqual([20_000]);
 	});
 
+	it("throttled() halves the rate, capped at the max slowdown", () => {
+		const time = fakeTime();
+		const throttle = new StoreThrottle(1_000, time.now, time.sleep);
+		throttle.throttled(0);
+		expect(throttle.currentSpacingMs).toBe(2_000);
+		for (let i = 0; i < 10; i++) throttle.throttled(0);
+		expect(throttle.currentSpacingMs).toBe(1_000 * RANK_LOOKUP_MAX_SLOWDOWN);
+	});
+
+	it("speeds back up one step per success streak, never past base", () => {
+		const time = fakeTime();
+		const throttle = new StoreThrottle(1_000, time.now, time.sleep);
+		throttle.throttled(0);
+		throttle.throttled(0);
+		expect(throttle.currentSpacingMs).toBe(4_000);
+
+		for (let i = 0; i < RANK_LOOKUP_RECOVERY_STREAK - 1; i++) {
+			throttle.recordSuccess();
+		}
+		expect(throttle.currentSpacingMs).toBe(4_000);
+		throttle.recordSuccess();
+		expect(throttle.currentSpacingMs).toBe(2_000);
+
+		for (let i = 0; i < RANK_LOOKUP_RECOVERY_STREAK * 3; i++) {
+			throttle.recordSuccess();
+		}
+		expect(throttle.currentSpacingMs).toBe(1_000);
+	});
+
+	it("a throttle answer resets the recovery streak", () => {
+		const time = fakeTime();
+		const throttle = new StoreThrottle(1_000, time.now, time.sleep);
+		throttle.throttled(0);
+		for (let i = 0; i < RANK_LOOKUP_RECOVERY_STREAK - 1; i++) {
+			throttle.recordSuccess();
+		}
+		throttle.throttled(0);
+		throttle.recordSuccess();
+		expect(throttle.currentSpacingMs).toBe(4_000);
+	});
+
 	it("uses the documented per-store spacing", () => {
 		expect(RANK_LOOKUP_SPACING_MS.appstore).toBe(3_500);
 		expect(RANK_LOOKUP_SPACING_MS.playstore).toBe(1_500);
@@ -114,7 +159,7 @@ describe("lookupRank", () => {
 		configureRankLookup();
 	});
 
-	it("retries a 403 throttle with backoff, then succeeds", async () => {
+	it("pauses the store and halves its rate on a 403, then succeeds", async () => {
 		const time = fakeTime();
 		let calls = 0;
 		const rt = configureRankLookup({
@@ -129,8 +174,37 @@ describe("lookupRank", () => {
 
 		const outcome = await lookupRank("appstore", "quiz", "1", "de", rt);
 		expect(outcome).toEqual({ attempts: 3, ok: true, position: 12 });
-		// Backoff grows: attempt 1 -> base, attempt 2 -> 2x base.
+		expect(time.waits).toEqual([
+			RANK_LOOKUP_THROTTLE_PAUSE_MS,
+			RANK_LOOKUP_THROTTLE_PAUSE_MS,
+		]);
+		expect(rt.throttles.appstore.currentSpacingMs).toBe(
+			RANK_LOOKUP_SPACING_MS.appstore * 4,
+		);
+		// The other store keeps its own pace.
+		expect(rt.throttles.playstore.currentSpacingMs).toBe(
+			RANK_LOOKUP_SPACING_MS.playstore,
+		);
+		configureRankLookup();
+	});
+
+	it("backs off exponentially on 5xx without slowing the store down", async () => {
+		const time = fakeTime();
+		let calls = 0;
+		const rt = configureRankLookup({
+			fetchPosition: async () => {
+				calls++;
+				if (calls < 3) throw storeError(503);
+				return 5;
+			},
+			now: time.now,
+			sleep: time.sleep,
+		});
+		await lookupRank("appstore", "quiz", "1", "de", rt);
 		expect(time.waits).toEqual([rankBackoffMs(1), rankBackoffMs(2)]);
+		expect(rt.throttles.appstore.currentSpacingMs).toBe(
+			RANK_LOOKUP_SPACING_MS.appstore,
+		);
 		configureRankLookup();
 	});
 
@@ -223,6 +297,13 @@ describe("store error helpers", () => {
 		expect(isRetryableLookup(null)).toBe(true);
 		expect(isRetryableLookup(400)).toBe(false);
 		expect(isRetryableLookup(404)).toBe(false);
+	});
+
+	it("treats only 403/429 as 'too fast'", () => {
+		expect(isThrottleStatus(403)).toBe(true);
+		expect(isThrottleStatus(429)).toBe(true);
+		expect(isThrottleStatus(503)).toBe(false);
+		expect(isThrottleStatus(null)).toBe(false);
 	});
 
 	it("caps the backoff", () => {
