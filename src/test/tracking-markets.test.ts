@@ -10,6 +10,7 @@ import {
 	configureRankLookup,
 	RANK_LOOKUP_MAX_ATTEMPTS,
 } from "@/modules/tracking/rank-lookup";
+import { MAX_KEYWORDS_PER_COUNTRY } from "@/modules/tracking/tracking.types";
 import { devicesFromAscPlatforms } from "@/providers/app-store";
 import { GooglePlayProvider } from "@/providers/google-play";
 import {
@@ -143,7 +144,10 @@ describe("POST /apps/:appId/tracking/keywords/bulk", () => {
 	});
 
 	it("reports already-tracked and over-the-cap keywords per market", async () => {
-		const many = Array.from({ length: 25 }, (_, i) => `spiel ${i}`);
+		const many = Array.from(
+			{ length: MAX_KEYWORDS_PER_COUNTRY + 5 },
+			(_, i) => `spiel ${i}`,
+		);
 		const res = await post(`/apps/${appId}/tracking/keywords/bulk`, {
 			items: [
 				{ country: "de", keywords: many },
@@ -160,7 +164,7 @@ describe("POST /apps/:appId/tracking/keywords/bulk", () => {
 			}>;
 		};
 		const de = body.results.find((r) => r.country === "de");
-		expect(de?.added.length).toBe(20);
+		expect(de?.added.length).toBe(MAX_KEYWORDS_PER_COUNTRY);
 		expect(de?.rejected.length).toBe(5);
 		const us = body.results.find((r) => r.country === "us");
 		expect(us?.added).toEqual(["family games"]);

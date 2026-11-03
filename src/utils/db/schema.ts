@@ -826,7 +826,7 @@ export const appTrackingConfig = pgTable(
 	(t) => [index().on(t.workspaceId)],
 );
 
-// Keywords the user wants to track per app + country. Capped at 20 per
+// Keywords the user wants to track per app + country. Capped at 40 per
 // (appId, country) in the service.
 export const trackedKeywords = pgTable(
 	"tracked_keywords",

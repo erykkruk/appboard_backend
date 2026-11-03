@@ -6,6 +6,7 @@ import { storesController } from "@/modules/stores";
 import { trackingController } from "@/modules/tracking";
 import { RankCheckJobs } from "@/modules/tracking/rank-check.jobs";
 import { configureRankLookup } from "@/modules/tracking/rank-lookup";
+import { MAX_KEYWORDS_PER_COUNTRY } from "@/modules/tracking/tracking.types";
 import {
 	authGuard,
 	authRequest,
@@ -115,11 +116,14 @@ describe("Tracked keywords", () => {
 		]);
 	});
 
-	it("enforces the 20-keyword-per-language cap", async () => {
-		const twenty = Array.from({ length: 20 }, (_, i) => `kw-${i}`);
+	it("enforces the per-language keyword cap", async () => {
+		const atCap = Array.from(
+			{ length: MAX_KEYWORDS_PER_COUNTRY },
+			(_, i) => `kw-${i}`,
+		);
 		const ok = await app.handle(
 			authRequest(`${BASE}/apps/${appId}/tracking/keywords`, {
-				body: JSON.stringify({ country: "de", keywords: twenty }),
+				body: JSON.stringify({ country: "de", keywords: atCap }),
 				headers: { "Content-Type": "application/json" },
 				method: "POST",
 			}),
