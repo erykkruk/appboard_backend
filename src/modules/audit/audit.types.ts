@@ -26,6 +26,12 @@ export interface AppAuditReport {
 	 */
 	recommendable: string[];
 	/**
+	 * Keywords the app tracks in this market when the audit ran. They are
+	 * scored first and their words are never dropped from a keyword-field
+	 * proposal. Absent on reports stored before this field existed.
+	 */
+	tracked?: string[];
+	/**
 	 * False on Google Play: there is no keyword difficulty for it, so the
 	 * report carries the text and screenshot rules only and the panel must not
 	 * render an empty keyword table as "you rank for nothing".

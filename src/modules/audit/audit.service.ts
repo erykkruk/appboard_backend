@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { HistoryService } from "@/modules/history/history.service";
 import {
+	appStoreLocale,
 	appstoreMeta,
 	isoForListingLanguage,
 } from "@/modules/research/appstore.client";
@@ -13,6 +14,7 @@ import {
 	extractCompetitorCandidates,
 	extractKeywordCandidates,
 	inGenre,
+	mergeAuditCandidates,
 } from "@/modules/research/listing-audit";
 import {
 	buildSuggestions,
@@ -39,8 +41,13 @@ import { AuditAiService } from "./audit-ai.service";
 const log = createLogger("audit-service");
 
 const DEFAULT_COUNTRY = "us";
-/** ResearchService.keywordScores caps the batch; asking for more just wastes calls. */
-const MAX_AUDIT_KEYWORDS = 10;
+/**
+ * Own terms scored per audit: tracked keywords, the keyword field and the
+ * listing text. ResearchService.keywordScores caps one call at 10, so these
+ * run in batches of SCORE_BATCH.
+ */
+const MAX_AUDIT_KEYWORDS = 16;
+const SCORE_BATCH = 10;
 /**
  * Second pass over terms taken from rival titles. Each one costs two live
  * store calls, so this stays small: the point is to break out of the app's
@@ -70,6 +77,33 @@ function describeError(error: unknown): string {
 const RUN_TIMEOUT_MS = 5 * 60 * 1000;
 /** Terms seeded into nightly tracking after the first audit of a country. */
 const AUTO_TRACK_LIMIT = 15;
+
+/**
+ * The synced store listing a market reads. Exact language first, then the
+ * market's own regional variant (en-GB in the GB store), then the store's
+ * default locale for the language (en-US), then any variant of it.
+ */
+export function pickListingForMarket<T extends { language: string }>(
+	rows: T[],
+	language: string,
+	country: string,
+): T | null {
+	if (rows.length === 0) return null;
+	const lower = (v: string) => v.toLowerCase();
+	const wanted = lower(language);
+	const bare = wanted.split(/[-_]/)[0] ?? wanted;
+	const regional = `${bare}-${lower(country)}`;
+	const storeDefault = lower(appStoreLocale(bare)?.listing ?? "");
+	return (
+		rows.find((r) => lower(r.language) === wanted) ??
+		rows.find((r) => lower(r.language) === regional) ??
+		(storeDefault
+			? rows.find((r) => lower(r.language) === storeDefault)
+			: undefined) ??
+		rows.find((r) => lower(r.language).split(/[-_]/)[0] === bare) ??
+		null
+	);
+}
 
 interface AppRow {
 	externalId: string;
@@ -274,6 +308,7 @@ export class AuditService {
 		const suggestions = buildSuggestions(
 			{
 				description: listing.fullDesc ?? undefined,
+				keep: report.tracked ?? [],
 				keywords: listing.keywords ?? undefined,
 				language: wanted,
 				name: listing.title ?? report.store.themes[0] ?? "",
@@ -558,10 +593,26 @@ export class AuditService {
 		const iso = isoForListingLanguage(auditLanguage);
 		const meta = await appstoreMeta(app.externalId, country, iso ?? undefined);
 
+		// Apple never serves the subtitle or the keyword field publicly. For an
+		// app whose listing we sync from App Store Connect they are known, and
+		// without them the audit reports an empty subtitle that is not empty.
+		const remote = pickListingForMarket(
+			await db
+				.select()
+				.from(listings)
+				.where(and(eq(listings.appId, appId), eq(listings.source, "remote"))),
+			auditLanguage,
+			country,
+		);
+		const tracked = (await TrackingService.getKeywords(appId))
+			.filter((k) => k.country.toLowerCase() === country.toLowerCase())
+			.map((k) => k.keyword);
+
 		const storeApp: AuditApp = {
 			country,
 			description: meta.description ?? "",
 			genre: meta.genre ?? app.primaryCategory ?? "",
+			keywordField: remote?.keywords?.trim() || undefined,
 			languages: meta.languages,
 			name: meta.title,
 			rating: meta.rating,
@@ -569,21 +620,22 @@ export class AuditService {
 			// The preview list is capped at 6 for display; the audit needs the
 			// real total or "only N screenshots" lies about every rich listing.
 			screenshots: meta.screenshotCount ?? meta.screenshots?.length ?? 0,
+			subtitle: remote?.shortDesc?.trim() || undefined,
 			updated: meta.lastUpdate,
 		};
 
-		const candidates = extractKeywordCandidates(storeApp).slice(
-			0,
+		const candidates = mergeAuditCandidates(
+			tracked,
+			storeApp.keywordField,
+			extractKeywordCandidates(storeApp),
 			MAX_AUDIT_KEYWORDS,
 		);
-		const own = candidates.length
-			? await ResearchService.keywordScores(
-					candidates,
-					country,
-					app.externalId,
-					workspaceId,
-				)
-			: [];
+		const own = await AuditService.scoreInBatches(
+			candidates,
+			country,
+			app.externalId,
+			workspaceId,
+		);
 
 		// Pass two: the words your rivals use. Without this the audit can only
 		// ever suggest terms already written in your own listing, which is
@@ -654,13 +706,36 @@ export class AuditService {
 				keywordsSupported: true,
 				// The report speaks the language of the market it measured. Falling
 				// back to en-US here would hand Polish keyword proposals to the
-				// English listing.
-				language: draft?.language ?? auditLanguage,
+				// English listing. The synced listing's locale ("en-US", not
+				// "en") is what the suggestions look the listing up by.
+				language: draft?.language ?? remote?.language ?? auditLanguage,
 				measuredAt: new Date().toISOString(),
 				recommendable,
 				store,
+				tracked,
 			},
 		};
+	}
+
+	/** keywordScores answers at most SCORE_BATCH terms per call. */
+	private static async scoreInBatches(
+		terms: string[],
+		country: string,
+		externalId: string,
+		workspaceId: string,
+	): Promise<KeywordScore[]> {
+		const out: KeywordScore[] = [];
+		for (let i = 0; i < terms.length; i += SCORE_BATCH) {
+			out.push(
+				...(await ResearchService.keywordScores(
+					terms.slice(i, i + SCORE_BATCH),
+					country,
+					externalId,
+					workspaceId,
+				)),
+			);
+		}
+		return out;
 	}
 
 	private static async computePlayAudit(
@@ -758,14 +833,19 @@ export class AuditService {
 		if (draftRow.fullDesc && draftRow.fullDesc !== storeApp.description) {
 			changedFields.push("description");
 		}
-		if (draftRow.shortDesc) changedFields.push("subtitle");
-		if (draftRow.keywords) changedFields.push("keywords");
+		if (draftRow.shortDesc && draftRow.shortDesc !== storeApp.subtitle) {
+			changedFields.push("subtitle");
+		}
+		if (draftRow.keywords && draftRow.keywords !== storeApp.keywordField) {
+			changedFields.push("keywords");
+		}
 
 		const draftApp: AuditApp = {
 			...storeApp,
 			description: draftRow.fullDesc ?? storeApp.description,
+			keywordField: draftRow.keywords ?? storeApp.keywordField,
 			name: draftRow.title ?? storeApp.name,
-			subtitle: draftRow.shortDesc ?? undefined,
+			subtitle: draftRow.shortDesc ?? storeApp.subtitle,
 		};
 
 		return {
