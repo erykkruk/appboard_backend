@@ -6,7 +6,10 @@ import { PublicReportsService } from "@/modules/public-reports/public-reports.se
 import { FreeToolQuotaService } from "@/modules/public-reports/quota.service";
 import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
-import { ResearchService } from "@/modules/research/research.service";
+import {
+	ResearchService,
+	type StorePacer,
+} from "@/modules/research/research.service";
 import type { ResearchRunReport } from "@/modules/research/research.types";
 import { createLogger } from "@/utils/logger";
 import { sendMail } from "@/utils/mailer";
@@ -19,11 +22,17 @@ import {
 	type StoreBreakerLimits,
 } from "./rank-lookup";
 import { ReportService } from "./report.service";
+import { KeywordSuggestionsService } from "./suggestions.service";
 import { TrackingService } from "./tracking.service";
 import {
+	AUTO_RESEARCH_HOUR,
 	type AutoResearchFrequency,
 	DEFAULT_SCHEDULER_TZ,
+	IDEA_RESCORE_DAYS,
+	IDEAS_SCORED_PER_MARKET,
 	RANK_CHECK_HOURS,
+	RESEARCH_ROTATION_DAYS,
+	type TrackingSchedule,
 } from "./tracking.types";
 
 const log = createLogger("scheduler");
@@ -32,8 +41,6 @@ const TICK_MS = 60_000;
 // Guard against a slot re-firing within the same window (e.g. after a restart
 // at 12:00). The two rank-check slots are 12h apart, so 6h is a safe gap.
 const MIN_RANK_GAP_MS = 6 * 60 * 60 * 1000;
-// Auto-research is evaluated once a day at midnight, then gated by frequency.
-const AUTO_RESEARCH_HOUR = 0;
 // Keyword-score refresh runs daily at 01:00 local (offset from the midnight
 // rank check so the two batches never hammer iTunes at the same time).
 const SCORE_REFRESH_HOUR = 1;
@@ -54,6 +61,9 @@ const FREQUENCY_DAYS: Record<AutoResearchFrequency, number> = {
 };
 // Fire a day/week/month interval slightly early to absorb tick jitter.
 const FREQUENCY_GRACE_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** How far ahead "next run" is searched (a monthly run plus slack). */
+const NEXT_RUN_SEARCH_DAYS = 40;
 
 interface RankSchedulable {
 	lastRankCheckAt: Date | null;
@@ -142,6 +152,98 @@ export function isAutoResearchDue(
 	return (
 		now.getTime() - new Date(cfg.lastAutoResearchAt).getTime() >= intervalMs
 	);
+}
+
+/** Days since 1970-01-01 of the local calendar date in the timezone. */
+export function localDayNumber(now: Date, tz: string): number {
+	const parts = new Intl.DateTimeFormat("en-CA", {
+		day: "2-digit",
+		month: "2-digit",
+		timeZone: tz,
+		year: "numeric",
+	}).formatToParts(now);
+	const get = (type: string) =>
+		Number(parts.find((p) => p.type === type)?.value ?? "0");
+	return Math.floor(
+		Date.UTC(get("year"), get("month") - 1, get("day")) / DAY_MS,
+	);
+}
+
+/**
+ * The markets one scheduled research run scores new keyword ideas in. Weekly
+ * and monthly runs cover every tracked market. A daily run covers one slice,
+ * so each market is still covered once every RESEARCH_ROTATION_DAYS without
+ * asking the App Store about every market every morning.
+ */
+export function marketsForResearchRun(
+	countries: string[],
+	frequency: string,
+	dayNumber: number,
+): string[] {
+	const sorted = [...new Set(countries.map((c) => c.toLowerCase()))].sort();
+	if (frequency !== "daily") return sorted;
+	const slice = dayNumber % RESEARCH_ROTATION_DAYS;
+	return sorted.filter((_, i) => i % RESEARCH_ROTATION_DAYS === slice);
+}
+
+/**
+ * Where the full research run (store page, reviews, AI) goes: the app's home
+ * storefront when it is tracked, otherwise the market with most keywords.
+ */
+export function primaryResearchMarket(
+	tracked: Array<{ country: string }>,
+	homeCountry: string | null | undefined,
+): string {
+	const counts = new Map<string, number>();
+	for (const k of tracked) {
+		const c = k.country.toLowerCase();
+		counts.set(c, (counts.get(c) ?? 0) + 1);
+	}
+	const home = homeCountry?.toLowerCase();
+	if (home && counts.has(home)) return home;
+	let best = "us";
+	let most = 0;
+	for (const [country, count] of [...counts.entries()].sort()) {
+		if (count > most) {
+			best = country;
+			most = count;
+		}
+	}
+	return best;
+}
+
+/** First minute at or after `now` when the auto-research slot fires. */
+export function nextAutoResearchAt(
+	cfg: ResearchSchedulable & { autoResearchEnabled: boolean },
+	now: Date,
+	tz: string,
+): Date | null {
+	if (!cfg.autoResearchEnabled) return null;
+	const start = new Date(now);
+	start.setUTCSeconds(0, 0);
+	start.setUTCMinutes(0);
+	const HOUR_MS = 60 * 60 * 1000;
+	for (let i = 0; i <= NEXT_RUN_SEARCH_DAYS * 24; i++) {
+		const candidate = new Date(start.getTime() + i * HOUR_MS);
+		if (candidate.getTime() < now.getTime()) continue;
+		if (isAutoResearchDue(cfg, candidate, tz)) return candidate;
+	}
+	return null;
+}
+
+/** Fixed slots of every scheduled job, for the panel's "Next run" line. */
+export function trackingSchedule(
+	cfg: ResearchSchedulable & { autoResearchEnabled: boolean },
+	now = new Date(),
+): TrackingSchedule {
+	const tz = config.SCHEDULER_TZ || DEFAULT_SCHEDULER_TZ;
+	return {
+		autoResearchHour: AUTO_RESEARCH_HOUR,
+		nextAutoResearchAt: nextAutoResearchAt(cfg, now, tz)?.toISOString() ?? null,
+		rankCheckHours: RANK_CHECK_HOURS,
+		scoreRefreshHour: SCORE_REFRESH_HOUR,
+		timezone: tz,
+	};
 }
 
 async function sendRankDigest(cfg: {
@@ -244,15 +346,65 @@ export async function runScheduledScoreRefresh(
 	await TrackingService.markScoreRefreshRun(cfg.appId);
 }
 
-async function runScheduledAutoResearch(cfg: {
-	appId: string;
-	notifyEmail: string | null;
-	workspaceId: string;
-}) {
+/**
+ * Score the keyword ideas of one market that were never scored or are older
+ * than IDEA_RESCORE_DAYS. Ideas come from stored data (rival titles in the
+ * search results of the tracked keywords), so the only store traffic is one
+ * App Store search per scored idea, paced by the shared throttle. Google Play
+ * is never asked: scores are App Store based for every app.
+ */
+export async function scoreMarketIdeas(
+	cfg: { appId: string; workspaceId: string },
+	country: string,
+	options: { appstoreId?: string; now?: Date; pace?: StorePacer } = {},
+): Promise<number> {
+	const { suggestions } = await KeywordSuggestionsService.forMarket(
+		cfg.appId,
+		cfg.workspaceId,
+		country,
+	);
+	const now = options.now ?? new Date();
+	const staleBefore = new Date(now.getTime() - IDEA_RESCORE_DAYS * DAY_MS)
+		.toISOString()
+		.slice(0, 10);
+	const due = suggestions
+		.filter((s) => !s.scoredAt || s.scoredAt < staleBefore)
+		.slice(0, IDEAS_SCORED_PER_MARKET)
+		.map((s) => s.keyword);
+	if (!due.length) return 0;
+	await ResearchService.keywordScores(
+		due,
+		country,
+		options.appstoreId,
+		cfg.workspaceId,
+		{ pace: options.pace },
+	);
+	return due.length;
+}
+
+/**
+ * The 06:00 auto-research. One full research run (store page, reviews, AI)
+ * in the app's primary market, then new keyword ideas scored in every market
+ * of today's rotation slice (all markets for weekly and monthly runs).
+ */
+export async function runScheduledAutoResearch(
+	cfg: {
+		appId: string;
+		autoResearchFrequency: string;
+		notifyEmail: string | null;
+		workspaceId: string;
+	},
+	now = new Date(),
+	options: { breakerLimits?: StoreBreakerLimits } = {},
+) {
+	const tz = config.SCHEDULER_TZ || DEFAULT_SCHEDULER_TZ;
 	const tracked = await TrackingService.getKeywords(cfg.appId);
-	const country = tracked[0]?.country ?? "us";
+	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
+	const home = (app.rawData as { publicCountry?: string } | null)
+		?.publicCountry;
+	const country = primaryResearchMarket(tracked, home);
 	const keywords = tracked
-		.filter((k) => k.country === country)
+		.filter((k) => k.country.toLowerCase() === country)
 		.map((k) => k.keyword);
 
 	const run = await ResearchRunsService.runForApp(cfg.appId, cfg.workspaceId, {
@@ -262,6 +414,32 @@ async function runScheduledAutoResearch(cfg: {
 		kind: "scheduled",
 	});
 	await TrackingService.markAutoResearchRun(cfg.appId);
+
+	const markets = marketsForResearchRun(
+		tracked.map((k) => k.country),
+		cfg.autoResearchFrequency,
+		localDayNumber(now, tz),
+	);
+	const rt = getRankLookupRuntime();
+	const breaker = new StoreBreaker(rt.now, options.breakerLimits);
+	const pace = breakerPacer("appstore", breaker, rt);
+	const appstoreId =
+		app.platform === "ios" ? (app.externalId ?? undefined) : undefined;
+	let scored = 0;
+	for (const market of markets) {
+		if (breaker.trippedReason) {
+			log.warn(
+				{ appId: cfg.appId, market, reason: breaker.trippedReason },
+				"Keyword ideas stopped by the store breaker",
+			);
+			break;
+		}
+		scored += await scoreMarketIdeas(cfg, market, { appstoreId, now, pace });
+	}
+	log.info(
+		{ appId: cfg.appId, country, markets: markets.length, scored },
+		"Scheduled auto-research complete",
+	);
 
 	const email = await TrackingService.resolveNotifyEmail(
 		cfg.workspaceId,
@@ -274,6 +452,9 @@ async function runScheduledAutoResearch(cfg: {
 	);
 	await sendMail({ ...message, to: email });
 }
+
+/** Apps whose detached auto-research is still running. */
+const researching = new Set<string>();
 
 /** Apps whose detached keyword-score refresh is still running. */
 const scoreRefreshing = new Set<string>();
@@ -314,14 +495,30 @@ async function runTick(now: Date, tz: string) {
 			}
 		}
 
-		const researchConfigs = await TrackingService.listAutoResearchConfigs();
-		for (const cfg of researchConfigs) {
-			if (!isAutoResearchDue(cfg, now, tz)) continue;
-			try {
-				await runScheduledAutoResearch(cfg);
-			} catch (err) {
-				log.error({ appId: cfg.appId, err }, "Scheduled auto-research failed");
-			}
+		// Detached and one app after another: a run scores ideas in many
+		// markets through the shared App Store throttle, which can take a
+		// while, and must not hold the tick (the 09:00 reminders) meanwhile.
+		const researchConfigs = (
+			await TrackingService.listAutoResearchConfigs()
+		).filter(
+			(cfg) => isAutoResearchDue(cfg, now, tz) && !researching.has(cfg.appId),
+		);
+		if (researchConfigs.length) {
+			for (const cfg of researchConfigs) researching.add(cfg.appId);
+			void (async () => {
+				for (const cfg of researchConfigs) {
+					try {
+						await runScheduledAutoResearch(cfg, now);
+					} catch (err) {
+						log.error(
+							{ appId: cfg.appId, err },
+							"Scheduled auto-research failed",
+						);
+					} finally {
+						researching.delete(cfg.appId);
+					}
+				}
+			})();
 		}
 
 		const refreshes = rankConfigs

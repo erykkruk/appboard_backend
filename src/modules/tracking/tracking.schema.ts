@@ -56,6 +56,10 @@ export const boardQuery = t.Object({
 	country: t.Optional(country),
 });
 
+export const suggestionsQuery = t.Object({
+	country,
+});
+
 export const historyQuery = t.Object({
 	country: t.Optional(t.String()),
 	keyword: t.Optional(t.String()),
