@@ -245,6 +245,13 @@
       "when": 1793692710075,
       "tag": "0034_familiar_gorgon",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793699067834,
+      "tag": "0035_slim_bloodscream",
+      "breakpoints": true
     }
   ],
   "version": "7"

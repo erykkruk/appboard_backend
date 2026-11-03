@@ -1,0 +1,1 @@
+CREATE INDEX "rank_snapshots_latest_idx" ON "rank_snapshots" USING btree ("app_id","country","keyword","created_at" DESC NULLS LAST);

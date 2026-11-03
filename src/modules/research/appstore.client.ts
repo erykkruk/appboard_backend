@@ -303,18 +303,31 @@ async function lookupCompetitors(
  * Primary: iTunes Search API. Fallback: App Store SSR page + Lookup API,
  * producing the identical shape so scoring is deterministic either way.
  */
+/**
+ * iTunes search only, no fallback. Throws when iTunes refuses the search, so
+ * a throttled caller sees the 403 and can back off instead of switching to
+ * other Apple endpoints behind the throttle's back.
+ */
+export async function appstoreKeywordSearchStrict(
+	keyword: string,
+	country: string,
+	limit: number,
+): Promise<KeywordCompetitor[]> {
+	const data = await itunesFetch(
+		`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=${limit}`,
+	);
+	return ((data.results as ItunesLookupResult[] | undefined) ?? []).map(
+		toKeywordCompetitor,
+	);
+}
+
 export async function appstoreKeywordSearch(
 	keyword: string,
 	country: string,
 	limit: number,
 ): Promise<KeywordCompetitor[]> {
 	try {
-		const data = await itunesFetch(
-			`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=${limit}`,
-		);
-		return ((data.results as ItunesLookupResult[] | undefined) ?? []).map(
-			toKeywordCompetitor,
-		);
+		return await appstoreKeywordSearchStrict(keyword, country, limit);
 	} catch (primaryError) {
 		const ids = await fetchSsrAppIds(keyword, country).catch(() => {
 			throw primaryError;

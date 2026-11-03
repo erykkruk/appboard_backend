@@ -6,6 +6,7 @@ import {
 	RANK_LOOKUP_MAX_ATTEMPTS,
 	RANK_LOOKUP_SPACING_MS,
 	RANK_LOOKUP_THROTTLE_PAUSE_MS,
+	STORE_BREAKER_MAX_STALL_MS,
 	throttledStoreCall,
 } from "@/modules/tracking/rank-lookup";
 import { runScheduledScoreRefresh } from "@/modules/tracking/scheduler.service";
@@ -13,7 +14,11 @@ import { TrackingService } from "@/modules/tracking/tracking.service";
 import { cleanupStores, getTestWorkspaceId } from "@/test/setup";
 import { seedTestApp, seedTestStore } from "@/test/test-helpers";
 import { db } from "@/utils/db";
-import { apps, keywordScoreSnapshots } from "@/utils/db/schema";
+import {
+	apps,
+	appTrackingConfig,
+	keywordScoreSnapshots,
+} from "@/utils/db/schema";
 
 /** A country no other suite scores in, so snapshot rows stay isolated. */
 const COUNTRY = "nz";
@@ -157,7 +162,7 @@ describe("nightly keyword-score refresh", () => {
 		const time = fakeTime();
 		const rt = configureRankLookup({ now: time.now, sleep: time.sleep });
 		let refusedOnce = false;
-		stubItunes((call) => {
+		const calls = stubItunes((call) => {
 			if (call.term !== "trivia night" || call.limit !== 25) return false;
 			if (refusedOnce) return false;
 			refusedOnce = true;
@@ -179,6 +184,9 @@ describe("nightly keyword-score refresh", () => {
 		expect(rt.throttles.appstore.currentSpacingMs).toBe(
 			RANK_LOOKUP_SPACING_MS.appstore * 2,
 		);
+		// Paced runs never fall back to the App Store web page or the lookup
+		// API: that would go around the throttle and hide the 403.
+		expect(calls.filter((c) => c.host !== "itunes.apple.com")).toHaveLength(0);
 	});
 
 	it("keeps scoring the batch when a rank search is refused on every try", async () => {
@@ -203,5 +211,50 @@ describe("nightly keyword-score refresh", () => {
 			calls.filter((c) => c.term === "quiz show" && c.limit === 200),
 		).toHaveLength(RANK_LOOKUP_MAX_ATTEMPTS);
 		expect(scores.filter((s) => s.appRank === 3)).toHaveLength(2);
+	});
+
+	it("stops when the store stays blocked, without scoring or marking the refresh", async () => {
+		const blocked = Array.from({ length: 20 }, (_, i) => `blocked term ${i}`);
+		const store = await seedTestStore();
+		storeIds.push(store.id);
+		const seeded = await seedTestApp(store.id);
+		await db
+			.update(apps)
+			.set({ externalId: TRACK_ID, platform: "ios" })
+			.where(eq(apps.id, seeded.id));
+		await TrackingService.addKeywords(seeded.id, COUNTRY, blocked);
+		const time = fakeTime();
+		configureRankLookup({ now: time.now, sleep: time.sleep });
+		const calls = stubItunes(() => true);
+
+		await runScheduledScoreRefresh({
+			appId: seeded.id,
+			workspaceId: getTestWorkspaceId(),
+		});
+
+		const itunes = calls.filter((c) => c.host === "itunes.apple.com");
+		// Without the breaker: 20 keywords x 2 searches x 4 attempts = 160.
+		expect(itunes.length).toBeLessThanOrEqual(2 * RANK_LOOKUP_MAX_ATTEMPTS);
+		expect(calls.filter((c) => c.host !== "itunes.apple.com")).toHaveLength(0);
+		// It gave up around the stall limit, not after hours of pauses.
+		expect(time.waits.reduce((sum, ms) => sum + ms, 0)).toBeLessThanOrEqual(
+			STORE_BREAKER_MAX_STALL_MS,
+		);
+
+		const scored = await db
+			.select({ keyword: keywordScoreSnapshots.keyword })
+			.from(keywordScoreSnapshots)
+			.where(
+				and(
+					eq(keywordScoreSnapshots.workspaceId, getTestWorkspaceId()),
+					eq(keywordScoreSnapshots.country, COUNTRY),
+				),
+			);
+		expect(scored.filter((r) => blocked.includes(r.keyword))).toHaveLength(0);
+		const [config] = await db
+			.select({ lastScoreRefreshAt: appTrackingConfig.lastScoreRefreshAt })
+			.from(appTrackingConfig)
+			.where(eq(appTrackingConfig.appId, seeded.id));
+		expect(config?.lastScoreRefreshAt ?? null).toBeNull();
 	});
 });

@@ -126,7 +126,9 @@ export class RankCheckJobs {
 				entry.runId = row.id;
 				return RankCheckJobs.execute(row, workspaceId, hooks);
 			})
-			.catch(() => undefined)
+			.catch((err) => {
+				log.error({ appId, err, kind }, "Rank check job failed to start");
+			})
 			.finally(release);
 
 		const row = await entry.started;

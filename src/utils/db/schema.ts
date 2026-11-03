@@ -857,7 +857,17 @@ export const rankSnapshots = pgTable(
 		platform: varchar({ length: 20 }).notNull(),
 		position: integer(),
 	},
-	(t) => [index().on(t.appId, t.keyword, t.country), index().on(t.appId)],
+	(t) => [
+		index().on(t.appId, t.keyword, t.country),
+		index().on(t.appId),
+		// Newest measurements per tracked keyword (LATERAL ... LIMIT 2).
+		index("rank_snapshots_latest_idx").on(
+			t.appId,
+			t.country,
+			t.keyword,
+			t.createdAt.desc(),
+		),
+	],
 );
 
 // One rank-check job (manual "Check now" or the scheduler). The check runs in

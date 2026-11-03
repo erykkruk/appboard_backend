@@ -14,6 +14,7 @@ import {
 	StoreThrottle,
 } from "@/modules/tracking/rank-lookup";
 import { rankTrackingSupport } from "@/modules/tracking/rank-support";
+import { parseRetryAfterMs } from "@/utils/backoff";
 import { buildError } from "@/utils/errors";
 
 /** Virtual clock: sleeping advances time instantly and records every wait. */
@@ -297,6 +298,17 @@ describe("store error helpers", () => {
 		expect(isRetryableLookup(null)).toBe(true);
 		expect(isRetryableLookup(400)).toBe(false);
 		expect(isRetryableLookup(404)).toBe(false);
+	});
+
+	it("honours a Retry-After up to the store pause, capping longer asks", () => {
+		expect(describeStoreError(storeError(429, "200")).retryAfterMs).toBe(
+			200_000,
+		);
+		expect(describeStoreError(storeError(429, "3600")).retryAfterMs).toBe(
+			RANK_LOOKUP_THROTTLE_PAUSE_MS,
+		);
+		// Other callers keep the shared 60 s cap.
+		expect(parseRetryAfterMs("200")).toBe(60_000);
 	});
 
 	it("treats only 403/429 as 'too fast'", () => {

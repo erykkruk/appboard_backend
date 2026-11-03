@@ -12,7 +12,12 @@ import { createLogger } from "@/utils/logger";
 import { sendMail } from "@/utils/mailer";
 import { DraftReminderService } from "./draft-reminder.service";
 import { RankCheckJobs } from "./rank-check.jobs";
-import { throttledStoreCall } from "./rank-lookup";
+import {
+	breakerPacer,
+	getRankLookupRuntime,
+	StoreBreaker,
+	type StoreBreakerLimits,
+} from "./rank-lookup";
 import { ReportService } from "./report.service";
 import { TrackingService } from "./tracking.service";
 import {
@@ -191,12 +196,16 @@ export async function runScheduledRankCheck(cfg: {
  * country at a time. iOS apps also get their rank refreshed via the app's
  * store id. The scoring path persists snapshots itself (workspaceId given).
  * Every iTunes request goes through the same process-wide throttle and retry
- * policy as rank checks, so a few hundred keywords never burst the store.
+ * policy as rank checks, so a few hundred keywords never burst the store, and
+ * the same circuit breaker stops the refresh when the store stays blocked.
  */
-export async function runScheduledScoreRefresh(cfg: {
-	appId: string;
-	workspaceId: string;
-}) {
+export async function runScheduledScoreRefresh(
+	cfg: {
+		appId: string;
+		workspaceId: string;
+	},
+	options: { breakerLimits?: StoreBreakerLimits } = {},
+) {
 	const tracked = await TrackingService.getKeywords(cfg.appId);
 	if (!tracked.length) return;
 	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
@@ -207,18 +216,28 @@ export async function runScheduledScoreRefresh(cfg: {
 	for (const k of tracked) {
 		byCountry.set(k.country, [...(byCountry.get(k.country) ?? []), k.keyword]);
 	}
+	const rt = getRankLookupRuntime();
+	const breaker = new StoreBreaker(rt.now, options.breakerLimits);
+	const pace = breakerPacer("appstore", breaker, rt);
 	for (const [country, keywords] of byCountry) {
 		for (
 			let start = 0;
 			start < keywords.length;
 			start += SCORE_KEYWORDS_PER_CALL
 		) {
+			if (breaker.trippedReason) {
+				log.warn(
+					{ appId: cfg.appId, country, reason: breaker.trippedReason },
+					"Score refresh stopped by the store breaker",
+				);
+				return;
+			}
 			await ResearchService.keywordScores(
 				keywords.slice(start, start + SCORE_KEYWORDS_PER_CALL),
 				country,
 				appstoreId,
 				cfg.workspaceId,
-				{ pace: (call) => throttledStoreCall("appstore", call) },
+				{ pace },
 			);
 		}
 	}

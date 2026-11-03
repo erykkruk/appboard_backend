@@ -9,6 +9,7 @@ import {
 	appstoreKeywordRank,
 	appstoreKeywordRankStrict,
 	appstoreKeywordSearch,
+	appstoreKeywordSearchStrict,
 	appstoreMeta,
 	appstoreReviews,
 	appstoreSearch,
@@ -253,9 +254,17 @@ export class ResearchService {
 				await new Promise((r) => setTimeout(r, delayMs));
 			}
 			try {
-				const search = () =>
-					appstoreKeywordSearch(keyword, country, SCORING_SEARCH_LIMIT);
-				const competitors = pace ? await pace(search) : await search();
+				// Paced (scheduled) runs skip the SSR/lookup fallback: it would hit
+				// Apple outside the throttle and hide the 403 the throttle needs.
+				const competitors = pace
+					? await pace(() =>
+							appstoreKeywordSearchStrict(
+								keyword,
+								country,
+								SCORING_SEARCH_LIMIT,
+							),
+						)
+					: await appstoreKeywordSearch(keyword, country, SCORING_SEARCH_LIMIT);
 				const internalPopularity = estimatePopularity(competitors, keyword);
 				const applePopularity = apple?.values.get(keyword) ?? null;
 				const appleGenre = inferAppleGenre(competitors);

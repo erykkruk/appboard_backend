@@ -1,6 +1,7 @@
 import { ResearchService } from "@/modules/research/research.service";
 import type { ResearchStore } from "@/modules/research/research.types";
 import { parseRetryAfterMs, sleep } from "@/utils/backoff";
+import { buildError } from "@/utils/errors";
 
 /**
  * Minimum gap between two search lookups against one store, shared by every
@@ -30,6 +31,18 @@ export const RANK_LOOKUP_THROTTLE_PAUSE_MS = 5 * 60_000;
 export const RANK_LOOKUP_MAX_SLOWDOWN = 4;
 /** Consecutive successes before a slowed store speeds back up one step. */
 export const RANK_LOOKUP_RECOVERY_STREAK = 20;
+/** Keywords in a row whose lookup failed (after retries) before a run stops. */
+export const STORE_BREAKER_MAX_CONSECUTIVE_FAILURES = 8;
+/** A run stops when the store has answered nothing for this long. */
+export const STORE_BREAKER_MAX_STALL_MS = 30 * 60_000;
+/**
+ * Hard cap on one run: 1,000 keywords at four times the base App Store
+ * spacing still fit, and a blocked store cannot hold the app's lock and the
+ * shared throttle for days.
+ */
+export const STORE_BREAKER_MAX_RUN_MS = 4 * 60 * 60_000;
+/** Error code on a run (or refresh) the breaker stopped. */
+export const STORE_THROTTLED_CODE = "STORE_THROTTLED";
 
 export type Sleeper = (ms: number) => Promise<void>;
 export type Clock = () => number;
@@ -57,6 +70,11 @@ export class StoreThrottle {
 
 	get currentSpacingMs(): number {
 		return this.gapMs;
+	}
+
+	/** When the next caller would get its slot (now if the store is free). */
+	nextSlotTime(): number {
+		return Math.max(this.now(), this.nextSlotAt);
 	}
 
 	async acquire(): Promise<void> {
@@ -90,9 +108,96 @@ export class StoreThrottle {
 	}
 }
 
+export interface StoreBreakerLimits {
+	maxConsecutiveFailures: number;
+	maxRunMs: number;
+	maxStallMs: number;
+}
+
+const DEFAULT_BREAKER_LIMITS: StoreBreakerLimits = {
+	maxConsecutiveFailures: STORE_BREAKER_MAX_CONSECUTIVE_FAILURES,
+	maxRunMs: STORE_BREAKER_MAX_RUN_MS,
+	maxStallMs: STORE_BREAKER_MAX_STALL_MS,
+};
+
+/**
+ * Circuit breaker for one long batch of store requests (a rank check or the
+ * nightly score refresh). It trips after too many failed lookups in a row,
+ * when the store has answered nothing for too long, or at the run time limit;
+ * the caller then stops instead of queueing for hours on a blocked store.
+ */
+export class StoreBreaker {
+	private consecutiveFailures = 0;
+	private lastSuccessAt: number;
+	private reason: string | null = null;
+	private readonly startedAt: number;
+
+	constructor(
+		private readonly now: Clock,
+		private readonly limits: StoreBreakerLimits = DEFAULT_BREAKER_LIMITS,
+	) {
+		this.startedAt = now();
+		this.lastSuccessAt = this.startedAt;
+	}
+
+	/** Why the batch must stop, or null while it may continue. */
+	get trippedReason(): string | null {
+		return this.reason;
+	}
+
+	/** Latest moment a request may still be waiting for its store slot. */
+	deadlineAt(): number {
+		return Math.min(
+			this.startedAt + this.limits.maxRunMs,
+			this.lastSuccessAt + this.limits.maxStallMs,
+		);
+	}
+
+	recordSuccess(): void {
+		this.consecutiveFailures = 0;
+		this.lastSuccessAt = this.now();
+	}
+
+	recordFailure(): void {
+		this.consecutiveFailures++;
+		if (this.consecutiveFailures >= this.limits.maxConsecutiveFailures) {
+			this.trip(
+				`Store throttled: ${this.consecutiveFailures} lookups in a row failed`,
+			);
+		}
+	}
+
+	/** A request would have had to wait past `deadlineAt()`. */
+	recordDeadline(): void {
+		const runEnd = this.startedAt + this.limits.maxRunMs;
+		const stallEnd = this.lastSuccessAt + this.limits.maxStallMs;
+		this.trip(
+			runEnd <= stallEnd
+				? `Run time limit reached (${Math.round(this.limits.maxRunMs / 60_000)} min)`
+				: `Store throttled: no answer from the store for ${Math.round(this.limits.maxStallMs / 60_000)} min`,
+		);
+	}
+
+	private trip(reason: string): void {
+		this.reason ??= reason;
+	}
+}
+
+/** Throw the typed error that ends a batch stopped by its breaker. */
+export function throwStoreThrottled(reason: string): never {
+	buildError("storeUnavailable", { code: STORE_THROTTLED_CODE, info: reason });
+}
+
 export type RankLookupOutcome =
 	| { attempts: number; ok: true; position: number | null }
-	| { attempts: number; error: string; ok: false; status: number | null };
+	| {
+			attempts: number;
+			/** Gave up without waiting: the next store slot was past the deadline. */
+			deadlineHit: boolean;
+			error: string;
+			ok: false;
+			status: number | null;
+	  };
 
 export type PositionFetcher = (
 	store: ResearchStore,
@@ -185,7 +290,12 @@ export function describeStoreError(err: unknown): StoreErrorDetail {
 		detail.status = status;
 	}
 	if (typeof data?.retryAfter === "string") {
-		detail.retryAfterMs = parseRetryAfterMs(data.retryAfter);
+		// A store may ask for up to our own pause length; longer asks are cut
+		// to it (the breaker ends a run that stays blocked anyway).
+		detail.retryAfterMs = parseRetryAfterMs(
+			data.retryAfter,
+			RANK_LOOKUP_THROTTLE_PAUSE_MS,
+		);
 	}
 	const message = data?.info ?? record.message;
 	if (typeof message === "string" && message) detail.message = message;
@@ -210,7 +320,13 @@ export function rankBackoffMs(attempt: number): number {
 
 type ThrottledOutcome<T> =
 	| { attempts: number; ok: true; value: T }
-	| { attempts: number; detail: StoreErrorDetail; error: unknown; ok: false };
+	| {
+			attempts: number;
+			deadlineHit: boolean;
+			detail: StoreErrorDetail;
+			error: unknown;
+			ok: false;
+	  };
 
 /**
  * One store request through the process-wide throttle: wait for a slot,
@@ -222,6 +338,7 @@ async function callThrottled<T>(
 	store: ResearchStore,
 	call: () => Promise<T>,
 	rt: RankLookupRuntime,
+	deadlineAt?: number,
 ): Promise<ThrottledOutcome<T>> {
 	const throttle = rt.throttles[store];
 	let lastError: unknown = null;
@@ -231,6 +348,15 @@ async function callThrottled<T>(
 		status: null,
 	};
 	for (let attempt = 1; attempt <= RANK_LOOKUP_MAX_ATTEMPTS; attempt++) {
+		if (deadlineAt !== undefined && throttle.nextSlotTime() > deadlineAt) {
+			return {
+				attempts: attempt - 1,
+				deadlineHit: true,
+				detail: { ...last, message: "Store throttled: lookup not attempted" },
+				error: lastError,
+				ok: false,
+			};
+		}
 		await throttle.acquire();
 		try {
 			const value = await call();
@@ -243,7 +369,13 @@ async function callThrottled<T>(
 				!isRetryableLookup(last.status) ||
 				attempt === RANK_LOOKUP_MAX_ATTEMPTS
 			) {
-				return { attempts: attempt, detail: last, error: err, ok: false };
+				return {
+					attempts: attempt,
+					deadlineHit: false,
+					detail: last,
+					error: err,
+					ok: false,
+				};
 			}
 			// The whole store backs off, not only this run: the limit is per IP.
 			if (isThrottleStatus(last.status)) {
@@ -255,6 +387,7 @@ async function callThrottled<T>(
 	}
 	return {
 		attempts: RANK_LOOKUP_MAX_ATTEMPTS,
+		deadlineHit: false,
 		detail: last,
 		error: lastError,
 		ok: false,
@@ -277,6 +410,34 @@ export async function throttledStoreCall<T>(
 }
 
 /**
+ * A pacer for a long batch (the nightly score refresh): every call goes
+ * through the shared throttle and retry policy and is counted by `breaker`.
+ * Once the breaker trips, every further call fails at once with
+ * STORE_THROTTLED instead of queueing on a blocked store.
+ */
+export function breakerPacer(
+	store: ResearchStore,
+	breaker: StoreBreaker,
+	rt: RankLookupRuntime = runtime,
+): <T>(call: () => Promise<T>) => Promise<T> {
+	return async <T>(call: () => Promise<T>): Promise<T> => {
+		const tripped = breaker.trippedReason;
+		if (tripped) throwStoreThrottled(tripped);
+		const outcome = await callThrottled(store, call, rt, breaker.deadlineAt());
+		if (outcome.ok) {
+			breaker.recordSuccess();
+			return outcome.value;
+		}
+		if (outcome.deadlineHit) {
+			breaker.recordDeadline();
+			throwStoreThrottled(breaker.trippedReason ?? outcome.detail.message);
+		}
+		breaker.recordFailure();
+		throw outcome.error;
+	};
+}
+
+/**
  * One keyword's position, throttled per store and retried with backoff.
  * `ok: true` with `position: null` means the store answered and we are not in
  * the scanned results; `ok: false` means we could not measure at all - the
@@ -288,17 +449,20 @@ export async function lookupRank(
 	externalId: string,
 	country: string,
 	rt: RankLookupRuntime = runtime,
+	deadlineAt?: number,
 ): Promise<RankLookupOutcome> {
 	const outcome = await callThrottled(
 		store,
 		() => rt.fetchPosition(store, keyword, externalId, country),
 		rt,
+		deadlineAt,
 	);
 	if (outcome.ok) {
 		return { attempts: outcome.attempts, ok: true, position: outcome.value };
 	}
 	return {
 		attempts: outcome.attempts,
+		deadlineHit: outcome.deadlineHit,
 		error: outcome.detail.message,
 		ok: false,
 		status: outcome.detail.status,

@@ -1,9 +1,10 @@
-import { asc, eq, lte, sql } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { db } from "@/utils/db";
-import { rankSnapshots, trackedKeywords } from "@/utils/db/schema";
+import { trackedKeywords } from "@/utils/db/schema";
 import { RankCheckJobs } from "./rank-check.jobs";
 import { rankTrackingSupport } from "./rank-support";
+import { TrackingService } from "./tracking.service";
 import type {
 	TrackingMarket,
 	TrackingMarketsOverview,
@@ -14,8 +15,6 @@ import type {
 const TOP_VISIBLE = 10;
 /** The scan depth of both store searches. */
 const TOP_SCANNED = 50;
-/** Latest + previous measurement per keyword is all the overview compares. */
-const MEASUREMENTS_PER_KEYWORD = 2;
 
 interface Measurement {
 	createdAt: Date;
@@ -116,26 +115,7 @@ export class TrackingMarketsService {
 			.where(eq(trackedKeywords.appId, appId))
 			.orderBy(asc(trackedKeywords.country), asc(trackedKeywords.keyword));
 
-		// Two newest measurements per (country, keyword), ranked in the DB:
-		// reading every snapshot of 700 keywords x months would be wasteful.
-		const ranked = db
-			.select({
-				country: rankSnapshots.country,
-				createdAt: rankSnapshots.createdAt,
-				keyword: rankSnapshots.keyword,
-				position: rankSnapshots.position,
-				rn: sql<number>`row_number() over (partition by ${rankSnapshots.country}, ${rankSnapshots.keyword} order by ${rankSnapshots.createdAt} desc)`.as(
-					"rn",
-				),
-			})
-			.from(rankSnapshots)
-			.where(eq(rankSnapshots.appId, appId))
-			.as("ranked");
-		const rows = await db
-			.select()
-			.from(ranked)
-			.where(lte(ranked.rn, MEASUREMENTS_PER_KEYWORD))
-			.orderBy(asc(ranked.country), asc(ranked.keyword), asc(ranked.rn));
+		const rows = await TrackingService.getLatestMeasurements(appId);
 
 		const byCountry = new Map<string, Map<string, Measurement[]>>();
 		for (const row of rows) {
