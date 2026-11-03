@@ -2,6 +2,9 @@ import { ResearchService } from "@/modules/research/research.service";
 import type { ResearchStore } from "@/modules/research/research.types";
 import { parseRetryAfterMs, sleep } from "@/utils/backoff";
 import { buildError } from "@/utils/errors";
+import { createLogger } from "@/utils/logger";
+
+const log = createLogger("rank-lookup");
 
 /**
  * Minimum gap between two search lookups against one store, shared by every
@@ -29,8 +32,22 @@ export const RANK_LOOKUP_THROTTLE_STATUSES: readonly number[] = [403, 429];
 export const RANK_LOOKUP_THROTTLE_PAUSE_MS = 5 * 60_000;
 /** A throttled store never slows below base spacing times this. */
 export const RANK_LOOKUP_MAX_SLOWDOWN = 4;
+/** Absolute floor on the pace: never slower than one lookup per this gap. */
+export const RANK_LOOKUP_MAX_SPACING_MS = 20_000;
 /** Consecutive successes before a slowed store speeds back up one step. */
-export const RANK_LOOKUP_RECOVERY_STREAK = 20;
+export const RANK_LOOKUP_RECOVERY_STREAK = 10;
+/**
+ * Additive recovery: each streak takes this share of the base spacing off the
+ * gap (AIMD - the rate halves on a throttle, comes back in small steps).
+ */
+export const RANK_LOOKUP_RECOVERY_STEP_RATIO = 0.5;
+/**
+ * A store that throttles us this many times inside the window is blocked for
+ * batch work: the run stops cleanly and the rest is measured at the next slot,
+ * instead of crawling at one lookup per pause for hours.
+ */
+export const STORE_THROTTLE_MAX_EVENTS = 3;
+export const STORE_THROTTLE_WINDOW_MS = 30 * 60_000;
 /** Keywords in a row whose lookup failed (after retries) before a run stops. */
 export const STORE_BREAKER_MAX_CONSECUTIVE_FAILURES = 8;
 /** A run stops when the store has answered nothing for this long. */
@@ -50,20 +67,25 @@ export type Clock = () => number;
 /**
  * Hands out lookup slots per store. Callers queue behind each other even when
  * they belong to different runs, so two apps checked at once cannot double the
- * request rate against the same store IP. The spacing adapts: a throttle
- * answer halves the rate (up to RANK_LOOKUP_MAX_SLOWDOWN), and every
- * RANK_LOOKUP_RECOVERY_STREAK successes undo one halving, never going faster
- * than the base spacing measured as safe.
+ * request rate against the same store IP. The spacing adapts AIMD style: a
+ * throttle answer doubles the gap (up to RANK_LOOKUP_MAX_SLOWDOWN times the
+ * base and never past RANK_LOOKUP_MAX_SPACING_MS), and every
+ * RANK_LOOKUP_RECOVERY_STREAK successes take a small fixed step back toward
+ * the base spacing measured as safe. Throttle answers are remembered for
+ * STORE_THROTTLE_WINDOW_MS so batch callers can stop on a store that keeps
+ * refusing us.
  */
 export class StoreThrottle {
 	private nextSlotAt = 0;
 	private gapMs: number;
 	private okStreak = 0;
+	private throttleEvents: number[] = [];
 
 	constructor(
 		private readonly spacingMs: number,
 		private readonly now: Clock,
 		private readonly wait: Sleeper,
+		readonly store: ResearchStore | null = null,
 	) {
 		this.gapMs = spacingMs;
 	}
@@ -90,13 +112,26 @@ export class StoreThrottle {
 	}
 
 	/** The store said "too fast": halve the rate and pause the whole store. */
-	throttled(pauseMs: number): void {
+	throttled(pauseMs: number, status: number | null = null): void {
 		this.okStreak = 0;
 		this.gapMs = Math.min(
 			this.gapMs * 2,
 			this.spacingMs * RANK_LOOKUP_MAX_SLOWDOWN,
+			Math.max(this.spacingMs, RANK_LOOKUP_MAX_SPACING_MS),
 		);
 		this.penalize(pauseMs);
+		const now = this.now();
+		this.throttleEvents = [...this.recentThrottles(now), now];
+		log.warn(
+			{
+				pauseMs,
+				spacingMs: this.gapMs,
+				status,
+				store: this.store,
+				throttlesInWindow: this.throttleEvents.length,
+			},
+			"Store throttled rank lookups - pausing and slowing down",
+		);
 	}
 
 	recordSuccess(): void {
@@ -104,7 +139,66 @@ export class StoreThrottle {
 		this.okStreak++;
 		if (this.okStreak < RANK_LOOKUP_RECOVERY_STREAK) return;
 		this.okStreak = 0;
-		this.gapMs = Math.max(this.spacingMs, this.gapMs / 2);
+		this.gapMs = Math.max(
+			this.spacingMs,
+			this.gapMs - this.spacingMs * RANK_LOOKUP_RECOVERY_STEP_RATIO,
+		);
+	}
+
+	/**
+	 * Why batch work must stop on this store right now, or null. Set once the
+	 * store throttled us STORE_THROTTLE_MAX_EVENTS times inside the window; it
+	 * clears by itself as the oldest answer leaves the window.
+	 */
+	blockedReason(): string | null {
+		const recent = this.recentThrottles(this.now());
+		if (recent.length < STORE_THROTTLE_MAX_EVENTS) return null;
+		return `Store throttled: ${recent.length} throttle answers in ${Math.round(STORE_THROTTLE_WINDOW_MS / 60_000)} min, the rest is measured at the next scheduled check`;
+	}
+
+	private recentThrottles(now: number): number[] {
+		return this.throttleEvents.filter(
+			(at) => now - at < STORE_THROTTLE_WINDOW_MS,
+		);
+	}
+}
+
+/**
+ * One batch run per store at a time, process-wide. Two Play apps of a
+ * workspace then run one after the other: the first finishes at full pace
+ * instead of both crawling half-way, and the waiting run's breaker does not
+ * tick while it waits.
+ */
+export class StoreRunQueue {
+	private tails: Record<ResearchStore, Promise<void>> = {
+		appstore: Promise.resolve(),
+		playstore: Promise.resolve(),
+	};
+	private waiting: Record<ResearchStore, number> = {
+		appstore: 0,
+		playstore: 0,
+	};
+
+	/** Runs queued or running on the store (for logs and tests). */
+	depth(store: ResearchStore): number {
+		return this.waiting[store];
+	}
+
+	async run<T>(store: ResearchStore, work: () => Promise<T>): Promise<T> {
+		const previous = this.tails[store];
+		let release: () => void = () => {};
+		const mine = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		this.tails[store] = previous.then(() => mine);
+		this.waiting[store]++;
+		try {
+			await previous;
+			return await work();
+		} finally {
+			this.waiting[store]--;
+			release();
+		}
 	}
 }
 
@@ -167,6 +261,11 @@ export class StoreBreaker {
 		}
 	}
 
+	/** The store kept throttling us: stop and leave the rest for the next slot. */
+	recordStoreBlocked(reason: string): void {
+		this.trip(reason);
+	}
+
 	/** A request would have had to wait past `deadlineAt()`. */
 	recordDeadline(): void {
 		const runEnd = this.startedAt + this.limits.maxRunMs;
@@ -197,6 +296,8 @@ export type RankLookupOutcome =
 			error: string;
 			ok: false;
 			status: number | null;
+			/** Set when the store is blocked for batch work (see StoreThrottle). */
+			storeBlocked: string | null;
 	  };
 
 export type PositionFetcher = (
@@ -209,6 +310,7 @@ export type PositionFetcher = (
 export interface RankLookupRuntime {
 	fetchPosition: PositionFetcher;
 	now: Clock;
+	runs: StoreRunQueue;
 	sleep: Sleeper;
 	throttles: Record<ResearchStore, StoreThrottle>;
 }
@@ -231,10 +333,11 @@ function buildRuntime(
 			((store, keyword, id, country) =>
 				ResearchService.positionFor(store, keyword, id, country)),
 		now,
+		runs: new StoreRunQueue(),
 		sleep: wait,
 		throttles: {
-			appstore: new StoreThrottle(spacing.appstore, now, wait),
-			playstore: new StoreThrottle(spacing.playstore, now, wait),
+			appstore: new StoreThrottle(spacing.appstore, now, wait, "appstore"),
+			playstore: new StoreThrottle(spacing.playstore, now, wait, "playstore"),
 		},
 	};
 }
@@ -326,6 +429,7 @@ type ThrottledOutcome<T> =
 			detail: StoreErrorDetail;
 			error: unknown;
 			ok: false;
+			storeBlocked: string | null;
 	  };
 
 /**
@@ -348,6 +452,19 @@ async function callThrottled<T>(
 		status: null,
 	};
 	for (let attempt = 1; attempt <= RANK_LOOKUP_MAX_ATTEMPTS; attempt++) {
+		// Batch callers (they pass a deadline) stop on a store that keeps
+		// throttling us; interactive calls just wait their turn.
+		const blocked = deadlineAt !== undefined ? throttle.blockedReason() : null;
+		if (blocked) {
+			return {
+				attempts: attempt - 1,
+				deadlineHit: true,
+				detail: { ...last, message: blocked },
+				error: lastError,
+				ok: false,
+				storeBlocked: blocked,
+			};
+		}
 		if (deadlineAt !== undefined && throttle.nextSlotTime() > deadlineAt) {
 			return {
 				attempts: attempt - 1,
@@ -355,6 +472,7 @@ async function callThrottled<T>(
 				detail: { ...last, message: "Store throttled: lookup not attempted" },
 				error: lastError,
 				ok: false,
+				storeBlocked: null,
 			};
 		}
 		await throttle.acquire();
@@ -375,11 +493,15 @@ async function callThrottled<T>(
 					detail: last,
 					error: err,
 					ok: false,
+					storeBlocked: null,
 				};
 			}
 			// The whole store backs off, not only this run: the limit is per IP.
 			if (isThrottleStatus(last.status)) {
-				throttle.throttled(last.retryAfterMs ?? RANK_LOOKUP_THROTTLE_PAUSE_MS);
+				throttle.throttled(
+					last.retryAfterMs ?? RANK_LOOKUP_THROTTLE_PAUSE_MS,
+					last.status,
+				);
 			} else {
 				throttle.penalize(last.retryAfterMs ?? rankBackoffMs(attempt));
 			}
@@ -391,6 +513,7 @@ async function callThrottled<T>(
 		detail: last,
 		error: lastError,
 		ok: false,
+		storeBlocked: null,
 	};
 }
 
@@ -427,6 +550,10 @@ export function breakerPacer(
 		if (outcome.ok) {
 			breaker.recordSuccess();
 			return outcome.value;
+		}
+		if (outcome.storeBlocked) {
+			breaker.recordStoreBlocked(outcome.storeBlocked);
+			throwStoreThrottled(breaker.trippedReason ?? outcome.storeBlocked);
 		}
 		if (outcome.deadlineHit) {
 			breaker.recordDeadline();
@@ -466,5 +593,6 @@ export async function lookupRank(
 		error: outcome.detail.message,
 		ok: false,
 		status: outcome.detail.status,
+		storeBlocked: outcome.storeBlocked,
 	};
 }
