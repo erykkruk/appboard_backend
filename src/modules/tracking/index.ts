@@ -5,6 +5,8 @@ import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import { TrackingBoardService } from "./board.service";
 import { TrackingMarketsService } from "./markets.service";
 import { RankCheckJobs } from "./rank-check.jobs";
+import { trackingSchedule } from "./scheduler.service";
+import { KeywordSuggestionsService } from "./suggestions.service";
 import {
 	addKeywordsBody,
 	appIdParams,
@@ -16,6 +18,7 @@ import {
 	keywordParams,
 	runForAppBody,
 	runParams,
+	suggestionsQuery,
 } from "./tracking.schema";
 import { TrackingService } from "./tracking.service";
 
@@ -31,12 +34,17 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 				TrackingService.getKeywords(params.appId),
 				TrackingService.getLatestPositions(params.appId),
 			]);
-			return { config, keywords, positions };
+			return {
+				config,
+				keywords,
+				positions,
+				schedule: trackingSchedule(config),
+			};
 		},
 		{
 			detail: {
 				description:
-					"Rank-tracking config, tracked keywords and latest positions",
+					"Rank-tracking config, tracked keywords, latest positions and the schedule of every automated job (with the next auto-research run)",
 				tags: ["Tracking"],
 			},
 			params: appIdParams,
@@ -213,6 +221,26 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 			},
 			params: appIdParams,
 			query: boardQuery,
+		},
+	)
+	.get(
+		"/:appId/tracking/suggestions",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return KeywordSuggestionsService.forMarket(
+				params.appId,
+				workspaceId!,
+				query.country,
+			);
+		},
+		{
+			detail: {
+				description:
+					"Keyword ideas for one market, mined from the titles of the apps that rank for the keywords you track there, with their newest stored score (popularity, difficulty, winnable). Reads stored data only, no store calls; score the unscored ideas with POST /research/keyword-scores.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: suggestionsQuery,
 		},
 	)
 	.get(

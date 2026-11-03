@@ -2,8 +2,13 @@ import { describe, expect, it } from "bun:test";
 import {
 	isAutoResearchDue,
 	isRankCheckDue,
+	localDayNumber,
 	localHourMinute,
+	marketsForResearchRun,
+	nextAutoResearchAt,
+	primaryResearchMarket,
 } from "@/modules/tracking/scheduler.service";
+import { RESEARCH_ROTATION_DAYS } from "@/modules/tracking/tracking.types";
 
 const TZ = "UTC";
 const HOUR = 60 * 60 * 1000;
@@ -66,20 +71,21 @@ describe("isRankCheckDue", () => {
 });
 
 describe("isAutoResearchDue", () => {
-	const midnight = at("2026-07-10T00:00:00Z");
+	// The slot is 06:00 local; with TZ = UTC that is 06:00Z.
+	const slot = at("2026-07-10T06:00:00Z");
 
-	it("only evaluates at midnight", () => {
+	it("only evaluates at 06:00", () => {
 		expect(
 			isAutoResearchDue(
 				{ autoResearchFrequency: "daily", lastAutoResearchAt: null },
-				at("2026-07-10T12:00:00Z"),
+				at("2026-07-10T00:00:00Z"),
 				TZ,
 			),
 		).toBe(false);
 		expect(
 			isAutoResearchDue(
 				{ autoResearchFrequency: "daily", lastAutoResearchAt: null },
-				midnight,
+				slot,
 				TZ,
 			),
 		).toBe(true);
@@ -90,9 +96,9 @@ describe("isAutoResearchDue", () => {
 			isAutoResearchDue(
 				{
 					autoResearchFrequency: "daily",
-					lastAutoResearchAt: new Date(midnight.getTime() - 2 * DAY),
+					lastAutoResearchAt: new Date(slot.getTime() - 2 * DAY),
 				},
-				midnight,
+				slot,
 				TZ,
 			),
 		).toBe(true);
@@ -100,9 +106,9 @@ describe("isAutoResearchDue", () => {
 			isAutoResearchDue(
 				{
 					autoResearchFrequency: "daily",
-					lastAutoResearchAt: new Date(midnight.getTime() - 12 * HOUR),
+					lastAutoResearchAt: new Date(slot.getTime() - 12 * HOUR),
 				},
-				midnight,
+				slot,
 				TZ,
 			),
 		).toBe(false);
@@ -113,9 +119,9 @@ describe("isAutoResearchDue", () => {
 			isAutoResearchDue(
 				{
 					autoResearchFrequency: "weekly",
-					lastAutoResearchAt: new Date(midnight.getTime() - 3 * DAY),
+					lastAutoResearchAt: new Date(slot.getTime() - 3 * DAY),
 				},
-				midnight,
+				slot,
 				TZ,
 			),
 		).toBe(false);
@@ -123,11 +129,136 @@ describe("isAutoResearchDue", () => {
 			isAutoResearchDue(
 				{
 					autoResearchFrequency: "weekly",
-					lastAutoResearchAt: new Date(midnight.getTime() - 8 * DAY),
+					lastAutoResearchAt: new Date(slot.getTime() - 8 * DAY),
 				},
-				midnight,
+				slot,
 				TZ,
 			),
 		).toBe(true);
+	});
+});
+
+describe("marketsForResearchRun", () => {
+	const countries = [
+		"us",
+		"pl",
+		"de",
+		"es",
+		"gb",
+		"fr",
+		"it",
+		"nl",
+		"se",
+		"no",
+	];
+
+	it("covers every market in one weekly or monthly run", () => {
+		expect(marketsForResearchRun(countries, "weekly", 0)).toHaveLength(10);
+		expect(marketsForResearchRun(countries, "monthly", 3)).toHaveLength(10);
+	});
+
+	it("covers every market exactly once across a daily rotation", () => {
+		const seen: string[] = [];
+		for (let day = 100; day < 100 + RESEARCH_ROTATION_DAYS; day++) {
+			seen.push(...marketsForResearchRun(countries, "daily", day));
+		}
+		expect(seen.sort()).toEqual([...countries].sort());
+	});
+
+	it("dedupes and lowercases country codes", () => {
+		expect(marketsForResearchRun(["US", "us", "pl"], "weekly", 0)).toEqual([
+			"pl",
+			"us",
+		]);
+	});
+});
+
+describe("primaryResearchMarket", () => {
+	const tracked = [
+		{ country: "us" },
+		{ country: "pl" },
+		{ country: "pl" },
+		{ country: "de" },
+	];
+
+	it("prefers the home storefront when it is tracked", () => {
+		expect(primaryResearchMarket(tracked, "US")).toBe("us");
+	});
+
+	it("falls back to the market with most keywords", () => {
+		expect(primaryResearchMarket(tracked, "fr")).toBe("pl");
+		expect(primaryResearchMarket(tracked, null)).toBe("pl");
+	});
+
+	it("uses us when nothing is tracked", () => {
+		expect(primaryResearchMarket([], null)).toBe("us");
+	});
+});
+
+describe("localDayNumber", () => {
+	it("follows the local calendar date, not the UTC one", () => {
+		// 23:30Z on the 9th is already the 10th in Warsaw (CEST, +2).
+		const late = at("2026-07-09T23:30:00Z");
+		expect(localDayNumber(late, "Europe/Warsaw")).toBe(
+			localDayNumber(late, "UTC") + 1,
+		);
+	});
+});
+
+describe("nextAutoResearchAt", () => {
+	it("is null when auto-research is off", () => {
+		expect(
+			nextAutoResearchAt(
+				{
+					autoResearchEnabled: false,
+					autoResearchFrequency: "daily",
+					lastAutoResearchAt: null,
+				},
+				at("2026-07-10T08:00:00Z"),
+				TZ,
+			),
+		).toBeNull();
+	});
+
+	it("is the next 06:00 for a daily run", () => {
+		expect(
+			nextAutoResearchAt(
+				{
+					autoResearchEnabled: true,
+					autoResearchFrequency: "daily",
+					lastAutoResearchAt: at("2026-07-10T06:00:00Z"),
+				},
+				at("2026-07-10T08:15:00Z"),
+				TZ,
+			)?.toISOString(),
+		).toBe("2026-07-11T06:00:00.000Z");
+	});
+
+	it("waits out the weekly interval", () => {
+		expect(
+			nextAutoResearchAt(
+				{
+					autoResearchEnabled: true,
+					autoResearchFrequency: "weekly",
+					lastAutoResearchAt: at("2026-07-10T06:00:00Z"),
+				},
+				at("2026-07-10T08:15:00Z"),
+				TZ,
+			)?.toISOString(),
+		).toBe("2026-07-17T06:00:00.000Z");
+	});
+
+	it("can be today when the slot has not passed yet", () => {
+		expect(
+			nextAutoResearchAt(
+				{
+					autoResearchEnabled: true,
+					autoResearchFrequency: "daily",
+					lastAutoResearchAt: null,
+				},
+				at("2026-07-10T05:59:00Z"),
+				TZ,
+			)?.toISOString(),
+		).toBe("2026-07-10T06:00:00.000Z");
 	});
 });
