@@ -54,6 +54,18 @@ export function devicesFromAscPlatforms(platforms: string[]): AppDevice[] {
 	);
 }
 
+/**
+ * Versions an iOS listing works with. A record that also ships on Apple TV
+ * lists its TV_OS versions in the same `appStoreVersions` collection, so
+ * `[0]` or the first editable one could be the tvOS version. When the list
+ * holds any IOS version only those are kept; a single-platform list is
+ * returned unchanged.
+ */
+export function iosListingVersions<T extends ApiResource>(versions: T[]): T[] {
+	const ios = versions.filter((v) => v.attributes.platform === "IOS");
+	return ios.length ? ios : versions;
+}
+
 const SCREENSHOT_DISPLAY_TYPE_TO_DEVICE: Record<string, string> = {
 	APP_APPLE_TV: "appleTV",
 	APP_DESKTOP: "desktop",
@@ -476,11 +488,12 @@ export class AppStoreProvider implements StoreProvider {
 		}
 
 		const { readAll } = await createAppStoreClient(this.credentials);
-		const { data: versions } = await readAll(`apps/${appId}/appStoreVersions`);
+		const { data } = await readAll(`apps/${appId}/appStoreVersions`);
+		const versions = iosListingVersions((data ?? []) as ApiResource[]);
 
-		if (!versions?.length) return null;
+		if (!versions.length) return null;
 
-		const latest = versions[0] as ApiResource;
+		const latest = versions[0];
 		const state = versionState(latest) ?? "";
 
 		return {
@@ -593,7 +606,9 @@ export class AppStoreProvider implements StoreProvider {
 			const { data: versions } = await readAll(
 				`apps/${appId}/appStoreVersions`,
 			);
-			const latestVersion = versions?.[0] as ApiResource | undefined;
+			const latestVersion = iosListingVersions(
+				(versions ?? []) as ApiResource[],
+			)[0];
 
 			let versionLocalizations: ApiResource[] = [];
 			if (latestVersion) {
@@ -800,16 +815,15 @@ export class AppStoreProvider implements StoreProvider {
 		try {
 			const { readAll } = await createAppStoreClient(this.credentials);
 
-			const { data: versions } = await readAll(
-				`apps/${appId}/appStoreVersions`,
-			);
+			const { data } = await readAll(`apps/${appId}/appStoreVersions`);
+			const versions = iosListingVersions((data ?? []) as ApiResource[]);
 
-			if (!versions?.length) {
+			if (!versions.length) {
 				log.warn({ appId }, "No app store versions found");
 				return [];
 			}
 
-			const latestVersion = versions[0] as ApiResource;
+			const latestVersion = versions[0];
 
 			const { data: versionLocalizations } = await readAll(
 				`appStoreVersions/${latestVersion.id}/appStoreVersionLocalizations`,
@@ -2757,6 +2771,6 @@ export class AppStoreProvider implements StoreProvider {
 
 		if (!versions?.length) return null;
 
-		return findEditableVersion(versions as ApiResource[]);
+		return findEditableVersion(iosListingVersions(versions as ApiResource[]));
 	}
 }
