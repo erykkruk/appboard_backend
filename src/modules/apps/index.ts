@@ -1,8 +1,13 @@
 import Elysia, { t } from "elysia";
 import { getCapabilities } from "@/config/capabilities";
-import type { Platform } from "@/config/const";
+import type { AppDevice, Platform } from "@/config/const";
 import { authGuard } from "@/modules/auth";
-import { appIdParams, appsQuery } from "./apps.schema";
+import {
+	appIdParams,
+	appsQuery,
+	devicesSchema,
+	updateAppBody,
+} from "./apps.schema";
 import { AppsService } from "./apps.service";
 
 export const appsController = new Elysia({ prefix: "/apps" })
@@ -26,6 +31,7 @@ export const appsController = new Elysia({ prefix: "/apps" })
 		async ({ body, workspaceId }) => {
 			const app = await AppsService.createLocal(workspaceId!, {
 				bundleId: body.bundleId,
+				devices: body.devices as AppDevice[] | undefined,
 				name: body.name,
 				platform: body.platform as Platform,
 			});
@@ -34,6 +40,7 @@ export const appsController = new Elysia({ prefix: "/apps" })
 		{
 			body: t.Object({
 				bundleId: t.Optional(t.String({ maxLength: 255 })),
+				devices: t.Optional(devicesSchema),
 				name: t.String({ maxLength: 255, minLength: 1 }),
 				platform: t.Union([t.Literal("ios"), t.Literal("android")]),
 			}),
@@ -52,6 +59,26 @@ export const appsController = new Elysia({ prefix: "/apps" })
 		},
 		{
 			detail: { description: "Get app details", tags: ["Apps"] },
+			params: appIdParams,
+		},
+	)
+	.patch(
+		"/:appId",
+		async ({ body, params, workspaceId }) => {
+			const app = await AppsService.updateDevices(
+				workspaceId!,
+				params.appId,
+				body.devices as AppDevice[],
+			);
+			return { app };
+		},
+		{
+			body: updateAppBody,
+			detail: {
+				description:
+					'Update app settings. `devices` = form factors the store record serves (phone, tablet, tv): Apple TV is a device of the iOS App Store record, an Android TV build is its own Play package marked ["tv"]. A tvOS-only App Store record cannot be rank-tracked (Apple has no public tvOS search).',
+				tags: ["Apps"],
+			},
 			params: appIdParams,
 		},
 	)

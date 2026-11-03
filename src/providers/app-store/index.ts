@@ -1,4 +1,5 @@
 import type { ApiResource } from "node-app-store-connect-api";
+import { type AppDevice, normalizeDevices } from "@/config/const";
 import { probeAccess } from "@/providers/capability-access";
 import {
 	getMockAssets,
@@ -37,6 +38,21 @@ const log = createLogger("app-store");
 
 /** Apple caps `limit` at 200; the default of 50 quadruples the number of pages. */
 const ASC_MAX_PAGE_SIZE = 200;
+
+/** ASC `appStoreVersions.platform` values that map to a device we track. */
+const ASC_PLATFORM_DEVICES: Record<string, AppDevice> = {
+	IOS: "phone",
+	TV_OS: "tv",
+};
+
+/** Devices implied by an App Store record's version platforms. */
+export function devicesFromAscPlatforms(platforms: string[]): AppDevice[] {
+	return normalizeDevices(
+		platforms
+			.map((p) => ASC_PLATFORM_DEVICES[p])
+			.filter((d): d is AppDevice => d !== undefined),
+	);
+}
 
 const SCREENSHOT_DISPLAY_TYPE_TO_DEVICE: Record<string, string> = {
 	APP_APPLE_TV: "appleTV",
@@ -504,6 +520,28 @@ export class AppStoreProvider implements StoreProvider {
 				platform: "ios" as const,
 			};
 		});
+
+		// An App Store record that also ships on Apple TV carries TV_OS
+		// versions. Best effort: a failure here must not break the sync, it only
+		// means the user marks Apple TV by hand.
+		for (const app of apps) {
+			try {
+				const { data: versions } = await readAll(
+					`apps/${app.externalId}/appStoreVersions`,
+				);
+				const devices = devicesFromAscPlatforms(
+					(versions ?? []).map(
+						(v) => (v as ApiResource).attributes.platform as string,
+					),
+				);
+				if (devices.length) app.devices = devices;
+			} catch (err) {
+				log.warn(
+					{ appId: app.externalId, err },
+					"Could not read App Store version platforms",
+				);
+			}
+		}
 
 		// Fetch icon URLs from iTunes Lookup API (try multiple countries)
 		const countries = ["US", "PL", "GB", "DE"];

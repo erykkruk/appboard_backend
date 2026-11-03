@@ -14,6 +14,29 @@ export const runParams = t.Object({
 	runId: t.String(),
 });
 
+export const checkRunParams = t.Object({
+	appId: t.String(),
+	runId: t.String({ format: "uuid" }),
+});
+
+/** Enough for ~700 phrases over 68 markets in one call, with headroom. */
+const MAX_BULK_MARKETS = 250;
+const MAX_BULK_KEYWORDS_PER_MARKET = 100;
+const MAX_KEYWORD_LENGTH = 255;
+
+export const bulkAddKeywordsBody = t.Object({
+	items: t.Array(
+		t.Object({
+			country: t.String({ pattern: "^[A-Za-z]{2}$" }),
+			keywords: t.Array(
+				t.String({ maxLength: MAX_KEYWORD_LENGTH, minLength: 1 }),
+				{ maxItems: MAX_BULK_KEYWORDS_PER_MARKET, minItems: 1 },
+			),
+		}),
+		{ maxItems: MAX_BULK_MARKETS, minItems: 1 },
+	),
+});
+
 export const configPatchBody = t.Object({
 	autoResearchEnabled: t.Optional(t.Boolean()),
 	autoResearchFrequency: t.Optional(

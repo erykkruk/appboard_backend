@@ -11,6 +11,7 @@ import type { ResearchRunReport } from "@/modules/research/research.types";
 import { createLogger } from "@/utils/logger";
 import { sendMail } from "@/utils/mailer";
 import { DraftReminderService } from "./draft-reminder.service";
+import { RankCheckJobs } from "./rank-check.jobs";
 import { ReportService } from "./report.service";
 import { TrackingService } from "./tracking.service";
 import {
@@ -137,13 +138,12 @@ export function isAutoResearchDue(
 	);
 }
 
-async function runScheduledRankCheck(cfg: {
+async function sendRankDigest(cfg: {
 	appId: string;
 	emailRankDigest: boolean;
 	notifyEmail: string | null;
 	workspaceId: string;
 }) {
-	await TrackingService.runRankCheck(cfg.appId, cfg.workspaceId, "scheduled");
 	if (!cfg.emailRankDigest) return;
 	const positions = await TrackingService.getLatestPositions(cfg.appId);
 	if (!positions.length) return;
@@ -155,6 +155,34 @@ async function runScheduledRankCheck(cfg: {
 	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
 	const message = ReportService.buildRankDigest(app.name, positions);
 	await sendMail({ ...message, to: email });
+}
+
+/**
+ * Start the app's rank check as a background job and return at once. A
+ * throttled check of a few hundred keywords takes tens of minutes; awaiting it
+ * here held the whole tick, so the 01:00 / 02:00 / 09:00 slots were silently
+ * skipped. The job runner keeps one run per app, so a slot that fires while
+ * the previous run is still going does not start a second one.
+ */
+export async function runScheduledRankCheck(cfg: {
+	appId: string;
+	emailRankDigest: boolean;
+	notifyEmail: string | null;
+	workspaceId: string;
+}) {
+	if (RankCheckJobs.isRunning(cfg.appId)) {
+		log.info({ appId: cfg.appId }, "Rank check still running - slot skipped");
+		return;
+	}
+	const started = await RankCheckJobs.startIfSupported(
+		cfg.appId,
+		cfg.workspaceId,
+		"scheduled",
+		{ onComplete: () => sendRankDigest(cfg) },
+	);
+	if (!started) {
+		log.info({ appId: cfg.appId }, "Store has no searchable results - skipped");
+	}
 }
 
 /**

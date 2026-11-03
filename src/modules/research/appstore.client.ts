@@ -485,7 +485,15 @@ export async function appstoreSearchPosition(
 		`https://itunes.apple.com/search?term=${encodeURIComponent(keyword)}&entity=software&country=${encodeURIComponent(country)}&limit=${SEARCH_LIMIT}`,
 		{ headers: UA },
 	);
-	if (!res.ok) return null;
+	// A refused search is not "not ranked": throw so rank tracking can retry
+	// and skip the snapshot instead of recording a NULL position.
+	if (!res.ok) {
+		buildError("storeApiError", {
+			info: `iTunes search HTTP ${res.status}`,
+			retryAfter: res.headers.get("retry-after"),
+			status: res.status,
+		});
+	}
 	const data = (await res.json()) as { results?: Array<{ trackId?: number }> };
 	const idx = (data.results ?? []).findIndex(
 		(r) => String(r.trackId) === trackId,

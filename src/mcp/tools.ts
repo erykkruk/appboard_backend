@@ -65,6 +65,14 @@ const languageSchema = z
 	.string()
 	.min(2)
 	.describe("BCP-47 language/locale code, e.g. en-US");
+const countrySchema = z
+	.string()
+	.regex(/^[A-Za-z]{2}$/)
+	.describe("Two-letter store country code, e.g. us, pl, de");
+const devicesSchema = z
+	.array(z.enum(["phone", "tablet", "tv"]))
+	.min(1)
+	.describe('Form factors of the store record, e.g. ["tv"] or ["phone", "tv"]');
 const platformSchema = z
 	.string()
 	.describe("Store platform, e.g. ios or android");
@@ -412,6 +420,261 @@ export const tools: RegisteredTool[] = [
 				.describe("Also submit the app for store review after publishing"),
 		},
 		name: "publishing_publish",
+	}),
+	// ── Store import + devices ─────────────────────────────────────────
+	defineTool({
+		description:
+			"Add an app to the workspace from a public store link (App Store or " +
+			"Google Play URL, bare Apple id or Android package name) - no store " +
+			"API credentials needed. Pass devices to mark form factors: " +
+			'["tv"] for an Android TV package (e.g. its own Play package), ' +
+			'["phone", "tv"] for an iOS app that also ships on Apple TV. ' +
+			"Re-importing an existing app with devices updates them.",
+		handler: (client, input) =>
+			client.api.stores.import
+				.post({
+					...(input.url ? { url: input.url } : {}),
+					...(input.platform ? { platform: input.platform } : {}),
+					...(input.externalId ? { externalId: input.externalId } : {}),
+					...(input.country ? { country: input.country } : {}),
+					...(input.devices ? { devices: input.devices } : {}),
+				})
+				.then(unwrap),
+		inputSchema: {
+			country: countrySchema
+				.optional()
+				.describe(
+					"Storefront to read the listing from (defaults to the link's, else us)",
+				),
+			devices: devicesSchema.optional(),
+			externalId: z
+				.string()
+				.min(1)
+				.optional()
+				.describe("Apple numeric id or Android package name (with platform)"),
+			platform: z
+				.enum(["ios", "android"])
+				.optional()
+				.describe("Required together with externalId"),
+			url: z
+				.string()
+				.min(1)
+				.optional()
+				.describe(
+					"Store listing URL, e.g. https://play.google.com/store/apps/details?id=com.example.tv",
+				),
+		},
+		name: "stores_import_app",
+	}),
+	defineTool({
+		description:
+			"Set the form factors an app's store record serves (phone, tablet, tv). " +
+			"A tvOS-only App Store record cannot be rank-tracked: Apple has no " +
+			"public Apple TV search.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.patch({ devices: input.devices })
+				.then(unwrap),
+		inputSchema: { appId: appIdSchema, devices: devicesSchema },
+		name: "apps_update_devices",
+	}),
+	// ── Rank tracking ──────────────────────────────────────────────────
+	defineTool({
+		description:
+			"Per-market rank overview of an app: for every country with tracked " +
+			"keywords - tracked / measured / ranked counts, top 10 and top 50, " +
+			"median, average and best position, improved / declined / entered / " +
+			"dropped since the previous measurement, failed lookups in the last " +
+			"run and last check time. Also totals, the latest rank-check run and " +
+			"whether the store can be rank-tracked (rankTracking.supported).",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.tracking.markets.get()
+				.then(unwrap),
+		inputSchema: { appId: appIdSchema },
+		name: "tracking_get_markets",
+	}),
+	defineTool({
+		description:
+			"The tracker board for ONE market: per keyword position, previous " +
+			"position, delta, best position, difficulty/popularity, the phrase " +
+			"leader and which listing fields carry it; plus movement, runs and " +
+			"metadata gaps. Omit country to get the first tracked market.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.tracking.board.get({
+					query: input.country ? { country: input.country } : {},
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			country: countrySchema.optional(),
+		},
+		name: "tracking_get_board",
+	}),
+	defineTool({
+		description:
+			"Track keywords in many markets at once: items = [{ country, " +
+			"keywords[] }] (up to 250 markets, 100 keywords each per call). " +
+			"Keywords are lowercased and deduped; each market holds at most 20. " +
+			"Returns per market what was added, skipped (already tracked) and " +
+			"rejected (over the cap) - the call never fails as a whole on the cap.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.tracking.keywords.bulk.post({ items: input.items })
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			items: z
+				.array(
+					z.object({
+						country: countrySchema,
+						keywords: z.array(z.string().min(1).max(255)).min(1).max(100),
+					}),
+				)
+				.min(1)
+				.max(250)
+				.describe("Markets and their keywords"),
+		},
+		name: "tracking_add_keywords",
+	}),
+	defineTool({
+		description:
+			"Stop tracking one keyword: pass keywordId, or country + keyword. " +
+			"Its measured history stays on the board.",
+		handler: async (client, input) => {
+			let keywordId = input.keywordId;
+			if (!keywordId) {
+				if (!input.country || !input.keyword) {
+					throw new Error("Pass keywordId, or both country and keyword.");
+				}
+				const overview = unwrap(
+					await client.api.apps({ appId: input.appId }).tracking.get(),
+				);
+				const country = input.country.toLowerCase();
+				const keyword = input.keyword.trim().toLowerCase();
+				const match = overview.keywords.find(
+					(k) => k.country === country && k.keyword === keyword,
+				);
+				if (!match) {
+					throw new Error(`Keyword "${keyword}" is not tracked in ${country}.`);
+				}
+				keywordId = match.id;
+			}
+			return client.api
+				.apps({ appId: input.appId })
+				.tracking.keywords({ keywordId })
+				.delete()
+				.then(unwrap);
+		},
+		inputSchema: {
+			appId: appIdSchema,
+			country: countrySchema.optional(),
+			keyword: z.string().min(1).optional(),
+			keywordId: z.string().optional().describe("Tracked keyword UUID"),
+		},
+		name: "tracking_remove_keyword",
+	}),
+	defineTool({
+		description:
+			"Start a rank check for every tracked keyword of the app. Runs in the " +
+			"background (throttled per store: about 3.5 s per App Store lookup, " +
+			"1.5 s per Google Play lookup), so this returns the run at once; " +
+			"poll tracking_check_status. If a check is already running it is " +
+			"returned with alreadyRunning: true.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.tracking.check.post()
+				.then(unwrap),
+		inputSchema: { appId: appIdSchema },
+		name: "tracking_run_check",
+	}),
+	defineTool({
+		description:
+			"Status of a rank check: running / completed / failed / interrupted, " +
+			"progress (0-1), measured, ranked and failed lookups (with the store " +
+			"error per keyword). Omit runId for the latest run.",
+		handler: (client, input) => {
+			const tracking = client.api.apps({ appId: input.appId }).tracking;
+			return (
+				input.runId
+					? tracking.check({ runId: input.runId }).get()
+					: tracking.check.get()
+			).then(unwrap);
+		},
+		inputSchema: {
+			appId: appIdSchema,
+			runId: z
+				.string()
+				.uuid()
+				.optional()
+				.describe("Run UUID from tracking_run_check"),
+		},
+		name: "tracking_check_status",
+	}),
+	defineTool({
+		description:
+			"Update the app's tracking automation: rankTrackingEnabled (checks at " +
+			"00:00 and 12:00), autoResearchEnabled + autoResearchFrequency " +
+			"(daily/weekly/monthly), emailRankDigest, notifyEmail.",
+		handler: (client, input) => {
+			const { appId, ...patch } = input;
+			return client.api
+				.apps({ appId })
+				.tracking.config.patch(patch)
+				.then(unwrap);
+		},
+		inputSchema: {
+			appId: appIdSchema,
+			autoResearchEnabled: z.boolean().optional(),
+			autoResearchFrequency: z.enum(["daily", "weekly", "monthly"]).optional(),
+			emailRankDigest: z.boolean().optional(),
+			notifyEmail: z.string().email().nullable().optional(),
+			rankTrackingEnabled: z.boolean().optional(),
+		},
+		name: "tracking_update_config",
+	}),
+	// ── Research runs ──────────────────────────────────────────────────
+	defineTool({
+		description: "List saved research runs (reports) for an app, newest first.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				["research-runs"].get()
+				.then(unwrap),
+		inputSchema: { appId: appIdSchema },
+		name: "research_runs_list",
+	}),
+	defineTool({
+		description:
+			"Run market research on the app in one country and save it to its " +
+			"history: reviews, store metadata, keyword positions (pass keywords) " +
+			"and AI analysis when an OpenRouter key is set. Waits for the run - " +
+			"deep runs can take a few minutes.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				["research-runs"].run.post({
+					country: input.country,
+					...(input.deep !== undefined ? { deep: input.deep } : {}),
+					...(input.keywords ? { keywords: input.keywords } : {}),
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			country: countrySchema,
+			deep: z
+				.boolean()
+				.optional()
+				.describe("Full review scrape + map-reduce AI"),
+			keywords: z.array(z.string().min(1)).max(15).optional(),
+		},
+		name: "research_run_start",
 	}),
 ];
 

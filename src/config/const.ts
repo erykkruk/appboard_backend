@@ -57,6 +57,21 @@ export const STORE_TYPE_PLATFORM: Record<StoreType, Platform> = {
 export const PLATFORMS = ["android", "ios"] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+// Form factors an app record serves. `platform` stays the store family (ios /
+// android) because every listing, publishing and AI path keys off it; a device
+// list rides next to it. Apple TV is a device of the iOS App Store record (no
+// separate listing), an Android TV build is usually its own Play package with
+// `devices: ["tv"]`. Rows from before this column default to ["phone"].
+export const APP_DEVICES = ["phone", "tablet", "tv"] as const;
+export type AppDevice = (typeof APP_DEVICES)[number];
+export const DEFAULT_APP_DEVICES: AppDevice[] = ["phone"];
+
+/** Stable order + dedupe, so stored device lists compare equal. */
+export function normalizeDevices(devices: readonly string[]): AppDevice[] {
+	const wanted = new Set(devices);
+	return APP_DEVICES.filter((d) => wanted.has(d));
+}
+
 export const STORE_STATUSES = ["connected", "error", "disconnected"] as const;
 export type StoreStatus = (typeof STORE_STATUSES)[number];
 

@@ -3,10 +3,14 @@ import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import { TrackingBoardService } from "./board.service";
+import { TrackingMarketsService } from "./markets.service";
+import { RankCheckJobs } from "./rank-check.jobs";
 import {
 	addKeywordsBody,
 	appIdParams,
 	boardQuery,
+	bulkAddKeywordsBody,
+	checkRunParams,
 	configPatchBody,
 	historyQuery,
 	keywordParams,
@@ -93,6 +97,22 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 			params: appIdParams,
 		},
 	)
+	.post(
+		"/:appId/tracking/keywords/bulk",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return TrackingService.addKeywordsBulk(params.appId, body.items);
+		},
+		{
+			body: bulkAddKeywordsBody,
+			detail: {
+				description:
+					"Add tracked keywords for many markets in one call: { items: [{ country, keywords[] }] }. Never fails the whole request on the per-market cap (20): each market reports added, skipped (already tracked) and rejected (over the cap).",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+		},
+	)
 	.delete(
 		"/:appId/tracking/keywords/:keywordId",
 		async ({ params, workspaceId }) => {
@@ -109,18 +129,69 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 	)
 	.post(
 		"/:appId/tracking/check",
-		async ({ params, workspaceId }) => {
+		async ({ params, set, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
-			const result = await TrackingService.runRankCheck(
+			const started = await RankCheckJobs.start(
 				params.appId,
 				workspaceId!,
 				"manual",
 			);
-			return { result };
+			set.status = 202;
+			return started;
 		},
 		{
 			detail: {
-				description: "Measure current positions for all tracked keywords now",
+				description:
+					"Start measuring current positions for all tracked keywords in the background (202). Lookups are throttled per store, so poll GET /tracking/check/:runId (or GET /tracking/check for the latest run). Returns the running job with alreadyRunning: true when one is in progress. 422 RANK_TRACKING_UNSUPPORTED for tvOS-only apps.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+		},
+	)
+	.get(
+		"/:appId/tracking/check",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const run = await RankCheckJobs.latest(params.appId, workspaceId!);
+			return { run };
+		},
+		{
+			detail: {
+				description: "Latest rank check run (status, progress, failures)",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+		},
+	)
+	.get(
+		"/:appId/tracking/check/:runId",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const run = await RankCheckJobs.get(
+				params.appId,
+				workspaceId!,
+				params.runId,
+			);
+			return { run };
+		},
+		{
+			detail: {
+				description: "One rank check run (status, progress, failures)",
+				tags: ["Tracking"],
+			},
+			params: checkRunParams,
+		},
+	)
+	.get(
+		"/:appId/tracking/markets",
+		async ({ params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return TrackingMarketsService.getMarkets(params.appId, workspaceId!);
+		},
+		{
+			detail: {
+				description:
+					"Every market of the app at a glance: per country tracked / measured / ranked keywords, top 10 and top 50 counts, median, average and best position, improved / declined / entered / dropped since each keyword's previous measurement, failed lookups in the last run and last check time; plus totals, the latest run and whether the store can be rank-tracked at all (tvOS-only apps cannot). Drill down with GET /tracking/board?country=.",
 				tags: ["Tracking"],
 			},
 			params: appIdParams,

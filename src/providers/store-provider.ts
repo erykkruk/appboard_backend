@@ -1,3 +1,5 @@
+import type { AppDevice } from "@/config/const";
+
 export interface VersionData {
 	isEditable: boolean;
 	state: string;
@@ -184,6 +186,8 @@ export interface StoreFacts {
 
 export interface AppData {
 	bundleId: string;
+	/** Form factors the store reports for the record, when it reports any. */
+	devices?: AppDevice[];
 	externalId: string;
 	iconUrl?: string;
 	isDraft?: boolean;

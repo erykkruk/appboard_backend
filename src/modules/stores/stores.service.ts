@@ -1,7 +1,10 @@
 import { and, count, eq, sql } from "drizzle-orm";
 import config from "@/config";
 import {
+	type AppDevice,
+	DEFAULT_APP_DEVICES,
 	isAlternativeStoreType,
+	normalizeDevices,
 	type Platform,
 	STORE_TYPE_LABELS,
 	type StoreType,
@@ -43,6 +46,8 @@ const log = createLogger("stores-service");
 
 export interface ImportAppInput {
 	country?: string;
+	/** Form factors of the record, e.g. ["tv"] for an Android TV package. */
+	devices?: AppDevice[];
 	externalId?: string;
 	platform?: Platform;
 	url?: string;
@@ -253,7 +258,7 @@ export class StoresService {
 			// Look up by externalId within the same workspace to handle
 			// reconnects where the store row was recreated with a new UUID.
 			const existing = await db
-				.select({ id: apps.id })
+				.select({ devices: apps.devices, id: apps.id })
 				.from(apps)
 				.innerJoin(stores, eq(apps.storeId, stores.id))
 				.where(
@@ -270,6 +275,16 @@ export class StoresService {
 				await db
 					.update(apps)
 					.set({
+						// Devices the user set are kept; sync only adds what the
+						// store reports (e.g. a TV_OS version on the ASC record).
+						...(appData.devices?.length
+							? {
+									devices: normalizeDevices([
+										...(existing[0].devices ?? []),
+										...appData.devices,
+									]),
+								}
+							: {}),
 						bundleId: appData.bundleId,
 						iconUrl: appData.iconUrl,
 						lastSyncedAt: new Date(),
@@ -288,6 +303,9 @@ export class StoresService {
 			} else {
 				await db.insert(apps).values({
 					bundleId: appData.bundleId,
+					devices: appData.devices?.length
+						? normalizeDevices(appData.devices)
+						: DEFAULT_APP_DEVICES,
 					externalId: appData.externalId,
 					iconUrl: appData.iconUrl,
 					lastSyncedAt: new Date(),
@@ -417,7 +435,15 @@ export class StoresService {
 				),
 			)
 			.limit(1);
+		const devices = input.devices?.length
+			? normalizeDevices(input.devices)
+			: null;
 		if (existing) {
+			// Re-importing with explicit devices is how a link-only client (MCP)
+			// marks an existing record as Apple TV / Android TV.
+			if (devices) {
+				await db.update(apps).set({ devices }).where(eq(apps.id, existing.id));
+			}
 			return { appId: existing.id, created: false, storeId: existing.storeId };
 		}
 
@@ -454,6 +480,7 @@ export class StoresService {
 			.insert(apps)
 			.values({
 				bundleId: meta.bundleId ?? parsed.externalId,
+				devices: devices ?? DEFAULT_APP_DEVICES,
 				externalId: parsed.externalId,
 				iconUrl: meta.icon,
 				lastSyncedAt: new Date(),

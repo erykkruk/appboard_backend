@@ -4,6 +4,8 @@ import { appsController } from "@/modules/apps";
 import { ResearchService } from "@/modules/research/research.service";
 import { storesController } from "@/modules/stores";
 import { trackingController } from "@/modules/tracking";
+import { RankCheckJobs } from "@/modules/tracking/rank-check.jobs";
+import { configureRankLookup } from "@/modules/tracking/rank-lookup";
 import {
 	authGuard,
 	authRequest,
@@ -34,6 +36,11 @@ async function json(res: Response) {
 }
 
 beforeAll(async () => {
+	// No real spacing between store lookups under test.
+	configureRankLookup({
+		sleep: async () => {},
+		spacingMs: { appstore: 0, playstore: 0 },
+	});
 	const store = await seedTestStore();
 	storeIds.push(store.id);
 	const seeded = await seedTestApp(store.id);
@@ -46,6 +53,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+	configureRankLookup();
 	await cleanupStores(storeIds);
 });
 
@@ -158,12 +166,36 @@ describe("Rank check", () => {
 					method: "POST",
 				}),
 			);
-			expect(res.status).toBe(200);
+			// Runs in the background: the request returns the job at once.
+			expect(res.status).toBe(202);
 			const body = (await json(res)) as {
-				result: { checked: number; snapshots: number };
+				alreadyRunning: boolean;
+				run: { id: string; status: string; total: number };
 			};
-			expect(body.result.snapshots).toBe(body.result.checked);
-			expect(body.result.snapshots).toBeGreaterThan(0);
+			expect(body.alreadyRunning).toBe(false);
+			expect(body.run.status).toBe("running");
+			expect(body.run.total).toBeGreaterThan(0);
+
+			await RankCheckJobs.waitFor(appId);
+			const status = await app.handle(
+				authRequest(`${BASE}/apps/${appId}/tracking/check/${body.run.id}`),
+			);
+			expect(status.status).toBe(200);
+			const done = (await json(status)) as {
+				run: {
+					checked: number;
+					failed: number;
+					measured: number;
+					progress: number;
+					status: string;
+					total: number;
+				};
+			};
+			expect(done.run.status).toBe("completed");
+			expect(done.run.measured).toBe(done.run.total);
+			expect(done.run.checked).toBe(done.run.total);
+			expect(done.run.failed).toBe(0);
+			expect(done.run.progress).toBe(1);
 			expect(spy).toHaveBeenCalled();
 
 			const history = await app.handle(
@@ -208,6 +240,20 @@ describe("Tracking summary", () => {
 
 		const spy = spyOn(ResearchService, "positionFor").mockResolvedValue(5);
 		try {
+			// First call imports the keywords and starts the check in the
+			// background instead of blocking the dashboard on store lookups.
+			const first = await app.handle(
+				authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
+			);
+			expect(first.status).toBe(200);
+			const started = (await json(first)) as {
+				rankCheck: { status: string } | null;
+				stats: { trackedKeywords: number };
+			};
+			expect(started.stats.trackedKeywords).toBe(3);
+			expect(started.rankCheck?.status).toBe("running");
+			await RankCheckJobs.waitFor(seeded.id);
+
 			const res = await app.handle(
 				authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
 			);
@@ -253,10 +299,12 @@ describe("Tracking summary", () => {
 			await app.handle(
 				authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
 			);
+			await RankCheckJobs.waitFor(seeded.id);
 			expect(spy).toHaveBeenCalledTimes(1);
 			await app.handle(
 				authRequest(`${BASE}/apps/${seeded.id}/tracking/summary`),
 			);
+			await RankCheckJobs.waitFor(seeded.id);
 			expect(spy).toHaveBeenCalledTimes(1);
 		} finally {
 			spy.mockRestore();

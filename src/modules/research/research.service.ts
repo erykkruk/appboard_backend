@@ -144,7 +144,9 @@ export class ResearchService {
 
 	/**
 	 * Search-ranking position (top 50) of a single app for one keyword in one
-	 * store. Returns null on error or when the app is not in the top results.
+	 * store. Returns null when the store answered and the app is not in the top
+	 * results; THROWS when the store could not be asked (throttled, 5xx,
+	 * network), so rank tracking can tell "not ranked" from "not measured".
 	 * A single seam so callers (rank tracking) can mock store lookups in tests.
 	 */
 	static async positionFor(
@@ -153,13 +155,9 @@ export class ResearchService {
 		id: string,
 		country: string,
 	): Promise<number | null> {
-		try {
-			return store === "appstore"
-				? await appstoreSearchPosition(keyword, id, country)
-				: await playstoreSearchPosition(keyword, id, country);
-		} catch {
-			return null;
-		}
+		return store === "appstore"
+			? appstoreSearchPosition(keyword, id, country)
+			: playstoreSearchPosition(keyword, id, country);
 	}
 
 	static async keywordPositions(

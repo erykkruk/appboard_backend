@@ -1,8 +1,6 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { HistoryService } from "@/modules/history/history.service";
-import { ResearchService } from "@/modules/research/research.service";
-import { platformToStore } from "@/modules/research/research.types";
 import { db } from "@/utils/db";
 import {
 	appAsoProfiles,
@@ -15,13 +13,23 @@ import {
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import { AppEventsService, CHART_EVENT_TYPES } from "./app-events.service";
+import { RankCheckJobs } from "./rank-check.jobs";
+import {
+	getRankLookupRuntime,
+	lookupRank,
+	type RankLookupRuntime,
+} from "./rank-lookup";
+import { rankTrackingSupport } from "./rank-support";
 import {
 	AUTO_RESEARCH_FREQUENCIES,
 	type AutoResearchFrequency,
+	type BulkAddMarketResult,
 	DEFAULT_TRACKING_COUNTRY,
 	type LatestPosition,
 	MAX_KEYWORDS_PER_COUNTRY,
+	type RankCheckKind,
 	type RankCheckResult,
+	type RankLookupFailure,
 	type TrackingSummaryStats,
 } from "./tracking.types";
 
@@ -29,6 +37,28 @@ const log = createLogger("tracking");
 
 // How far back to look when computing latest position + day-over-day delta.
 const LATEST_LOOKBACK_LIMIT = 2000;
+
+/** Progress shape a running check reports (also what the run row stores). */
+export interface RankCheckProgress {
+	checked: number;
+	failed: number;
+	failures: RankLookupFailure[];
+	measured: number;
+	ranked: number;
+	total: number;
+}
+
+export interface RankCheckOptions {
+	/** Called after every lookup; the job runner flushes it to the run row. */
+	onProgress?: (progress: RankCheckProgress) => Promise<void> | void;
+	runtime?: RankLookupRuntime;
+}
+
+function normalizeKeywords(keywords: string[]): string[] {
+	return [
+		...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)),
+	];
+}
 
 export interface ConfigPatch {
 	autoResearchEnabled?: boolean;
@@ -101,9 +131,7 @@ export class TrackingService {
 		// Normalize country + keywords to lowercase so the unique constraint and
 		// rank-snapshot grouping stay consistent regardless of caller casing.
 		const cc = country.toLowerCase();
-		const cleaned = [
-			...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)),
-		];
+		const cleaned = normalizeKeywords(keywords);
 		if (!cleaned.length) {
 			buildError("badRequest", { info: "No valid keywords provided" });
 		}
@@ -131,6 +159,84 @@ export class TrackingService {
 		}
 
 		return TrackingService.getKeywords(appId);
+	}
+
+	/**
+	 * Add keywords for many markets in one call (hundreds of phrases across
+	 * dozens of countries). Unlike `addKeywords` it never rejects the whole
+	 * request: each market reports what was added, what was already tracked and
+	 * what did not fit under MAX_KEYWORDS_PER_COUNTRY.
+	 */
+	static async addKeywordsBulk(
+		appId: string,
+		items: Array<{ country: string; keywords: string[] }>,
+	): Promise<{
+		keywords: Awaited<ReturnType<typeof TrackingService.getKeywords>>;
+		results: BulkAddMarketResult[];
+		totals: { added: number; rejected: number; skipped: number };
+	}> {
+		// Merge repeated countries so the cap is applied once per market.
+		const requested = new Map<string, string[]>();
+		for (const item of items) {
+			const cc = item.country.trim().toLowerCase();
+			requested.set(cc, [...(requested.get(cc) ?? []), ...item.keywords]);
+		}
+
+		const existingRows = await db
+			.select({
+				country: trackedKeywords.country,
+				keyword: trackedKeywords.keyword,
+			})
+			.from(trackedKeywords)
+			.where(eq(trackedKeywords.appId, appId));
+		const existingByCountry = new Map<string, Set<string>>();
+		for (const row of existingRows) {
+			const set = existingByCountry.get(row.country) ?? new Set<string>();
+			set.add(row.keyword);
+			existingByCountry.set(row.country, set);
+		}
+
+		const results: BulkAddMarketResult[] = [];
+		const rows: Array<{ appId: string; country: string; keyword: string }> = [];
+		for (const [country, raw] of [...requested.entries()].sort((a, b) =>
+			a[0].localeCompare(b[0]),
+		)) {
+			const existing = existingByCountry.get(country) ?? new Set<string>();
+			// Duplicates inside the request collapse silently, like addKeywords.
+			const unique = normalizeKeywords(raw);
+			const fresh = unique.filter((k) => !existing.has(k));
+			const room = Math.max(0, MAX_KEYWORDS_PER_COUNTRY - existing.size);
+			const added = fresh.slice(0, room);
+			results.push({
+				added,
+				country,
+				rejected: fresh.slice(room),
+				skipped: unique.filter((k) => existing.has(k)),
+			});
+			for (const keyword of added) rows.push({ appId, country, keyword });
+		}
+
+		if (rows.length) {
+			await db.insert(trackedKeywords).values(rows).onConflictDoNothing();
+		}
+		log.info(
+			{ added: rows.length, appId, markets: results.length },
+			"Bulk-added tracked keywords",
+		);
+
+		const totals = results.reduce(
+			(acc, r) => ({
+				added: acc.added + r.added.length,
+				rejected: acc.rejected + r.rejected.length,
+				skipped: acc.skipped + r.skipped.length,
+			}),
+			{ added: 0, rejected: 0, skipped: 0 },
+		);
+		return {
+			keywords: await TrackingService.getKeywords(appId),
+			results,
+			totals,
+		};
 	}
 
 	static async removeKeyword(appId: string, keywordId: string) {
@@ -214,10 +320,18 @@ export class TrackingService {
 		await TrackingService.syncKeywordsFromProfile(appId, workspaceId);
 
 		const keywords = await TrackingService.getKeywords(appId);
-		let positions = await TrackingService.getLatestPositions(appId);
-		if (keywords.length && !positions.length) {
-			await TrackingService.runRankCheck(appId, workspaceId, "manual");
-			positions = await TrackingService.getLatestPositions(appId);
+		const positions = await TrackingService.getLatestPositions(appId);
+		// The first check runs in the background: throttled store lookups for a
+		// few hundred keywords take minutes, far longer than a request may block.
+		// `rankCheck` tells the caller a measurement is on its way.
+		let rankCheck = await RankCheckJobs.latest(appId, workspaceId);
+		if (keywords.length && !positions.length && !rankCheck) {
+			const started = await RankCheckJobs.startIfSupported(
+				appId,
+				workspaceId,
+				"summary",
+			);
+			rankCheck = started?.run ?? null;
 		}
 		const config = await TrackingService.getConfig(appId, workspaceId);
 
@@ -241,7 +355,7 @@ export class TrackingService {
 			trackedKeywords: keywords.length,
 		};
 
-		return { config, positions, stats };
+		return { config, positions, rankCheck, stats };
 	}
 
 	/**
@@ -252,28 +366,64 @@ export class TrackingService {
 	static async runRankCheck(
 		appId: string,
 		workspaceId: string,
-		kind: "manual" | "scheduled" = "manual",
+		kind: RankCheckKind = "manual",
+		options: RankCheckOptions = {},
 	): Promise<RankCheckResult> {
 		const app = await AppsService.findOne(workspaceId, appId);
-		const store = platformToStore(app.platform);
+		const support = rankTrackingSupport(app);
+		if (!support.supported) {
+			buildError("validationFailed", {
+				code: "RANK_TRACKING_UNSUPPORTED",
+				info: support.note ?? "Rank tracking is not available for this app",
+			});
+		}
+		const store = support.store;
 		const keywords = await TrackingService.getKeywords(appId);
+		const runtime = options.runtime ?? getRankLookupRuntime();
 
-		let snapshots = 0;
+		const progress: RankCheckProgress = {
+			checked: 0,
+			failed: 0,
+			failures: [],
+			measured: 0,
+			ranked: 0,
+			total: keywords.length,
+		};
 		for (const { country, keyword } of keywords) {
-			const position = await ResearchService.positionFor(
+			const outcome = await lookupRank(
 				store,
 				keyword,
 				app.externalId,
 				country,
+				runtime,
 			);
-			await db.insert(rankSnapshots).values({
-				appId,
-				country,
-				keyword,
-				platform: store,
-				position,
-			});
-			snapshots++;
+			progress.checked++;
+			if (outcome.ok) {
+				await db.insert(rankSnapshots).values({
+					appId,
+					country,
+					keyword,
+					platform: store,
+					position: outcome.position,
+				});
+				progress.measured++;
+				if (outcome.position !== null) progress.ranked++;
+			} else {
+				// No snapshot: a NULL row would read as "fell out of the results".
+				progress.failed++;
+				progress.failures.push({
+					attempts: outcome.attempts,
+					country,
+					error: outcome.error,
+					keyword,
+					status: outcome.status,
+				});
+				log.warn(
+					{ appId, country, keyword, status: outcome.status },
+					"Rank lookup failed - no snapshot recorded",
+				);
+			}
+			await options.onProgress?.(progress);
 		}
 
 		await db
@@ -281,8 +431,22 @@ export class TrackingService {
 			.set({ lastRankCheckAt: new Date() })
 			.where(eq(appTrackingConfig.appId, appId));
 
-		log.info({ appId, kind, snapshots }, "Rank check complete");
-		return { checked: keywords.length, snapshots };
+		log.info(
+			{
+				appId,
+				failed: progress.failed,
+				kind,
+				ranked: progress.ranked,
+				snapshots: progress.measured,
+			},
+			"Rank check complete",
+		);
+		return {
+			checked: keywords.length,
+			failed: progress.failed,
+			ranked: progress.ranked,
+			snapshots: progress.measured,
+		};
 	}
 
 	/**
