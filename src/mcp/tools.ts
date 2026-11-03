@@ -421,7 +421,7 @@ export const tools: RegisteredTool[] = [
 		},
 		name: "publishing_publish",
 	}),
-	// ── Store import + devices ─────────────────────────────────────────
+	// Store import + devices
 	defineTool({
 		description:
 			"Add an app to the workspace from a public store link (App Store or " +
@@ -479,7 +479,7 @@ export const tools: RegisteredTool[] = [
 		inputSchema: { appId: appIdSchema, devices: devicesSchema },
 		name: "apps_update_devices",
 	}),
-	// ── Rank tracking ──────────────────────────────────────────────────
+	// Rank tracking
 	defineTool({
 		description:
 			"Per-market rank overview of an app: for every country with tracked " +
@@ -639,7 +639,7 @@ export const tools: RegisteredTool[] = [
 		},
 		name: "tracking_update_config",
 	}),
-	// ── Research runs ──────────────────────────────────────────────────
+	// Research runs
 	defineTool({
 		description: "List saved research runs (reports) for an app, newest first.",
 		handler: (client, input) =>
