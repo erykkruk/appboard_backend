@@ -1,5 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
+import { isBrandKeyword } from "@/modules/research/listing-audit";
 import { db } from "@/utils/db";
 import { trackedKeywords } from "@/utils/db/schema";
 import { RankCheckJobs } from "./rank-check.jobs";
@@ -7,6 +8,7 @@ import { rankTrackingSupport } from "./rank-support";
 import { TrackingService } from "./tracking.service";
 import type {
 	TrackingMarket,
+	TrackingMarketBestKeyword,
 	TrackingMarketsOverview,
 	TrackingMarketTotals,
 } from "./tracking.types";
@@ -43,8 +45,11 @@ function aggregate(
 	tracked: string[],
 	measurements: Map<string, Measurement[]>,
 	failedKeywords: Set<string>,
+	isBrand: (keyword: string) => boolean,
 ): Omit<TrackingMarket, "country"> {
 	const positions: number[] = [];
+	const earnedPositions: number[] = [];
+	let bestEarned: TrackingMarketBestKeyword | null = null;
 	let measured = 0;
 	let improved = 0;
 	let declined = 0;
@@ -63,6 +68,19 @@ function aggregate(
 		if (latest.position !== null) positions.push(latest.position);
 
 		const previous = list?.[1];
+		if (latest.position !== null && !isBrand(keyword)) {
+			earnedPositions.push(latest.position);
+			if (!bestEarned || latest.position < bestEarned.position) {
+				bestEarned = {
+					delta:
+						previous?.position != null
+							? previous.position - latest.position
+							: null,
+					keyword,
+					position: latest.position,
+				};
+			}
+		}
 		if (!previous) continue;
 		if (latest.position !== null && previous.position !== null) {
 			if (latest.position < previous.position) improved++;
@@ -76,9 +94,13 @@ function aggregate(
 
 	return {
 		avgPosition: average(positions),
+		bestEarned,
 		bestPosition: positions.length ? Math.min(...positions) : null,
 		declined,
 		dropped,
+		earnedRanked: earnedPositions.length,
+		earnedTop10: earnedPositions.filter((p) => p <= TOP_VISIBLE).length,
+		earnedTop50: earnedPositions.filter((p) => p <= TOP_SCANNED).length,
 		entered,
 		failedLastRun: tracked.filter((k) => failedKeywords.has(k)).length,
 		improved,
@@ -105,6 +127,7 @@ export class TrackingMarketsService {
 	): Promise<TrackingMarketsOverview> {
 		const app = await AppsService.findOne(workspaceId, appId);
 		const support = rankTrackingSupport(app);
+		const isBrand = (keyword: string) => isBrandKeyword(keyword, app.name);
 
 		const tracked = await db
 			.select({
@@ -149,6 +172,7 @@ export class TrackingMarketsService {
 					keywords,
 					byCountry.get(country) ?? new Map(),
 					failedByCountry.get(country) ?? new Set(),
+					isBrand,
 				),
 			}),
 		);
@@ -167,7 +191,9 @@ export class TrackingMarketsService {
 			}
 		}
 		const totals: TrackingMarketTotals = {
-			...aggregate(allTracked, allMeasurements, allFailed),
+			...aggregate(allTracked, allMeasurements, allFailed, (key) =>
+				isBrand(key.slice(key.indexOf("|") + 1)),
+			),
 			markets: markets.length,
 		};
 

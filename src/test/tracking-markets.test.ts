@@ -412,6 +412,65 @@ describe("GET /apps/:appId/tracking/markets", () => {
 		});
 	});
 
+	it("counts earned rankings without the app's own name", async () => {
+		const app3 = await seedApp(storeIds[0], { name: "Buzzin: TV Party" });
+		await post(`/apps/${app3.id}/tracking/keywords/bulk`, {
+			items: [
+				{ country: "pl", keywords: ["buzzin", "buzzin tv", "trivia", "quiz"] },
+				{ country: "cn", keywords: ["buzzin", "trivia"] },
+			],
+		});
+		const earlier = new Date(Date.now() - 12 * 60 * 60 * 1000);
+		const now = new Date();
+		const snap = (
+			country: string,
+			keyword: string,
+			position: number | null,
+			createdAt: Date,
+		) => ({
+			appId: app3.id,
+			country,
+			createdAt,
+			keyword,
+			platform: "playstore",
+			position,
+		});
+		await db
+			.insert(rankSnapshots)
+			.values([
+				snap("pl", "buzzin", 1, now),
+				snap("pl", "buzzin tv", 2, now),
+				snap("pl", "trivia", 15, earlier),
+				snap("pl", "trivia", 12, now),
+				snap("pl", "quiz", 40, now),
+				snap("cn", "buzzin", 3, now),
+				snap("cn", "trivia", null, now),
+			]);
+
+		const res = await get(`/apps/${app3.id}/tracking/markets`);
+		expect(res.status).toBe(200);
+		const body = (await res.json()) as {
+			markets: Array<Json & { country: string }>;
+		};
+		const pl = body.markets.find((m) => m.country === "pl");
+		expect(pl).toMatchObject({
+			bestEarned: { delta: 3, keyword: "trivia", position: 12 },
+			earnedRanked: 2,
+			earnedTop10: 0,
+			earnedTop50: 2,
+			ranked: 4,
+			top10: 2,
+		});
+		const cn = body.markets.find((m) => m.country === "cn");
+		expect(cn).toMatchObject({
+			bestEarned: null,
+			earnedRanked: 0,
+			earnedTop10: 0,
+			ranked: 1,
+			top10: 1,
+		});
+	});
+
 	it("flags a tvOS-only App Store record as not rank-trackable", async () => {
 		const tv = await seedApp(storeIds[0], {
 			devices: ["tv"],
