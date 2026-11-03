@@ -1,6 +1,11 @@
 import { type } from "arktype";
 import { AIService } from "@/modules/ai/ai.service";
-import type { AuditApp } from "@/modules/research/listing-audit";
+import {
+	type AuditApp,
+	isWinnableScore,
+	MAX_WINNABLE_DIFFICULTY,
+	PROVEN_RANK,
+} from "@/modules/research/listing-audit";
 import { createLogger } from "@/utils/logger";
 import type { AppAuditReport, AuditAiInsights } from "./audit.types";
 
@@ -18,9 +23,13 @@ const MAX_PRIORITIES = 4;
 const MAX_KEYWORDS_IN_PROMPT = 18;
 const MAX_DESCRIPTION_CHARS = 1800;
 const TEMPERATURE = 0.3;
-/** Below this many ratings a keyword above medium difficulty is not winnable. */
-const SMALL_APP_RATINGS = 1000;
-const SMALL_APP_MAX_DIFFICULTY = 50;
+/**
+ * A keyword-field rewrite must build on the current field. Below these it is
+ * a replacement, not an edit (one word for a full 100-character field), and
+ * it is dropped instead of shown.
+ */
+const MIN_KEPT_TERM_SHARE = 0.5;
+const MIN_KEYWORD_LENGTH_SHARE = 0.4;
 
 const insightsSchema = type({
 	priorities: type({ how: "string", title: "string", why: "string" }).array(),
@@ -55,7 +64,11 @@ Your job is judgement, not repetition: connect the numbers, decide what matters 
 
 ${STORE_RULES[store]}
 
-Winnability: an app with fewer than ${SMALL_APP_RATINGS} ratings should chase keywords with difficulty well below ${SMALL_APP_MAX_DIFFICULTY} and real popularity; a term the app already ranks in the top 10 for is a strength to keep, not a lever; a high-popularity term with difficulty above the app's weight class is a distraction, say so instead of recommending it.
+Winnability: every keyword in the table is already marked "winnable" or "not winnable" by AppBoard's rule (difficulty ${MAX_WINNABLE_DIFFICULTY} or lower, or the app already ranks in the top ${PROVEN_RANK}). Use that mark as given and never apply a threshold of your own: the developer sees the same mark in the keyword table, and advice that contradicts it is wrong. A term the app already ranks in the top 10 for is a strength to keep, not a lever; a popular term marked not winnable is a distraction, say so instead of recommending it.
+
+Keywords marked "tracked" were chosen by the developer for this market: treat them as the targets, measure the listing against them, and never advise removing one.
+
+Keyword field rewrite (App Store): return the COMPLETE field, built from the current one. Keep every term that ranks, is tracked or is winnable, remove only words that repeat the title or subtitle or are weak, and use the freed characters for winnable terms. Never return a short list that replaces the field, and never tell the developer to set the field to a single word.
 
 Rules:
 - Recommend only keywords marked recommendable. Never invent keywords, features, numbers, awards or claims that are not in the listing or the table.
@@ -83,6 +96,39 @@ function cut(value: string | null, limit: number): string | null {
 	return trimmed.length > limit ? null : trimmed;
 }
 
+function fieldTerms(field: string): string[] {
+	return [
+		...new Set(
+			field
+				.split(",")
+				.map((t) => t.trim().toLowerCase())
+				.filter(Boolean),
+		),
+	];
+}
+
+/**
+ * Drops a keyword-field rewrite that throws the current field away: one that
+ * keeps fewer than half of the current terms, or is much shorter than the
+ * field it would replace. Without a known current field there is nothing to
+ * protect and the rewrite stands.
+ */
+export function guardKeywordRewrite(
+	proposed: string | null,
+	current: string | undefined,
+): string | null {
+	if (!proposed) return null;
+	const before = fieldTerms(current ?? "");
+	if (before.length === 0) return proposed;
+	const after = new Set(fieldTerms(proposed));
+	const kept = before.filter((t) => after.has(t)).length;
+	if (kept / before.length < MIN_KEPT_TERM_SHARE) return null;
+	if (proposed.length < (current ?? "").length * MIN_KEYWORD_LENGTH_SHARE) {
+		return null;
+	}
+	return proposed;
+}
+
 function stripFences(raw: string): string {
 	const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
 	const body = (fenced ? fenced[1] : raw).trim();
@@ -95,16 +141,38 @@ function storeOf(report: AppAuditReport): Store {
 	return report.keywordsSupported === false ? "play" : "appstore";
 }
 
-function buildUserPrompt(report: AppAuditReport, listing: AuditApp): string {
+export function buildUserPrompt(
+	report: AppAuditReport,
+	listing: AuditApp,
+): string {
 	const store = storeOf(report);
-	const keywords = report.keywords
+	const tracked = new Set(
+		(report.tracked ?? []).map((k) => k.trim().toLowerCase()),
+	);
+	// Tracked terms first, so the prompt cap never cuts the developer's own
+	// targets in favour of words lifted from the description.
+	const keywords = [...report.keywords]
+		.sort(
+			(a, b) =>
+				Number(tracked.has(b.keyword.trim().toLowerCase())) -
+				Number(tracked.has(a.keyword.trim().toLowerCase())),
+		)
 		.filter((k) => !k.error)
 		.slice(0, MAX_KEYWORDS_IN_PROMPT)
 		.map((k) => {
+			const norm = k.keyword.trim().toLowerCase();
 			const safe = report.recommendable.some(
-				(r) => r.trim().toLowerCase() === k.keyword.trim().toLowerCase(),
+				(r) => r.trim().toLowerCase() === norm,
 			);
-			return `- "${k.keyword}": popularity ${k.popularity}, difficulty ${k.difficulty}, rank ${k.appRank ?? "none"}, ${safe ? "recommendable" : "other category - do not recommend"}`;
+			const isTracked = tracked.has(norm);
+			const marks = [
+				isWinnableScore(k) ? "winnable" : "not winnable",
+				isTracked ? "tracked" : null,
+				safe || isTracked
+					? "recommendable"
+					: "other category - do not recommend",
+			].filter(Boolean);
+			return `- "${k.keyword}": popularity ${k.popularity}, difficulty ${k.difficulty}, rank ${k.appRank ?? "none"}, ${marks.join(", ")}`;
 		});
 	const issues = report.store.issues.map(
 		(i) => `- [${i.severity}] ${i.title}: ${i.detail}`,
@@ -117,7 +185,10 @@ function buildUserPrompt(report: AppAuditReport, listing: AuditApp): string {
 		`Store: ${store === "play" ? "Google Play" : "App Store"}.`,
 		"",
 		`Title: ${listing.name}`,
-		`${store === "play" ? "Short description" : "Subtitle"}: ${listing.subtitle ?? "(none)"}`,
+		`${store === "play" ? "Short description" : "Subtitle"}: ${listing.subtitle ?? (store === "play" ? "(none)" : "(not known: Apple does not publish it and this listing is not synced; do not call it empty)")}`,
+		store === "appstore"
+			? `Keyword field: ${listing.keywordField ?? "(not known: Apple does not publish it; do not call it empty)"}`
+			: "",
 		`Category: ${listing.genre || "(unknown)"}`,
 		`Rating: ${listing.rating ?? "n/a"} from ${listing.ratingsCount ?? 0} ratings. Screenshot count: ${listing.screenshots} (content not available to you).`,
 		"",
@@ -185,7 +256,10 @@ export class AuditAiService {
 				keywords:
 					store === "play"
 						? null
-						: cut(validated.rewrites.keywords, KEYWORDS_LIMIT),
+						: guardKeywordRewrite(
+								cut(validated.rewrites.keywords, KEYWORDS_LIMIT),
+								listing.keywordField,
+							),
 				opening: cut(validated.rewrites.opening, OPENING_LIMIT),
 				subtitle: cut(validated.rewrites.subtitle, subtitleLimit),
 				title: cut(validated.rewrites.title, TITLE_LIMIT),

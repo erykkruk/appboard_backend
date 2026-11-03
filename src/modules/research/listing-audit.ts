@@ -104,6 +104,11 @@ export interface AuditApp {
 	/** Listing languages the app actually ships, e.g. ["en-US", "pl"]. */
 	languages?: string[];
 	subtitle?: string;
+	/**
+	 * iOS keyword field. Apple never serves it publicly, so it is only known
+	 * for apps whose listing AppBoard syncs from App Store Connect.
+	 */
+	keywordField?: string;
 }
 
 /**
@@ -125,7 +130,12 @@ export function extractKeywordCandidates(app: AuditApp): string[] {
 	};
 
 	const titleParts = app.name.split(/[:–—|-]+/).slice(1);
-	for (const part of titleParts) {
+	// The subtitle is indexed like the title, so its phrases are just as
+	// deliberate a target.
+	const indexedParts = app.subtitle
+		? [...titleParts, app.subtitle]
+		: titleParts;
+	for (const part of indexedParts) {
 		for (const chunk of part.split(/[,&+/]+/)) {
 			const words = tokenize(chunk);
 			if (words.length >= 1 && words.length <= 3) push(words.join(" "));
@@ -156,6 +166,32 @@ export function extractKeywordCandidates(app: AuditApp): string[] {
 	if (app.genre) push(tokenize(app.genre).join(" "));
 
 	return candidates.slice(0, MAX_CANDIDATES);
+}
+
+/**
+ * The terms an audit scores, best evidence first: the keywords the developer
+ * chose to track, then the terms of their keyword field, then what the
+ * listing text suggests. Without the first two the audit table fills with
+ * words lifted from the description and never shows the terms that matter.
+ */
+export function mergeAuditCandidates(
+	tracked: string[],
+	keywordField: string | undefined,
+	listing: string[],
+	limit: number,
+): string[] {
+	const out: string[] = [];
+	const seen = new Set<string>();
+	const push = (term: string) => {
+		const norm = term.trim().toLowerCase();
+		if (norm.length < 2 || seen.has(norm)) return;
+		seen.add(norm);
+		out.push(norm);
+	};
+	for (const term of tracked) push(term);
+	for (const term of (keywordField ?? "").split(",")) push(term);
+	for (const term of listing) push(term);
+	return out.slice(0, limit);
 }
 
 /**
@@ -279,9 +315,9 @@ const TITLE_UPGRADE_MARGIN = 15;
  * ("game", "photo", "music") score high popularity precisely because their
  * competitors are huge - putting one in your title buys nothing.
  */
-const MAX_WINNABLE_DIFFICULTY = 45;
+export const MAX_WINNABLE_DIFFICULTY = 45;
 /** Ranking this high proves the term works for you whatever its difficulty. */
-const PROVEN_RANK = 50;
+export const PROVEN_RANK = 50;
 /** Search taps collapse past the first screen of results. */
 const VISIBLE_RANK = 10;
 /** Category check: how many rivals to sample, and how sure to be. */
@@ -289,8 +325,22 @@ const CATEGORY_RIVALS_PER_TERM = 10;
 const CATEGORY_MIN_RIVALS = 8;
 const CATEGORY_MAJORITY = 0.6;
 /** A term worth chasing: enough searches to matter, low enough to win. */
-const GAP_MIN_POPULARITY = 35;
-const GAP_MAX_DIFFICULTY = 45;
+export const GAP_MIN_POPULARITY = 35;
+export const GAP_MAX_DIFFICULTY = MAX_WINNABLE_DIFFICULTY;
+
+/**
+ * The one winnability rule: the audit, the suggestions, the AI review and
+ * the panel all ask this, so a term is never "too hard" in one place and
+ * "winnable" in another.
+ */
+export function isWinnableScore(
+	score: Pick<KeywordScore, "appRank" | "difficulty">,
+): boolean {
+	return (
+		score.difficulty <= MAX_WINNABLE_DIFFICULTY ||
+		(score.appRank != null && score.appRank <= PROVEN_RANK)
+	);
+}
 
 /** Popularity is null when the estimator could not score a term at all. */
 function pop(score: KeywordScore): number {
@@ -405,9 +455,7 @@ export function buildAudit(
 			titleLower.includes(s.keyword.toLowerCase()) &&
 			s.keyword.toLowerCase() !== brandToken(app.name),
 	);
-	const isWinnable = (s: KeywordScore) =>
-		s.difficulty <= MAX_WINNABLE_DIFFICULTY ||
-		(s.appRank != null && s.appRank <= PROVEN_RANK);
+	const isWinnable = isWinnableScore;
 	const titleKeyword = inTitle
 		.filter((s) => pop(s) >= MIN_TITLE_KEYWORD_POPULARITY && isWinnable(s))
 		.sort((a, b) => pop(b) - pop(a))[0];

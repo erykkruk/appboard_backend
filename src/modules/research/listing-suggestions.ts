@@ -21,6 +21,11 @@ export interface SuggestionInput {
 	/** iOS keyword field. */
 	keywords?: string;
 	description?: string;
+	/**
+	 * Phrases the developer tracks. Their words are never dropped from the
+	 * keyword field: the developer chose them on purpose.
+	 */
+	keep?: string[];
 }
 
 export interface Suggestion {
@@ -73,6 +78,49 @@ function words(text: string): Set<string> {
 			(w) => w.length > 1,
 		),
 	);
+}
+
+function splitTerms(field: string): string[] {
+	return [
+		...new Set(
+			field
+				.split(",")
+				.map((t) => t.trim().toLowerCase())
+				.filter(Boolean),
+		),
+	];
+}
+
+/**
+ * The current keyword-field terms worth keeping. A rewrite starts from what
+ * is there: a term goes only when it repeats the title or subtitle (Apple
+ * counts it once anyway) or when it was measured as weak - not ranking, not
+ * winnable or barely searched - and the developer does not track it.
+ */
+export function keptKeywordTerms(
+	field: string,
+	taken: Set<string>,
+	scores: KeywordScore[],
+	keep: string[],
+): string[] {
+	const protectedWords = new Set(
+		keep.flatMap((k) => k.toLowerCase().split(/\s+/)).filter(Boolean),
+	);
+	const byKeyword = new Map(
+		scores
+			.filter((s) => !s.error)
+			.map((s) => [s.keyword.trim().toLowerCase(), s] as const),
+	);
+	return splitTerms(field).filter((term) => {
+		if (taken.has(term)) return false;
+		if (protectedWords.has(term)) return true;
+		const score = byKeyword.get(term);
+		if (!score || score.appRank != null) return true;
+		const weak =
+			(score.popularity ?? 0) < MIN_POPULARITY ||
+			score.difficulty > MAX_KEYWORD_DIFFICULTY;
+		return !weak;
+	});
 }
 
 /**
@@ -174,8 +222,11 @@ export function buildSuggestions(
 		const shortAfter =
 			out.find((s) => s.field === "shortDesc")?.proposed ?? shortCurrent;
 		const taken = new Set([...words(titleAfter), ...words(shortAfter)]);
-		const parts: string[] = [];
-		let length = 0;
+		const current = input.keywords ?? "";
+		const kept = keptKeywordTerms(current, taken, scores, input.keep ?? []);
+		const parts: string[] = [...kept];
+		for (const w of parts) taken.add(w);
+		let length = parts.join(",").length;
 		for (const s of pool) {
 			// Apple indexes each word once across title, subtitle and this
 			// field, so a word already in the title only wastes characters here.
@@ -189,8 +240,9 @@ export function buildSuggestions(
 			}
 		}
 		const proposed = parts.join(",");
-		const current = input.keywords ?? "";
 		if (parts.length > 0 && proposed !== current) {
+			const currentCount = splitTerms(current).length;
+			const dropped = currentCount - kept.length;
 			out.push({
 				current,
 				field: "keywords",
@@ -198,7 +250,9 @@ export function buildSuggestions(
 				language: input.language,
 				points: 8,
 				proposed,
-				reason: `Comma-separated, no spaces, no word repeated from the title or subtitle - each word counts once. ${proposed.length} of ${limits.keywords} characters used${current ? "" : ", and the field is empty today"}.`,
+				reason: current
+					? `Built on your current field: keeps ${kept.length} of ${currentCount} terms${dropped > 0 ? `, drops ${dropped} that repeat the title or subtitle or that you cannot win and do not rank for` : ""}, and fills the space with winnable terms. ${proposed.length} of ${limits.keywords} characters.`
+					: `Comma-separated, no spaces, no word repeated from the title or subtitle - each word counts once. ${proposed.length} of ${limits.keywords} characters used, and the field is empty today.`,
 			});
 		}
 	}
