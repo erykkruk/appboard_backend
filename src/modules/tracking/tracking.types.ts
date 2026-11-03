@@ -103,15 +103,32 @@ export interface TrackingSummaryStats {
 	lastCheckedAt: Date | null;
 }
 
+/** The best-placed tracked keyword that is not the app's own name. */
+export interface TrackingMarketBestKeyword {
+	/** Positive = moved up since the previous measurement. */
+	delta: number | null;
+	keyword: string;
+	position: number;
+}
+
 /** One market (country) of an app in the per-market overview. */
 export interface TrackingMarket {
 	avgPosition: number | null;
 	bestPosition: number | null;
+	/** Best ranked keyword that is not a brand match (null when none ranks). */
+	bestEarned: TrackingMarketBestKeyword | null;
 	country: string;
 	/** Ranked both times, worse now. */
 	declined: number;
 	/** Ranked at the previous measurement, outside the scanned results now. */
 	dropped: number;
+	/**
+	 * Ranked / top 10 / top 50 counted over keywords that are not the app's
+	 * own name: "#1 for buzzin" proves nothing about discovery.
+	 */
+	earnedRanked: number;
+	earnedTop10: number;
+	earnedTop50: number;
 	/** Outside the scanned results before, ranked now. */
 	entered: number;
 	/** Keywords the latest run could not measure (store refused). */
