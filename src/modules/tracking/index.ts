@@ -91,7 +91,7 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 		{
 			body: addKeywordsBody,
 			detail: {
-				description: "Add tracked keywords for a country (max 20 per language)",
+				description: "Add tracked keywords for a country (max 40 per language)",
 				tags: ["Tracking"],
 			},
 			params: appIdParams,
