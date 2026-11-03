@@ -21,6 +21,27 @@ export const RANK_CHECK_HOURS = [0, 12] as const;
 
 export const DEFAULT_SCHEDULER_TZ = "Europe/Warsaw";
 
+// Auto-research slot (local hour). After the 00:00 rank check and the 01:00
+// score refresh have had five hours to drain the shared App Store throttle,
+// and well before the 12:00 rank check.
+export const AUTO_RESEARCH_HOUR = 6;
+// A daily auto-research covers every tracked market once per this many days:
+// one slice of the markets per day instead of all of them every morning.
+export const RESEARCH_ROTATION_DAYS = 7;
+// Keyword ideas scored per market per run: one App Store search each.
+export const IDEAS_SCORED_PER_MARKET = 10;
+// An idea scored within this many days is not scored again.
+export const IDEA_RESCORE_DAYS = 7;
+
+export interface TrackingSchedule {
+	timezone: string;
+	rankCheckHours: readonly number[];
+	scoreRefreshHour: number;
+	autoResearchHour: number;
+	/** Null when auto-research is off. */
+	nextAutoResearchAt: string | null;
+}
+
 export interface RankCheckResult {
 	checked: number;
 	snapshots: number;
