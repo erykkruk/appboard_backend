@@ -210,6 +210,8 @@ describe("POST /api/stores/import", () => {
 
 		expect(data.created).toBe(true);
 		expect(data.app.externalId).toBe(APPLE_ID);
+		// No devices in the request: the record is a phone app, as before.
+		expect(data.app.devices).toEqual(["phone"]);
 		expect(data.app.name).toBe("TaskMaster");
 		expect(data.app.bundleId).toBe("com.example.taskmaster");
 		expect(data.app.platform).toBe("ios");
@@ -246,6 +248,38 @@ describe("POST /api/stores/import", () => {
 		const data = await res.json();
 		expect(data.created).toBe(false);
 		expect(data.app.id).toBe(importedAppId);
+	});
+
+	it("marks an existing record as Apple TV when re-imported with devices", async () => {
+		stubItunes();
+		const res = await app.handle(
+			authRequest("http://localhost/api/stores/import", {
+				body: JSON.stringify({
+					devices: ["tv", "phone", "tv"],
+					url: `https://apps.apple.com/us/app/x/id${APPLE_ID}`,
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(res.status).toBe(200);
+		const data = await res.json();
+		expect(data.created).toBe(false);
+		expect(data.app.devices).toEqual(["phone", "tv"]);
+	});
+
+	it("rejects an unknown device", async () => {
+		const res = await app.handle(
+			authRequest("http://localhost/api/stores/import", {
+				body: JSON.stringify({
+					devices: ["watch"],
+					url: `https://apps.apple.com/us/app/x/id${APPLE_ID}`,
+				}),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			}),
+		);
+		expect(res.status).toBe(422);
 	});
 
 	it("accepts a typeahead pick (platform + externalId)", async () => {

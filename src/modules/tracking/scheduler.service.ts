@@ -11,6 +11,13 @@ import type { ResearchRunReport } from "@/modules/research/research.types";
 import { createLogger } from "@/utils/logger";
 import { sendMail } from "@/utils/mailer";
 import { DraftReminderService } from "./draft-reminder.service";
+import { RankCheckJobs } from "./rank-check.jobs";
+import {
+	breakerPacer,
+	getRankLookupRuntime,
+	StoreBreaker,
+	type StoreBreakerLimits,
+} from "./rank-lookup";
 import { ReportService } from "./report.service";
 import { TrackingService } from "./tracking.service";
 import {
@@ -137,13 +144,12 @@ export function isAutoResearchDue(
 	);
 }
 
-async function runScheduledRankCheck(cfg: {
+async function sendRankDigest(cfg: {
 	appId: string;
 	emailRankDigest: boolean;
 	notifyEmail: string | null;
 	workspaceId: string;
 }) {
-	await TrackingService.runRankCheck(cfg.appId, cfg.workspaceId, "scheduled");
 	if (!cfg.emailRankDigest) return;
 	const positions = await TrackingService.getLatestPositions(cfg.appId);
 	if (!positions.length) return;
@@ -158,14 +164,48 @@ async function runScheduledRankCheck(cfg: {
 }
 
 /**
+ * Start the app's rank check as a background job and return at once. A
+ * throttled check of a few hundred keywords takes tens of minutes; awaiting it
+ * here held the whole tick, so the 01:00 / 02:00 / 09:00 slots were silently
+ * skipped. The job runner keeps one run per app, so a slot that fires while
+ * the previous run is still going does not start a second one.
+ */
+export async function runScheduledRankCheck(cfg: {
+	appId: string;
+	emailRankDigest: boolean;
+	notifyEmail: string | null;
+	workspaceId: string;
+}) {
+	if (RankCheckJobs.isRunning(cfg.appId)) {
+		log.info({ appId: cfg.appId }, "Rank check still running - slot skipped");
+		return;
+	}
+	const started = await RankCheckJobs.startIfSupported(
+		cfg.appId,
+		cfg.workspaceId,
+		"scheduled",
+		{ onComplete: () => sendRankDigest(cfg) },
+	);
+	if (!started) {
+		log.info({ appId: cfg.appId }, "Store has no searchable results - skipped");
+	}
+}
+
+/**
  * Refresh keyword-score snapshots for every tracked keyword of an app, one
  * country at a time. iOS apps also get their rank refreshed via the app's
  * store id. The scoring path persists snapshots itself (workspaceId given).
+ * Every iTunes request goes through the same process-wide throttle and retry
+ * policy as rank checks, so a few hundred keywords never burst the store, and
+ * the same circuit breaker stops the refresh when the store stays blocked.
  */
-async function runScheduledScoreRefresh(cfg: {
-	appId: string;
-	workspaceId: string;
-}) {
+export async function runScheduledScoreRefresh(
+	cfg: {
+		appId: string;
+		workspaceId: string;
+	},
+	options: { breakerLimits?: StoreBreakerLimits } = {},
+) {
 	const tracked = await TrackingService.getKeywords(cfg.appId);
 	if (!tracked.length) return;
 	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
@@ -176,17 +216,28 @@ async function runScheduledScoreRefresh(cfg: {
 	for (const k of tracked) {
 		byCountry.set(k.country, [...(byCountry.get(k.country) ?? []), k.keyword]);
 	}
+	const rt = getRankLookupRuntime();
+	const breaker = new StoreBreaker(rt.now, options.breakerLimits);
+	const pace = breakerPacer("appstore", breaker, rt);
 	for (const [country, keywords] of byCountry) {
 		for (
 			let start = 0;
 			start < keywords.length;
 			start += SCORE_KEYWORDS_PER_CALL
 		) {
+			if (breaker.trippedReason) {
+				log.warn(
+					{ appId: cfg.appId, country, reason: breaker.trippedReason },
+					"Score refresh stopped by the store breaker",
+				);
+				return;
+			}
 			await ResearchService.keywordScores(
 				keywords.slice(start, start + SCORE_KEYWORDS_PER_CALL),
 				country,
 				appstoreId,
 				cfg.workspaceId,
+				{ pace },
 			);
 		}
 	}
@@ -224,6 +275,22 @@ async function runScheduledAutoResearch(cfg: {
 	await sendMail({ ...message, to: email });
 }
 
+/** Apps whose detached keyword-score refresh is still running. */
+const scoreRefreshing = new Set<string>();
+
+async function runDailyCleanups(refreshed: boolean[]) {
+	if (!refreshed.some(Boolean)) return;
+	await KeywordScoresHistoryService.cleanup().catch((err) => {
+		log.error({ err }, "Keyword score cleanup failed");
+	});
+	await FreeToolQuotaService.cleanup().catch((err) => {
+		log.error({ err }, "Free-tool quota cleanup failed");
+	});
+	await PublicReportsService.cleanupShares().catch((err) => {
+		log.error({ err }, "Shared report cleanup failed");
+	});
+}
+
 // Prevents overlapping ticks: a slow tick (many keywords × network latency)
 // could otherwise still be running when the next interval fires, and both
 // would pass the due-checks against the not-yet-updated timestamps — causing
@@ -257,26 +324,26 @@ async function runTick(now: Date, tz: string) {
 			}
 		}
 
-		let scoresRefreshed = false;
-		for (const cfg of rankConfigs) {
-			if (!isScoreRefreshDue(cfg, now, tz)) continue;
-			try {
-				await runScheduledScoreRefresh(cfg);
-				scoresRefreshed = true;
-			} catch (err) {
-				log.error({ appId: cfg.appId, err }, "Scheduled score refresh failed");
-			}
-		}
-		if (scoresRefreshed) {
-			await KeywordScoresHistoryService.cleanup().catch((err) => {
-				log.error({ err }, "Keyword score cleanup failed");
+		const refreshes = rankConfigs
+			.filter((cfg) => isScoreRefreshDue(cfg, now, tz))
+			.filter((cfg) => !scoreRefreshing.has(cfg.appId))
+			.map((cfg) => {
+				scoreRefreshing.add(cfg.appId);
+				return runScheduledScoreRefresh(cfg)
+					.then(() => true)
+					.catch((err) => {
+						log.error(
+							{ appId: cfg.appId, err },
+							"Scheduled score refresh failed",
+						);
+						return false;
+					})
+					.finally(() => scoreRefreshing.delete(cfg.appId));
 			});
-			await FreeToolQuotaService.cleanup().catch((err) => {
-				log.error({ err }, "Free-tool quota cleanup failed");
-			});
-			await PublicReportsService.cleanupShares().catch((err) => {
-				log.error({ err }, "Shared report cleanup failed");
-			});
+		// Throttled refreshes take tens of minutes for large keyword sets, so
+		// they run detached; the cleanups follow once they are all done.
+		if (refreshes.length) {
+			void Promise.all(refreshes).then(runDailyCleanups);
 		}
 
 		const { hour, minute } = localHourMinute(now, tz);

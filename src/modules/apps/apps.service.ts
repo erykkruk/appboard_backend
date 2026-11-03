@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
-import type { Platform } from "@/config/const";
+import {
+	type AppDevice,
+	DEFAULT_APP_DEVICES,
+	normalizeDevices,
+	type Platform,
+} from "@/config/const";
 import { PUBLIC_CONNECTION_CAPABILITIES } from "@/config/store-capabilities";
 import { db } from "@/utils/db";
 import { apps, stores } from "@/utils/db/schema";
@@ -24,7 +29,12 @@ export class AppsService {
 	 */
 	static async createLocal(
 		workspaceId: string,
-		input: { name: string; platform: Platform; bundleId?: string },
+		input: {
+			bundleId?: string;
+			devices?: AppDevice[];
+			name: string;
+			platform: Platform;
+		},
 	) {
 		const name = input.name.trim();
 		if (!name) {
@@ -69,6 +79,9 @@ export class AppsService {
 			.insert(apps)
 			.values({
 				bundleId: input.bundleId?.trim() || localId,
+				devices: input.devices?.length
+					? normalizeDevices(input.devices)
+					: DEFAULT_APP_DEVICES,
 				externalId: localId,
 				name,
 				platform: input.platform,
@@ -80,6 +93,30 @@ export class AppsService {
 
 		log.info({ appId: app.id, platform: input.platform }, "Local app created");
 		return app;
+	}
+
+	/**
+	 * Set the form factors the app's store record serves. On the App Store,
+	 * Apple TV is a device of the same record as iPhone; an Android TV build is
+	 * usually a separate Play package marked `["tv"]`. Store sync never
+	 * overwrites this - it only adds devices it can detect.
+	 */
+	static async updateDevices(
+		workspaceId: string,
+		appId: string,
+		devices: AppDevice[],
+	) {
+		await AppsService.findOne(workspaceId, appId);
+		const normalized = normalizeDevices(devices);
+		if (!normalized.length) {
+			buildError("badRequest", { info: "Pick at least one device." });
+		}
+		await db
+			.update(apps)
+			.set({ devices: normalized })
+			.where(eq(apps.id, appId));
+		log.info({ appId, devices: normalized }, "App devices updated");
+		return AppsService.findOne(workspaceId, appId);
 	}
 
 	/** True for an app that has no store listing behind it. */

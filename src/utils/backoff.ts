@@ -41,15 +41,19 @@ export function computeBackoffMs(attempt: number): number {
 
 /**
  * Parses a `Retry-After` header (RFC 7231: delay-seconds or HTTP-date).
- * Returns null when the header is absent or unparseable.
+ * Returns null when the header is absent or unparseable. `maxMs` caps the
+ * result (default 60 s); rank lookups allow up to their own store pause.
  */
-export function parseRetryAfterMs(header: string | null): number | null {
+export function parseRetryAfterMs(
+	header: string | null,
+	maxMs: number = MAX_RETRY_AFTER_MS,
+): number | null {
 	if (!header) return null;
 
 	const seconds = Number(header);
 	if (Number.isFinite(seconds)) {
 		if (seconds < 0) return null;
-		return Math.min(seconds * 1_000, MAX_RETRY_AFTER_MS);
+		return Math.min(seconds * 1_000, maxMs);
 	}
 
 	const date = Date.parse(header);
@@ -57,7 +61,7 @@ export function parseRetryAfterMs(header: string | null): number | null {
 
 	const delta = date - Date.now();
 	if (delta <= 0) return 0;
-	return Math.min(delta, MAX_RETRY_AFTER_MS);
+	return Math.min(delta, maxMs);
 }
 
 /**

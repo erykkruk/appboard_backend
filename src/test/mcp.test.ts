@@ -19,6 +19,17 @@ const EXPECTED_TOOLS = [
 	"purchases_list",
 	"publishing_validate_screenshot",
 	"publishing_publish",
+	"stores_import_app",
+	"apps_update_devices",
+	"tracking_get_markets",
+	"tracking_get_board",
+	"tracking_add_keywords",
+	"tracking_remove_keyword",
+	"tracking_run_check",
+	"tracking_check_status",
+	"tracking_update_config",
+	"research_runs_list",
+	"research_run_start",
 ];
 
 describe("MCP tool registry", () => {
@@ -50,6 +61,16 @@ describe("MCP tool registry", () => {
 			"purchases_list",
 			"publishing_validate_screenshot",
 			"publishing_publish",
+			"apps_update_devices",
+			"tracking_get_markets",
+			"tracking_get_board",
+			"tracking_add_keywords",
+			"tracking_remove_keyword",
+			"tracking_run_check",
+			"tracking_check_status",
+			"tracking_update_config",
+			"research_runs_list",
+			"research_run_start",
 		];
 		for (const name of appScoped) {
 			const tool = getTool(name);
@@ -84,6 +105,43 @@ describe("MCP tool registry", () => {
 				keywords: Array.from({ length: 11 }, (_, i) => `kw${i}`),
 			}).success,
 		).toBe(false);
+	});
+
+	it("tracking_add_keywords validates markets in bulk", () => {
+		const schema = z.object(getTool("tracking_add_keywords")!.inputSchema);
+		expect(
+			schema.safeParse({
+				appId: "a",
+				items: [
+					{ country: "us", keywords: ["party game"] },
+					{ country: "PL", keywords: ["gra imprezowa", "quiz"] },
+				],
+			}).success,
+		).toBe(true);
+		expect(
+			schema.safeParse({
+				appId: "a",
+				items: [{ country: "usa", keywords: ["x"] }],
+			}).success,
+		).toBe(false);
+		expect(schema.safeParse({ appId: "a", items: [] }).success).toBe(false);
+	});
+
+	it("stores_import_app and apps_update_devices accept only known devices", () => {
+		const importSchema = z.object(getTool("stores_import_app")!.inputSchema);
+		expect(
+			importSchema.safeParse({
+				devices: ["tv"],
+				url: "https://play.google.com/store/apps/details?id=com.example.tv",
+			}).success,
+		).toBe(true);
+		expect(
+			importSchema.safeParse({ devices: ["watch"], url: "x" }).success,
+		).toBe(false);
+		const devicesSchema = z.object(getTool("apps_update_devices")!.inputSchema);
+		expect(devicesSchema.safeParse({ appId: "a", devices: [] }).success).toBe(
+			false,
+		);
 	});
 
 	it("getTool returns undefined for unknown tools", () => {

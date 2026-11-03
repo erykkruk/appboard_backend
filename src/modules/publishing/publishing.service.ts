@@ -11,6 +11,7 @@ import { decryptCredentials } from "@/modules/vault/credentials";
 import { createProvider } from "@/providers";
 import {
 	EDITABLE_VERSION_STATES,
+	iosListingVersions,
 	isEditableVersion,
 	versionState,
 } from "@/providers/app-store";
@@ -634,11 +635,10 @@ export class PublishingService {
 
 		try {
 			const { readAll } = await createAppStoreClient(credentials);
-			const { data: ascVersions } = await readAll(
-				`apps/${app.externalId}/appStoreVersions`,
-			);
+			const { data } = await readAll(`apps/${app.externalId}/appStoreVersions`);
+			const ascVersions = iosListingVersions((data ?? []) as ApiResource[]);
 
-			if (!ascVersions?.length) {
+			if (!ascVersions.length) {
 				return { source: "live" as const, synced: 0 };
 			}
 
@@ -663,7 +663,7 @@ export class PublishingService {
 			let synced = 0;
 			const now = new Date();
 
-			for (const v of ascVersions as ApiResource[]) {
+			for (const v of ascVersions) {
 				const state = versionState(v) ?? "";
 				const versionString = (v.attributes.versionString as string) ?? "";
 				const copyright = (v.attributes.copyright as string) ?? "";
@@ -3819,17 +3819,16 @@ export class PublishingService {
 		const client = await createAppStoreClient(credentials);
 		const { create, read, readAll, update } = client;
 
-		const { data: versions } = await readAll(
-			`apps/${app.externalId}/appStoreVersions`,
-		);
+		const { data } = await readAll(`apps/${app.externalId}/appStoreVersions`);
+		const versions = iosListingVersions((data ?? []) as ApiResource[]);
 
-		if (!versions?.length)
+		if (!versions.length)
 			buildError("notFound", { info: "No app store version found" });
 
-		const version = (versions as ApiResource[]).find(isEditableVersion);
+		const version = versions.find(isEditableVersion);
 
 		if (!version) {
-			const states = (versions as ApiResource[])
+			const states = versions
 				.map((v) => versionState(v) ?? "UNKNOWN")
 				.join(", ");
 			buildError("badRequest", {

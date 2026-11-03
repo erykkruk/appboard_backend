@@ -1,5 +1,6 @@
 import { t } from "elysia";
 import { PLATFORMS, STORE_TYPES } from "@/config/const";
+import { devicesSchema } from "@/modules/apps/apps.schema";
 import { unionEnum } from "@/utils/helpers";
 
 export const connectStoreBody = t.Object({
@@ -17,8 +18,12 @@ export const storeCapabilitiesBody = t.Object({
 // `externalId` (Apple numeric id / Android package name) from a typeahead.
 export const importAppBody = t.Object({
 	country: t.Optional(t.String({ maxLength: 2, minLength: 2 })),
+	// Form factors of the record: ["tv"] for an Android TV package,
+	// ["phone", "tv"] for an iOS app that also ships on Apple TV.
+	devices: t.Optional(devicesSchema),
 	externalId: t.Optional(t.String({ maxLength: 255, minLength: 1 })),
-	platform: t.Optional(unionEnum(PLATFORMS)),
+	// t.UnionEnum keeps the literals visible to Eden clients (the MCP server).
+	platform: t.Optional(t.UnionEnum(PLATFORMS)),
 	url: t.Optional(t.String({ maxLength: 2048, minLength: 1 })),
 });
 

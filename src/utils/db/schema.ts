@@ -12,12 +12,14 @@ import {
 	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
+import type { AppDevice } from "@/config/const";
 import type { AppAuditReport } from "@/modules/audit/audit.types";
 import type {
 	KeywordScore,
 	ResearchRunReport,
 } from "@/modules/research/research.types";
 import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
+import type { RankLookupFailure } from "@/modules/tracking/tracking.types";
 
 const timeColumns = {
 	createdAt: timestamp().notNull().defaultNow(),
@@ -189,6 +191,9 @@ export const apps = pgTable(
 		id: uuid().defaultRandom().primaryKey(),
 		...timeColumns,
 		bundleId: varchar({ length: 255 }).notNull(),
+		// Form factors this store record serves (see APP_DEVICES). Kept apart
+		// from `platform`, which stays the store family every other path uses.
+		devices: jsonb().$type<AppDevice[]>().notNull().default(["phone"]),
 		externalId: varchar({ length: 255 }).notNull(),
 		iconUrl: varchar({ length: 1024 }),
 		lastSyncedAt: timestamp(),
@@ -852,7 +857,51 @@ export const rankSnapshots = pgTable(
 		platform: varchar({ length: 20 }).notNull(),
 		position: integer(),
 	},
-	(t) => [index().on(t.appId, t.keyword, t.country), index().on(t.appId)],
+	(t) => [
+		index().on(t.appId, t.keyword, t.country),
+		index().on(t.appId),
+		// Newest measurements per tracked keyword (LATERAL ... LIMIT 2).
+		index("rank_snapshots_latest_idx").on(
+			t.appId,
+			t.country,
+			t.keyword,
+			t.createdAt.desc(),
+		),
+	],
+);
+
+// One rank-check job (manual "Check now" or the scheduler). The check runs in
+// the background, throttled per store, so the panel polls this row for
+// progress. A lookup the store refused (403/429/5xx after retries) is counted
+// in `failed` and listed in `failures` - it is never written to rank_snapshots
+// as a NULL position, which would read as "not ranked".
+export const rankCheckRuns = pgTable(
+	"rank_check_runs",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		// Lookups done so far (measured + failed); total = tracked keywords.
+		checked: integer().notNull().default(0),
+		error: text(),
+		failed: integer().notNull().default(0),
+		failures: jsonb().$type<RankLookupFailure[]>(),
+		finishedAt: timestamp(),
+		// manual | scheduled | summary
+		kind: varchar({ length: 16 }).notNull().default("manual"),
+		measured: integer().notNull().default(0),
+		ranked: integer().notNull().default(0),
+		startedAt: timestamp().notNull().defaultNow(),
+		// running | completed | failed | interrupted
+		status: varchar({ length: 16 }).notNull().default("running"),
+		total: integer().notNull().default(0),
+		workspaceId: uuid()
+			.notNull()
+			.references(() => workspaces.id, { onDelete: "cascade" }),
+	},
+	(t) => [index().on(t.appId, t.createdAt), index().on(t.workspaceId)],
 );
 
 // Daily keyword-scoring snapshots: one row per workspace+keyword+country+day
@@ -1084,6 +1133,7 @@ export const schema = {
 	purchaseLocalizations,
 	purchasePrices,
 	purchaseReviewInfo,
+	rankCheckRuns,
 	rankSnapshots,
 	researchRuns,
 	reviews,

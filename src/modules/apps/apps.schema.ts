@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import { PLATFORMS } from "@/config/const";
+import { APP_DEVICES, PLATFORMS } from "@/config/const";
 import { unionEnum } from "@/utils/helpers";
 
 export const appsQuery = t.Object({
@@ -9,4 +9,14 @@ export const appsQuery = t.Object({
 
 export const appIdParams = t.Object({
 	appId: t.String({ format: "uuid" }),
+});
+
+// t.UnionEnum (not the unionEnum helper) so Eden clients see the literals.
+export const devicesSchema = t.Array(t.UnionEnum(APP_DEVICES), {
+	maxItems: APP_DEVICES.length,
+	minItems: 1,
+});
+
+export const updateAppBody = t.Object({
+	devices: devicesSchema,
 });
