@@ -838,6 +838,8 @@ export const trackedKeywords = pgTable(
 			.references(() => apps.id, { onDelete: "cascade" }),
 		country: varchar({ length: 2 }).notNull(),
 		keyword: varchar({ length: 255 }).notNull(),
+		/** Marked as one of "our" keywords: the ones the team actually targets. */
+		starred: boolean().notNull().default(false),
 	},
 	(t) => [unique().on(t.appId, t.country, t.keyword), index().on(t.appId)],
 );

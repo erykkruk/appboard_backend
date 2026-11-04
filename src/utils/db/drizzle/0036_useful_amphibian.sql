@@ -1,0 +1,1 @@
+ALTER TABLE "tracked_keywords" ADD COLUMN "starred" boolean DEFAULT false NOT NULL;

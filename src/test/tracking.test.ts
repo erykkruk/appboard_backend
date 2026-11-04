@@ -161,6 +161,176 @@ describe("Tracked keywords", () => {
 	});
 });
 
+describe("Starred keywords", () => {
+	type TrackedRow = {
+		country: string;
+		id: string;
+		keyword: string;
+		starred: boolean;
+	};
+
+	async function trackedRows(id: string): Promise<TrackedRow[]> {
+		const res = await app.handle(authRequest(`${BASE}/apps/${id}/tracking`));
+		return ((await json(res)) as { keywords: TrackedRow[] }).keywords;
+	}
+
+	function patchJson(url: string, body: unknown, request = authRequest) {
+		return app.handle(
+			request(url, {
+				body: JSON.stringify(body),
+				headers: { "Content-Type": "application/json" },
+				method: "PATCH",
+			}),
+		);
+	}
+
+	it("tracks new keywords unstarred", async () => {
+		const rows = await trackedRows(appId);
+		expect(rows.length).toBeGreaterThan(0);
+		expect(rows.every((k) => k.starred === false)).toBe(true);
+	});
+
+	it("stars and unstars one keyword", async () => {
+		const target = (await trackedRows(appId)).find(
+			(k) => k.keyword === "task manager",
+		);
+		expect(target).toBeDefined();
+		const url = `${BASE}/apps/${appId}/tracking/keywords/${target?.id}`;
+
+		const on = await patchJson(url, { starred: true });
+		expect(on.status).toBe(200);
+		const body = (await json(on)) as { keyword: TrackedRow };
+		expect(body.keyword).toEqual(
+			expect.objectContaining({ id: target?.id, starred: true }),
+		);
+		const after = await trackedRows(appId);
+		expect(after.filter((k) => k.starred).map((k) => k.keyword)).toEqual([
+			"task manager",
+		]);
+
+		const off = await patchJson(url, { starred: false });
+		expect(off.status).toBe(200);
+		expect((await trackedRows(appId)).some((k) => k.starred)).toBe(false);
+	});
+
+	it("answers 404 for an unknown keyword and 422 for a malformed id", async () => {
+		const missing = await patchJson(
+			`${BASE}/apps/${appId}/tracking/keywords/00000000-0000-0000-0000-000000000000`,
+			{ starred: true },
+		);
+		expect(missing.status).toBe(404);
+		const malformed = await patchJson(
+			`${BASE}/apps/${appId}/tracking/keywords/not-a-uuid`,
+			{ starred: true },
+		);
+		expect(malformed.status).toBe(422);
+	});
+
+	it("stars in bulk by market and reports phrases that are not tracked", async () => {
+		const res = await patchJson(`${BASE}/apps/${appId}/tracking/keywords`, {
+			items: [
+				{ country: "DE", keywords: ["KW-1", "kw-2", "never tracked"] },
+				{ country: "us", keywords: ["kw-1"] },
+			],
+			starred: true,
+		});
+		expect(res.status).toBe(200);
+		const body = (await json(res)) as {
+			results: Array<{
+				country: string;
+				notTracked: string[];
+				updated: string[];
+			}>;
+			totals: { notTracked: number; updated: number };
+		};
+		expect(body.totals).toEqual({ notTracked: 2, updated: 2 });
+		expect(body.results).toEqual([
+			{
+				country: "de",
+				notTracked: ["never tracked"],
+				updated: ["kw-1", "kw-2"],
+			},
+			{ country: "us", notTracked: ["kw-1"], updated: [] },
+		]);
+
+		const rows = await trackedRows(appId);
+		const starred = rows.filter((k) => k.starred);
+		expect(starred.map((k) => `${k.country}|${k.keyword}`).sort()).toEqual([
+			"de|kw-1",
+			"de|kw-2",
+		]);
+		// Starring never tracks.
+		expect(rows.some((k) => k.keyword === "never tracked")).toBe(false);
+	});
+
+	it("carries starred and the keyword id on the board and in markets", async () => {
+		const board = await app.handle(
+			authRequest(`${BASE}/apps/${appId}/tracking/board?country=de`),
+		);
+		expect(board.status).toBe(200);
+		const b = (await json(board)) as {
+			keywords: Array<{
+				keyword: string;
+				keywordId: string | null;
+				starred: boolean;
+			}>;
+			stats: { starred: number };
+		};
+		expect(b.stats.starred).toBe(2);
+		const kw1 = b.keywords.find((k) => k.keyword === "kw-1");
+		expect(kw1?.starred).toBe(true);
+		expect(kw1?.keywordId).toEqual(expect.any(String));
+		expect(b.keywords.find((k) => k.keyword === "kw-3")?.starred).toBe(false);
+
+		const markets = await app.handle(
+			authRequest(`${BASE}/apps/${appId}/tracking/markets`),
+		);
+		expect(markets.status).toBe(200);
+		const m = (await json(markets)) as {
+			markets: Array<{
+				country: string;
+				starred: number;
+				starredTop10: number;
+			}>;
+			totals: { starred: number };
+		};
+		expect(m.markets.find((x) => x.country === "de")).toEqual(
+			expect.objectContaining({ starred: 2, starredTop10: 0 }),
+		);
+		expect(m.markets.find((x) => x.country === "us")?.starred).toBe(0);
+		expect(m.totals.starred).toBe(2);
+	});
+
+	it("workspace B cannot star workspace A's keywords", async () => {
+		const target = (await trackedRows(appId)).find(
+			(k) => k.keyword === "task manager",
+		);
+		const one = await patchJson(
+			`${BASE}/apps/${appId}/tracking/keywords/${target?.id}`,
+			{ starred: true },
+			authRequestB,
+		);
+		expect(one.status).toBe(404);
+		const bulk = await patchJson(
+			`${BASE}/apps/${appId}/tracking/keywords`,
+			{ items: [{ country: "us", keywords: ["task manager"] }], starred: true },
+			authRequestB,
+		);
+		expect(bulk.status).toBe(404);
+		// A keyword id from app A cannot be starred through app B's URL.
+		const crossApp = await patchJson(
+			`${BASE}/apps/${appIdB}/tracking/keywords/${target?.id}`,
+			{ starred: true },
+			authRequestB,
+		);
+		expect(crossApp.status).toBe(404);
+		expect(
+			(await trackedRows(appId)).find((k) => k.keyword === "task manager")
+				?.starred,
+		).toBe(false);
+	});
+});
+
 describe("Rank check", () => {
 	it("records a snapshot per tracked keyword and updates history", async () => {
 		const spy = spyOn(ResearchService, "positionFor").mockResolvedValue(7);

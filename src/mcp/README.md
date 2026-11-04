@@ -108,6 +108,7 @@ For the hosted backend use `"APPBOARD_API_URL": "https://api.appboard.dev"`.
 | `tracking_get_markets`           | Per-market rank overview: tracked / ranked / top 10 / top 50, median and average position, movement, failed lookups, last check |
 | `tracking_get_board`             | Tracker board for one market (positions, scores, movement, metadata gaps) |
 | `tracking_add_keywords`          | Track keywords in many markets in one call (`items: [{ country, keywords[] }]`) |
+| `tracking_star_keywords`         | Star / unstar tracked keywords as the team's own targets (`items: [{ country, keywords[] }]`, `starred`) |
 | `tracking_remove_keyword`        | Stop tracking a keyword (by `keywordId` or `country` + `keyword`) |
 | `tracking_run_check`             | Start a background rank check (throttled per store) |
 | `tracking_check_status`          | Status / progress / failures of the latest or a given rank check |

@@ -486,7 +486,8 @@ export const tools: RegisteredTool[] = [
 			"keywords - tracked / measured / ranked counts, top 10 and top 50, " +
 			"median, average and best position, improved / declined / entered / " +
 			"dropped since the previous measurement, failed lookups in the last " +
-			"run and last check time. Also totals, the latest rank-check run and " +
+			"run, last check time, starred keywords and starred in the top 10. " +
+			"Also totals, the latest rank-check run and " +
 			"whether the store can be rank-tracked (rankTracking.supported).",
 		handler: (client, input) =>
 			client.api
@@ -500,8 +501,9 @@ export const tools: RegisteredTool[] = [
 		description:
 			"The tracker board for ONE market: per keyword position, previous " +
 			"position, delta, best position, difficulty/popularity, the phrase " +
-			"leader and which listing fields carry it; plus movement, runs and " +
-			"metadata gaps. Omit country to get the first tracked market.",
+			"leader, which listing fields carry it and starred (one of the " +
+			"team's own target keywords); plus movement, runs and metadata " +
+			"gaps. Omit country to get the first tracked market.",
 		handler: (client, input) =>
 			client.api
 				.apps({ appId: input.appId })
@@ -519,7 +521,7 @@ export const tools: RegisteredTool[] = [
 		description:
 			"Track keywords in many markets at once: items = [{ country, " +
 			"keywords[] }] (up to 250 markets, 100 keywords each per call). " +
-			"Keywords are lowercased and deduped; each market holds at most 20. " +
+			"Keywords are lowercased and deduped; each market holds at most 40. " +
 			"Returns per market what was added, skipped (already tracked) and " +
 			"rejected (over the cap) - the call never fails as a whole on the cap.",
 		handler: (client, input) =>
@@ -541,6 +543,40 @@ export const tools: RegisteredTool[] = [
 				.describe("Markets and their keywords"),
 		},
 		name: "tracking_add_keywords",
+	}),
+	defineTool({
+		description:
+			"Star (or unstar with starred: false) tracked keywords as the team's " +
+			"own targets: items = [{ country, keywords[] }]. The app UI can " +
+			"filter to starred keywords and charts them by default. Starring " +
+			"never tracks: phrases not tracked in a market come back under " +
+			"notTracked (add them with tracking_add_keywords first).",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.tracking.keywords.patch({
+					items: input.items,
+					starred: input.starred ?? true,
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			items: z
+				.array(
+					z.object({
+						country: countrySchema,
+						keywords: z.array(z.string().min(1).max(255)).min(1).max(100),
+					}),
+				)
+				.min(1)
+				.max(250)
+				.describe("Markets and their keywords"),
+			starred: z
+				.boolean()
+				.optional()
+				.describe("true (default) to star, false to unstar"),
+		},
+		name: "tracking_star_keywords",
 	}),
 	defineTool({
 		description:

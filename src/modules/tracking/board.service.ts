@@ -72,7 +72,9 @@ export class TrackingBoardService {
 		const tracked = await db
 			.select({
 				country: trackedKeywords.country,
+				id: trackedKeywords.id,
 				keyword: trackedKeywords.keyword,
+				starred: trackedKeywords.starred,
 			})
 			.from(trackedKeywords)
 			.where(eq(trackedKeywords.appId, appId));
@@ -85,9 +87,11 @@ export class TrackingBoardService {
 			countries[0] ??
 			DEFAULT_TRACKING_COUNTRY
 		).toLowerCase();
-		const keywords = tracked
-			.filter((k) => k.country.toLowerCase() === country)
-			.map((k) => k.keyword);
+		const trackedHere = tracked.filter(
+			(k) => k.country.toLowerCase() === country,
+		);
+		const keywords = trackedHere.map((k) => k.keyword);
+		const trackedByKeyword = new Map(trackedHere.map((k) => [k.keyword, k]));
 
 		const config = await TrackingService.getConfig(appId, workspaceId);
 		const language = langFor(country);
@@ -172,6 +176,7 @@ export class TrackingBoardService {
 						: null,
 				difficultyLabel: payload?.difficultyLabel ?? null,
 				keyword,
+				keywordId: trackedByKeyword.get(keyword)?.id ?? null,
 				leader: TrackingBoardService.leaderOf(payload),
 				measuredAt: latestDay,
 				metadataFields: TrackingBoardService.fieldsCarrying(keyword, metadata),
@@ -194,6 +199,7 @@ export class TrackingBoardService {
 						popularity: s.popularity,
 					}),
 				),
+				starred: trackedByKeyword.get(keyword)?.starred ?? false,
 			};
 		});
 
@@ -585,6 +591,7 @@ export class TrackingBoardService {
 			picks: rows.filter((r) => r.pick).length,
 			ranked: ranked.length,
 			runs: days.length,
+			starred: rows.filter((r) => r.starred).length,
 			top10: ranked.filter((r) => r.position <= VISIBLE_RANK).length,
 			tracked: rows.length,
 		};
