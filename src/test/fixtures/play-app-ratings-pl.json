@@ -1,0 +1,16 @@
+{
+	"appId": "tech.ravenlab.buzzin",
+	"histogram": {
+		"1": 5,
+		"2": 3,
+		"3": 0,
+		"4": 3,
+		"5": 61
+	},
+	"ratings": 73,
+	"reviews": 21,
+	"score": 4.529412,
+	"scoreText": "4,5",
+	"title": "Buzzin: Gry na TV i Wilkołaki",
+	"version": "1.7.5"
+}

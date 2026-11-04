@@ -18,6 +18,7 @@ import type {
 	KeywordScore,
 	ResearchRunReport,
 } from "@/modules/research/research.types";
+import type { RatingHistogram } from "@/modules/reviews/ratings.types";
 import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
 import type { RankLookupFailure } from "@/modules/tracking/tracking.types";
 
@@ -368,6 +369,55 @@ export const reviews = pgTable(
 	},
 	(t) => [index().on(t.appId)],
 );
+
+// Daily public store rating per app and storefront country: every star
+// rating (star-only included), from the iTunes Lookup API and the Google Play
+// store page. Only countries with at least one rating get a row.
+export const appRatingSnapshots = pgTable(
+	"app_rating_snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		average: real(),
+		country: varchar({ length: 2 }).notNull(),
+		currentVersionAverage: real(),
+		currentVersionRatingCount: integer(),
+		/** Local day (scheduler timezone) the snapshot belongs to. */
+		day: date({ mode: "string" }).notNull(),
+		fetchedAt: timestamp().notNull(),
+		histogram: jsonb().$type<RatingHistogram>(),
+		ratingCount: integer().notNull(),
+		storeType: varchar({ length: 50 }).notNull(),
+		version: varchar({ length: 50 }),
+		writtenReviews: integer(),
+	},
+	(t) => [unique().on(t.appId, t.country, t.day), index().on(t.appId, t.day)],
+);
+
+// Progress of the day's rating refresh per app, so a run cut short by a
+// restart or a throttling store resumes where it stopped.
+export const appRatingRefreshes = pgTable("app_rating_refreshes", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	appId: uuid()
+		.notNull()
+		.references(() => apps.id, { onDelete: "cascade" })
+		.unique(),
+	completedAt: timestamp(),
+	/** Local day of the run in progress or last finished. */
+	day: date({ mode: "string" }).notNull(),
+	doneCountries: jsonb().$type<string[]>().notNull().default([]),
+	fullSweep: boolean().notNull().default(false),
+	lastError: text(),
+	/** Last day every storefront was checked, not only the rated ones. */
+	lastFullSweepDay: date({ mode: "string" }),
+	/** Set when a store throttled the run: no retry before this. */
+	nextAttemptAt: timestamp(),
+	reviewsSynced: boolean().notNull().default(false),
+});
 
 export const appAsoProfiles = pgTable("app_aso_profiles", {
 	id: uuid().defaultRandom().primaryKey(),
@@ -1125,6 +1175,8 @@ export const schema = {
 	appGroupMembers,
 	appGroups,
 	appPrivacyDeclarations,
+	appRatingRefreshes,
+	appRatingSnapshots,
 	apps,
 	appTrackingConfig,
 	appVersions,

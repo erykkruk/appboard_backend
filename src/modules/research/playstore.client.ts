@@ -66,6 +66,18 @@ export async function playstoreMeta(
 	};
 }
 
+/**
+ * The raw Google Play store page of one country (score, ratings, written
+ * review count, histogram). Google shows ratings per country, so each
+ * country is its own request.
+ */
+export async function playstoreAppRaw(
+	appId: string,
+	country: string,
+): Promise<unknown> {
+	return gplay.app({ appId, country, lang: langFor(country) });
+}
+
 export async function playstoreSearch(
 	term: string,
 	country: string,

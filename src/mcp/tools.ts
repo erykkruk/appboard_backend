@@ -61,6 +61,12 @@ function unwrap<T>(response: TreatyResponse<T>): T {
 }
 
 const appIdSchema = z.string().describe("App UUID");
+const reviewScopeSchema = z
+	.enum(["app", "group"])
+	.optional()
+	.describe(
+		"app (default) = this app only; group = every app of its app group",
+	);
 const languageSchema = z
 	.string()
 	.min(2)
@@ -290,23 +296,52 @@ export const tools: RegisteredTool[] = [
 						...(input.language ? { language: input.language } : {}),
 						...(input.rating !== undefined ? { rating: input.rating } : {}),
 						...(input.storeType ? { storeType: input.storeType } : {}),
+						...(input.country ? { country: input.country } : {}),
+						...(input.scope ? { scope: input.scope } : {}),
 					},
 				})
 				.then(unwrap),
 		inputSchema: {
 			appId: appIdSchema,
+			country: z
+				.string()
+				.length(2)
+				.optional()
+				.describe("Filter by storefront country (ISO alpha-2, e.g. pl, us)"),
 			hasReply: z
 				.boolean()
 				.optional()
 				.describe("Filter by whether a reply exists"),
 			language: z.string().optional(),
 			rating: z.number().min(1).max(5).optional(),
+			scope: reviewScopeSchema,
 			storeType: z
 				.string()
 				.optional()
 				.describe("Filter by store type (e.g. app_store, google_play)"),
 		},
 		name: "reviews_list",
+	}),
+	defineTool({
+		description:
+			"Store ratings of an app: every star rating (star-only included) " +
+			"per store (App Store, Google Play) and per country, with average, " +
+			"rating count, reviews with text and histogram (Google Play), plus " +
+			"the total over all countries (weighted average). scope=group sums " +
+			"the app group (e.g. the iPhone and Android apps of one product); a " +
+			"listing shared by two records counts once. Refreshed daily.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.reviews.ratings.get({
+					query: input.scope ? { scope: input.scope } : {},
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			scope: reviewScopeSchema,
+		},
+		name: "reviews_ratings_summary",
 	}),
 	defineTool({
 		description: "Reply to a review by its UUID.",

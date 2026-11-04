@@ -97,8 +97,9 @@ For the hosted backend use `"APPBOARD_API_URL": "https://api.appboard.dev"`.
 | `ai_translate_localization`      | Translate localization fields with ASO context                  |
 | `ai_generate_release_notes`      | Generate release notes (What's New)                             |
 | `ai_generate_listing_field`      | Generate / rephrase a single listing field                      |
-| `reviews_list`                   | List reviews (filter by rating, language, reply, store)         |
+| `reviews_list`                   | List reviews (filter by rating, language, reply, store, country; scope=group) |
 | `reviews_reply`                  | Reply to a review                                               |
+| `reviews_ratings_summary`        | Store ratings per store and country (star-only included), totals |
 | `research_keyword_scores`        | Score keywords: popularity, difficulty + tiers, opportunity, classification, download estimates |
 | `purchases_list`                 | List in-app purchases for an app                                |
 | `publishing_validate_screenshot` | Validate a screenshot's dimensions for a display type           |

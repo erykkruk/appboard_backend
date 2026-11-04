@@ -38,6 +38,10 @@ import { publishingController } from "@/modules/publishing";
 import { purchasesController } from "@/modules/purchases";
 import { researchController } from "@/modules/research";
 import { reviewsController } from "@/modules/reviews";
+import {
+	startRatingsScheduler,
+	stopRatingsScheduler,
+} from "@/modules/reviews/ratings.scheduler";
 import { screenshotScenesController } from "@/modules/screenshot-scenes";
 import { settingsController } from "@/modules/settings";
 import { storePerformanceController } from "@/modules/store-performance";
@@ -124,11 +128,13 @@ export type App = typeof app;
 
 await bootstrap();
 startScheduler();
+startRatingsScheduler();
 
 log.info(`AppBoard backend running on http://localhost:${port}`);
 
 async function shutdown() {
 	log.info("Shutting down...");
+	stopRatingsScheduler();
 	app.stop();
 	await shutdownAnalytics();
 	process.exit(0);
