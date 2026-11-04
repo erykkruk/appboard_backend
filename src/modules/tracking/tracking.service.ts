@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { HistoryService } from "@/modules/history/history.service";
 import { db } from "@/utils/db";
@@ -27,6 +27,7 @@ import {
 	AUTO_RESEARCH_FREQUENCIES,
 	type AutoResearchFrequency,
 	type BulkAddMarketResult,
+	type BulkStarMarketResult,
 	DEFAULT_TRACKING_COUNTRY,
 	type LatestPosition,
 	MAX_KEYWORDS_PER_COUNTRY,
@@ -270,6 +271,81 @@ export class TrackingService {
 			.returning({ id: trackedKeywords.id });
 		if (!deleted) buildError("notFound", { info: "Keyword not found" });
 		return { id: deleted.id, success: true };
+	}
+
+	/** Mark (or unmark) one tracked keyword as one of the team's own targets. */
+	static async setStarred(appId: string, keywordId: string, starred: boolean) {
+		const [updated] = await db
+			.update(trackedKeywords)
+			.set({ starred })
+			.where(
+				and(
+					eq(trackedKeywords.id, keywordId),
+					eq(trackedKeywords.appId, appId),
+				),
+			)
+			.returning();
+		if (!updated) buildError("notFound", { info: "Keyword not found" });
+		return updated;
+	}
+
+	/**
+	 * Star or unstar many tracked keywords by market and phrase in one call
+	 * (seeding the team's targets across dozens of markets). Phrases that are
+	 * not tracked are reported back, never added: starring does not track.
+	 */
+	static async setStarredBulk(
+		appId: string,
+		items: Array<{ country: string; keywords: string[] }>,
+		starred: boolean,
+	): Promise<{
+		results: BulkStarMarketResult[];
+		totals: { notTracked: number; updated: number };
+	}> {
+		const requested = new Map<string, string[]>();
+		for (const item of items) {
+			const cc = item.country.trim().toLowerCase();
+			requested.set(cc, [...(requested.get(cc) ?? []), ...item.keywords]);
+		}
+
+		const results: BulkStarMarketResult[] = [];
+		for (const [country, raw] of [...requested.entries()].sort((a, b) =>
+			a[0].localeCompare(b[0]),
+		)) {
+			const keywords = normalizeKeywords(raw);
+			const rows = keywords.length
+				? await db
+						.update(trackedKeywords)
+						.set({ starred })
+						.where(
+							and(
+								eq(trackedKeywords.appId, appId),
+								eq(trackedKeywords.country, country),
+								inArray(trackedKeywords.keyword, keywords),
+							),
+						)
+						.returning({ keyword: trackedKeywords.keyword })
+				: [];
+			const updated = new Set(rows.map((r) => r.keyword));
+			results.push({
+				country,
+				notTracked: keywords.filter((k) => !updated.has(k)),
+				updated: keywords.filter((k) => updated.has(k)),
+			});
+		}
+		log.info(
+			{ appId, markets: results.length, starred },
+			"Bulk-starred tracked keywords",
+		);
+
+		const totals = results.reduce(
+			(acc, r) => ({
+				notTracked: acc.notTracked + r.notTracked.length,
+				updated: acc.updated + r.updated.length,
+			}),
+			{ notTracked: 0, updated: 0 },
+		);
+		return { results, totals };
 	}
 
 	/**

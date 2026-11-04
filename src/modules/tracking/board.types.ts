@@ -41,6 +41,10 @@ export interface BoardKeyword {
 	keyword: string;
 	country: string;
 	platform: string;
+	/** Tracked keyword id; NULL for history of a phrase that is no longer tracked. */
+	keywordId: string | null;
+	/** One of the team's own target keywords. */
+	starred: boolean;
 	// ── Where we stand ───────────────────────────────────────────────
 	position: number | null;
 	previousPosition: number | null;
@@ -111,6 +115,8 @@ export interface BoardGap {
 
 export interface BoardStats {
 	tracked: number;
+	/** Tracked keywords marked as the team's own targets. */
+	starred: number;
 	ranked: number;
 	top10: number;
 	picks: number;

@@ -77,6 +77,31 @@ describe("MCP tracking tools against the real endpoints", () => {
 		expect(board.country).toBe("us");
 		expect(board.keywords.length).toBe(2);
 
+		const star = (await call("tracking_star_keywords", {
+			appId,
+			items: [{ country: "US", keywords: ["Party Game", "not tracked"] }],
+		})) as {
+			results: Array<{
+				country: string;
+				notTracked: string[];
+				updated: string[];
+			}>;
+			totals: { notTracked: number; updated: number };
+		};
+		expect(star.totals).toEqual({ notTracked: 1, updated: 1 });
+		expect(star.results[0]).toEqual({
+			country: "us",
+			notTracked: ["not tracked"],
+			updated: ["party game"],
+		});
+		const starredBoard = (await call("tracking_get_board", {
+			appId,
+			country: "us",
+		})) as { keywords: Array<{ keyword: string; starred: boolean }> };
+		expect(
+			starredBoard.keywords.filter((k) => k.starred).map((k) => k.keyword),
+		).toEqual(["party game"]);
+
 		const removed = (await call("tracking_remove_keyword", {
 			appId,
 			country: "US",
