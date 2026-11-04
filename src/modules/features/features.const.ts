@@ -142,6 +142,7 @@ export const ROUTE_FEATURE_MAP: Array<{
 	{ feature: "RESEARCH", pattern: "/research-runs" },
 	{ feature: "RESEARCH", pattern: "/research" },
 	{ feature: "RESEARCH", pattern: "/tracking" },
+	{ feature: "RESEARCH", pattern: "/store-performance" },
 	{ feature: "REVIEWS", pattern: "/reviews" },
 	{ feature: "MONETIZATION_CHAT", pattern: "/monetization-chat" },
 	{ feature: "AI", pattern: "/ai" },

@@ -115,6 +115,7 @@ For the hosted backend use `"APPBOARD_API_URL": "https://api.appboard.dev"`.
 | `tracking_update_config`         | Rank tracking, auto-research, digest email settings |
 | `research_runs_list`             | Saved research runs for an app |
 | `research_run_start`             | Run research for an app in one country and save it |
+| `store_performance_get`          | Google Play store listing acquisitions / visitors / conversion per month by traffic source, search term, campaign and country, from the Play bulk reports bucket |
 
 All operations are scoped to the workspace the API key belongs to.
 

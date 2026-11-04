@@ -221,6 +221,17 @@ One call behind the whole tracker view for a single market - the panel cannot li
 
 `app_audits` only ever holds the latest report, so every successful audit also records an `audit_scored` app event (`{ country, storeScore, draftScore, issues }`). `AuditService.history` reads those into an oldest-first score timeline plus the listing edits made since the PREVIOUS measurement (`since`), which is the window that explains the last move. `audit_scored` is deliberately NOT in `CHART_EVENT_TYPES`: measuring a listing does not change it. There is no backfill - the series starts at the first run recorded after this shipped.
 
+## Store performance (Google Play bulk reports, 0.22.0)
+
+`src/modules/store-performance/`, `GET /apps/:appId/store-performance?months=1..12&refresh=true` (RESEARCH flag), MCP tool `store_performance_get`.
+
+- **Source**: the Play Console bulk-report bucket of the developer account (`pubsite_prod_...`), stored per Play connection in `stores.play_reports_bucket` (migration 0037, nullable). Set with `PATCH /stores/:storeId/play-reports-bucket { bucket }` (accepts the bare name, `gs://...` URI or a Cloud Console URL; `normalizePlayReportsBucket` rejects anything that is not a bucket name, null/"" clears). Play exposes no API that returns the bucket id.
+- **Auth**: the connection's own service account key, `devstorage.read_only` scope (`googleAccessToken` in `play-reports.storage.ts`). The account needs the Play Console ACCOUNT permission "View app information and download bulk reports (read-only)". Verified 2026-11-04: Cloud Storage answers 403 `storage.objects.list` denied when it is missing.
+- **Files**: `stats/store_performance/store_performance_<pkg>_<YYYYMM>_traffic_source.csv` and `_country.csv`, `stats/installs/installs_<pkg>_<YYYYMM>_overview.csv`. UTF-16LE with BOM. `total_store_performance_*` is a different file with other columns - never read it as traffic (names are built exactly, not prefix-matched). Country header is "Country / region" and has an "Other" row. The service LISTS the two prefixes first (one call surfaces 403/404 for the whole bucket) and downloads only files that exist.
+- **Placeholders**: "Other" / "No search terms specified" / empty in the search term column are totals, not keywords (`searchTermPlaceholders`); "Other" / "No UTM source specified" / "No UTM campaign specified" are not campaigns. Conversion = summed acquisitions / summed visitors (never average Play's per-row rate). Android TV packages: everything is "Other", no terms (`tvOnly`).
+- **Errors are states, not HTTP errors**: `status` = ok | bucket_missing | integration_required (link import or demo connection) | access_denied (401/403) | bucket_not_found | credentials_invalid | error, always with a `message` that says how to fix it. iOS = `{ supported: false }`.
+- **Cache**: in memory, 6 h per (store, bucket, package, months), successes only; `refresh=true` and a bucket change drop it. Store id is in the key so another workspace pasting the same bucket never reads our cached numbers.
+
 ## App events + reminders (`src/modules/tracking/`)
 
 - `app_events` (`AppEventsService.record`, never throws) marks version created/submitted and listing published; `GET /apps/:id/tracking/history` merges them with `listing_history` into chart annotations (`CHART_EVENT_TYPES` only - reminder events are housekeeping).

@@ -1,0 +1,1 @@
+ALTER TABLE "stores" ADD COLUMN "play_reports_bucket" varchar(255);

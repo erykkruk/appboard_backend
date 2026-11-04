@@ -712,6 +712,46 @@ export const tools: RegisteredTool[] = [
 		},
 		name: "research_run_start",
 	}),
+	defineTool({
+		description:
+			"Google Play store listing performance of an Android app per month " +
+			"(newest first), from the Play Console bulk reports: acquisitions, " +
+			"visitors and conversion rate by traffic source (Google Play " +
+			"search, Ads and referrals, Other...), top search terms with Play " +
+			"placeholders (Other / No search terms specified) apart, UTM " +
+			"campaigns, countries and the installs overview when Play wrote " +
+			"them. Android TV packages report everything as Other. When " +
+			"status is not ok, message says what to fix (bucket not set, " +
+			"service account without bulk-report permission). iOS apps " +
+			"return supported: false.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				["store-performance"].get({
+					query: {
+						...(input.months !== undefined ? { months: input.months } : {}),
+						...(input.refresh ? { refresh: "true" } : {}),
+					},
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			months: z
+				.number()
+				.int()
+				.min(1)
+				.max(12)
+				.optional()
+				.describe(
+					"How many calendar months back, current one included (default 3)",
+				),
+			refresh: z
+				.boolean()
+				.optional()
+				.describe("Skip the 6 hour cache and read the bucket again"),
+		},
+		name: "store_performance_get",
+	}),
 ];
 
 /**

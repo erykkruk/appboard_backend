@@ -40,6 +40,7 @@ import { researchController } from "@/modules/research";
 import { reviewsController } from "@/modules/reviews";
 import { screenshotScenesController } from "@/modules/screenshot-scenes";
 import { settingsController } from "@/modules/settings";
+import { storePerformanceController } from "@/modules/store-performance";
 import { storesController } from "@/modules/stores";
 import { storeCapabilityGuard } from "@/modules/stores/store-capabilities.guard";
 import { bootstrap, systemController } from "@/modules/system";
@@ -114,7 +115,8 @@ const app = new Elysia()
 			.use(historyController)
 			.use(appleAdsController)
 			.use(researchController)
-			.use(trackingController),
+			.use(trackingController)
+			.use(storePerformanceController),
 	)
 	.listen(port);
 

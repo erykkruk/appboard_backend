@@ -31,6 +31,7 @@ const EXPECTED_TOOLS = [
 	"tracking_update_config",
 	"research_runs_list",
 	"research_run_start",
+	"store_performance_get",
 ];
 
 describe("MCP tool registry", () => {
@@ -73,6 +74,7 @@ describe("MCP tool registry", () => {
 			"tracking_update_config",
 			"research_runs_list",
 			"research_run_start",
+			"store_performance_get",
 		];
 		for (const name of appScoped) {
 			const tool = getTool(name);
