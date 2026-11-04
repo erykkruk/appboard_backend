@@ -15,6 +15,11 @@ import {
 	appstoreSearch,
 	appstoreSearchPosition,
 } from "./appstore.client";
+import {
+	type CachedKeywordSearch,
+	KeywordScoreCacheService,
+	normalizeCacheKeyword,
+} from "./keyword-score-cache.service";
 import { KeywordScoresHistoryService } from "./keyword-scores-history.service";
 import {
 	calcOpportunity,
@@ -87,6 +92,93 @@ async function pacedKeywordRank(
 }
 
 export type SearchScope = "both" | "appstore" | "playstore";
+
+export type ApplePopularityContext = Awaited<
+	ReturnType<typeof AppleAdsService.popularityContext>
+>;
+
+/**
+ * The full score of one keyword from its (possibly cached) App Store search.
+ * Pure over its inputs: the search is shared by every workspace, `apple`
+ * (the workspace's popularity source) and `appRank` (the asking app) are
+ * not, which is why they are applied here and never stored in the cache.
+ */
+export function scoreFromSearch(
+	search: CachedKeywordSearch,
+	country: string,
+	apple: ApplePopularityContext | null,
+	extra: { appRank?: number | null; cached: boolean },
+): KeywordScore {
+	const { competitors, keyword } = search;
+	const internalPopularity = estimatePopularity(competitors, keyword);
+	const applePopularity = apple?.values.get(keyword) ?? null;
+	const appleGenre = inferAppleGenre(competitors);
+
+	// Effective popularity: Apple's official value when selected and
+	// present; otherwise the internal estimate, capped just below the
+	// keyword's own category floor when the term is provably absent
+	// from the active dataset (absence = not top-500 in its genre).
+	let popularity = internalPopularity;
+	let popularitySource: "internal" | "apple" = "internal";
+	let popularityFallback = false;
+	if (apple?.source === "apple" && apple.hasDataset) {
+		if (applePopularity !== null) {
+			popularity = applePopularity;
+			popularitySource = "apple";
+		} else {
+			popularityFallback = true;
+			const floor = apple.floorFor(appleGenre);
+			if (floor !== null && internalPopularity !== null) {
+				popularity = Math.min(internalPopularity, Math.max(1, floor - 1));
+			}
+		}
+	}
+
+	const difficulty = calculateDifficulty(competitors, keyword);
+	return {
+		appleGenre,
+		applePopularity,
+		appRank: extra.appRank,
+		breakdown: difficulty.breakdown,
+		cached: extra.cached,
+		classification: classifyKeyword(popularity, difficulty.score),
+		competitors: competitors.slice(0, SCORING_COMPETITORS_RETURNED),
+		country,
+		difficulty: difficulty.score,
+		difficultyLabel: difficulty.label,
+		downloads: estimateDownloads(popularity, country),
+		internalPopularity,
+		keyword,
+		opportunity: calcOpportunity(popularity, difficulty.score),
+		popularity,
+		popularityFallback,
+		popularitySource,
+		scoredAt: search.scoredAt.toISOString(),
+		tiers: difficulty.tiers,
+	};
+}
+
+function failedScore(
+	keyword: string,
+	country: string,
+	err: unknown,
+): KeywordScore {
+	const empty = calculateDifficulty([], keyword);
+	return {
+		breakdown: empty.breakdown,
+		classification: "unknown",
+		competitors: [],
+		country,
+		difficulty: 0,
+		difficultyLabel: "no-data",
+		downloads: estimateDownloads(null, country),
+		error: err instanceof Error ? err.message : "Unknown error",
+		keyword,
+		opportunity: 0,
+		popularity: null,
+		tiers: empty.tiers,
+	};
+}
 
 export class ResearchService {
 	static async search(
@@ -215,12 +307,51 @@ export class ResearchService {
 	}
 
 	/**
+	 * Ask the App Store for the search a score is derived from (top 25) and
+	 * store the answer in the global cache for every workspace. Callers read
+	 * the cache first; this is the miss path. Paced (scheduled) calls skip
+	 * the SSR/lookup fallback: it would hit Apple outside the throttle and
+	 * hide the 403 the throttle needs.
+	 */
+	static async fetchKeywordSearch(
+		keyword: string,
+		country: string,
+		options: { pace?: StorePacer; now?: Date } = {},
+	): Promise<CachedKeywordSearch> {
+		const { pace } = options;
+		const competitors = pace
+			? await pace(() =>
+					appstoreKeywordSearchStrict(keyword, country, SCORING_SEARCH_LIMIT),
+				)
+			: await appstoreKeywordSearch(keyword, country, SCORING_SEARCH_LIMIT);
+		const scoredAt = options.now ?? new Date();
+		try {
+			return await KeywordScoreCacheService.put(
+				keyword,
+				country,
+				competitors,
+				scoredAt,
+			);
+		} catch (err) {
+			log.warn({ country, err, keyword }, "Keyword score cache write failed");
+			return { competitors, country, keyword, scoredAt };
+		}
+	}
+
+	/**
 	 * Score keywords for ASO targeting: popularity estimate, difficulty with
 	 * breakdown + ranking tiers, opportunity, classification and download
 	 * estimates - all derived from one App Store search per keyword.
+	 * The search comes from the global (keyword, country) cache when it is
+	 * younger than KEYWORD_SCORE_CACHE_TTL_DAYS, so a keyword any workspace
+	 * scored this week costs no App Store call; `refresh` bypasses the cache
+	 * for this (small, explicit) batch. Everything app- or workspace-specific
+	 * (the own app's rank, the Apple Ads popularity source) is computed per
+	 * request on top of the cached search, never cached.
 	 * Failures are reported per keyword so a batch survives partial outages.
 	 * When a workspaceId is given, successful scores are also persisted as
-	 * today's history snapshots (best-effort).
+	 * that workspace's history snapshot of the day the search was made
+	 * (best-effort).
 	 * `pace` routes every App Store request through a caller-supplied
 	 * throttle (the scheduler passes the process-wide store throttle) and
 	 * replaces the local per-batch delay.
@@ -230,90 +361,54 @@ export class ResearchService {
 		country: string,
 		appstoreId?: string,
 		workspaceId?: string,
-		options: { pace?: StorePacer } = {},
+		options: { pace?: StorePacer; refresh?: boolean; now?: Date } = {},
 	): Promise<KeywordScore[]> {
 		const { pace } = options;
+		const now = options.now ?? new Date();
 		const unique = [
-			...new Set(keywords.map((k) => k.trim().toLowerCase()).filter(Boolean)),
+			...new Set(keywords.map(normalizeCacheKeyword).filter(Boolean)),
 		].slice(0, MAX_SCORED_KEYWORDS);
 
-		// Apple dual-source context: the workspace's chosen source plus the
-		// active-week official values for the whole batch (one query).
 		const apple = workspaceId
-			? await AppleAdsService.popularityContext(
-					workspaceId,
-					country,
-					unique,
-				).catch(() => null)
+			? await ResearchService.appleContext(workspaceId, country, unique)
 			: null;
+		const cached = options.refresh
+			? new Map<string, CachedKeywordSearch>()
+			: await KeywordScoreCacheService.getFresh(unique, country, now).catch(
+					(err) => {
+						log.warn({ country, err }, "Keyword score cache read failed");
+						return new Map<string, CachedKeywordSearch>();
+					},
+				);
 
 		const scores: KeywordScore[] = [];
 		let delayMs = SCORING_DELAY_BASE_MS;
+		let askedStore = false;
 		for (const keyword of unique) {
-			if (scores.length > 0 && !pace) {
+			const hit = cached.get(keyword);
+			const needsStore = !hit || Boolean(appstoreId);
+			if (needsStore && askedStore && !pace) {
 				await new Promise((r) => setTimeout(r, delayMs));
 			}
+			if (needsStore) askedStore = true;
 			try {
-				// Paced (scheduled) runs skip the SSR/lookup fallback: it would hit
-				// Apple outside the throttle and hide the 403 the throttle needs.
-				const competitors = pace
-					? await pace(() =>
-							appstoreKeywordSearchStrict(
-								keyword,
-								country,
-								SCORING_SEARCH_LIMIT,
-							),
-						)
-					: await appstoreKeywordSearch(keyword, country, SCORING_SEARCH_LIMIT);
-				const internalPopularity = estimatePopularity(competitors, keyword);
-				const applePopularity = apple?.values.get(keyword) ?? null;
-				const appleGenre = inferAppleGenre(competitors);
-
-				// Effective popularity: Apple's official value when selected and
-				// present; otherwise the internal estimate, capped just below the
-				// keyword's own category floor when the term is provably absent
-				// from the active dataset (absence = not top-500 in its genre).
-				let popularity = internalPopularity;
-				let popularitySource: "internal" | "apple" = "internal";
-				let popularityFallback = false;
-				if (apple?.source === "apple" && apple.hasDataset) {
-					if (applePopularity !== null) {
-						popularity = applePopularity;
-						popularitySource = "apple";
-					} else {
-						popularityFallback = true;
-						const floor = apple.floorFor(appleGenre);
-						if (floor !== null && internalPopularity !== null) {
-							popularity = Math.min(internalPopularity, Math.max(1, floor - 1));
-						}
-					}
-				}
-
-				const difficulty = calculateDifficulty(competitors, keyword);
+				const search =
+					hit ??
+					(await ResearchService.fetchKeywordSearch(keyword, country, {
+						now,
+						pace,
+					}));
 				const appRank = appstoreId
 					? pace
 						? await pacedKeywordRank(pace, keyword, appstoreId, country)
 						: await appstoreKeywordRank(keyword, appstoreId, country)
 					: undefined;
-				scores.push({
-					appleGenre,
-					applePopularity,
-					appRank,
-					breakdown: difficulty.breakdown,
-					classification: classifyKeyword(popularity, difficulty.score),
-					competitors: competitors.slice(0, SCORING_COMPETITORS_RETURNED),
-					country,
-					difficulty: difficulty.score,
-					difficultyLabel: difficulty.label,
-					downloads: estimateDownloads(popularity, country),
-					internalPopularity,
-					keyword,
-					opportunity: calcOpportunity(popularity, difficulty.score),
-					popularity,
-					popularityFallback,
-					popularitySource,
-					tiers: difficulty.tiers,
-				});
+				scores.push(
+					scoreFromSearch(search, country, apple, {
+						appRank,
+						cached: Boolean(hit),
+					}),
+				);
 				delayMs = Math.max(
 					SCORING_DELAY_BASE_MS,
 					delayMs / SCORING_DELAY_GROWTH,
@@ -324,30 +419,34 @@ export class ResearchService {
 					SCORING_DELAY_MAX_MS,
 					delayMs * SCORING_DELAY_GROWTH,
 				);
-				scores.push({
-					breakdown: calculateDifficulty([], keyword).breakdown,
-					classification: "unknown",
-					competitors: [],
-					country,
-					difficulty: 0,
-					difficultyLabel: "no-data",
-					downloads: estimateDownloads(null, country),
-					error: err instanceof Error ? err.message : "Unknown error",
-					keyword,
-					opportunity: 0,
-					popularity: null,
-					tiers: calculateDifficulty([], keyword).tiers,
-				});
+				scores.push(failedScore(keyword, country, err));
 			}
 		}
 		if (workspaceId) {
-			await KeywordScoresHistoryService.upsertToday(workspaceId, scores).catch(
+			await KeywordScoresHistoryService.upsertScores(workspaceId, scores).catch(
 				(err) => {
 					log.warn({ err, workspaceId }, "Keyword score history upsert failed");
 				},
 			);
 		}
 		return scores;
+	}
+
+	/**
+	 * Apple dual-source context: the workspace's chosen source plus the
+	 * active-week official values for the whole batch (one query). Null when
+	 * it cannot be read - scoring then uses the internal estimate.
+	 */
+	static async appleContext(
+		workspaceId: string,
+		country: string,
+		keywords: string[],
+	): Promise<ApplePopularityContext | null> {
+		return AppleAdsService.popularityContext(
+			workspaceId,
+			country,
+			keywords,
+		).catch(() => null);
 	}
 
 	static async markets(
