@@ -15,6 +15,7 @@ const EXPECTED_TOOLS = [
 	"ai_generate_listing_field",
 	"reviews_list",
 	"reviews_reply",
+	"reviews_ratings_summary",
 	"research_keyword_scores",
 	"purchases_list",
 	"publishing_validate_screenshot",
@@ -30,6 +31,9 @@ const EXPECTED_TOOLS = [
 	"tracking_run_check",
 	"tracking_check_status",
 	"tracking_update_config",
+	"daily_summary_get",
+	"daily_summary_update",
+	"daily_summary_send_test",
 	"research_runs_list",
 	"research_run_start",
 	"store_performance_get",
@@ -61,6 +65,7 @@ describe("MCP tool registry", () => {
 			"listings_translate_from",
 			"reviews_list",
 			"reviews_reply",
+			"reviews_ratings_summary",
 			"purchases_list",
 			"publishing_validate_screenshot",
 			"publishing_publish",
@@ -111,6 +116,20 @@ describe("MCP tool registry", () => {
 				keywords: Array.from({ length: 11 }, (_, i) => `kw${i}`),
 			}).success,
 		).toBe(false);
+	});
+
+	it("reviews_ratings_summary and reviews_list accept only app or group scope", () => {
+		const summary = z.object(getTool("reviews_ratings_summary")!.inputSchema);
+		expect(summary.safeParse({ appId: "a" }).success).toBe(true);
+		expect(summary.safeParse({ appId: "a", scope: "group" }).success).toBe(
+			true,
+		);
+		expect(summary.safeParse({ appId: "a", scope: "workspace" }).success).toBe(
+			false,
+		);
+		const list = z.object(getTool("reviews_list")!.inputSchema);
+		expect(list.safeParse({ appId: "a", country: "pl" }).success).toBe(true);
+		expect(list.safeParse({ appId: "a", country: "pol" }).success).toBe(false);
 	});
 
 	it("tracking_add_keywords validates markets in bulk", () => {

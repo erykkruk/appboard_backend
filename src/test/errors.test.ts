@@ -48,6 +48,7 @@ describe("Error utilities", () => {
 			"forbidden",
 			"integrationRequired",
 			"invalidScreenshotDimensions",
+			"mailUnavailable",
 			"notFound",
 			"rateLimitExceeded",
 			"somethingWentWrong",

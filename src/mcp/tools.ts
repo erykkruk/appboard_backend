@@ -41,7 +41,8 @@ function defineTool<Shape extends z.ZodRawShape>(
 /** Eden treaty resolves every call to `{ data, error, status }`. */
 type TreatyResponse<T> = {
 	data: T | null;
-	error: { status?: number; value?: unknown } | null;
+	// `unknown` for routes without any schema (no params/body/query).
+	error: { status?: number | unknown; value?: unknown } | null;
 	status?: number;
 };
 
@@ -51,7 +52,11 @@ type TreatyResponse<T> = {
  */
 function unwrap<T>(response: TreatyResponse<T>): T {
 	if (response.error) {
-		const status = response.error.status ?? response.status ?? 0;
+		const errorStatus = response.error.status;
+		const status =
+			(typeof errorStatus === "number" ? errorStatus : undefined) ??
+			response.status ??
+			0;
 		const value = response.error.value;
 		const detail =
 			typeof value === "string" ? value : JSON.stringify(value ?? {});
@@ -61,6 +66,12 @@ function unwrap<T>(response: TreatyResponse<T>): T {
 }
 
 const appIdSchema = z.string().describe("App UUID");
+const reviewScopeSchema = z
+	.enum(["app", "group"])
+	.optional()
+	.describe(
+		"app (default) = this app only; group = every app of its app group",
+	);
 const languageSchema = z
 	.string()
 	.min(2)
@@ -290,23 +301,52 @@ export const tools: RegisteredTool[] = [
 						...(input.language ? { language: input.language } : {}),
 						...(input.rating !== undefined ? { rating: input.rating } : {}),
 						...(input.storeType ? { storeType: input.storeType } : {}),
+						...(input.country ? { country: input.country } : {}),
+						...(input.scope ? { scope: input.scope } : {}),
 					},
 				})
 				.then(unwrap),
 		inputSchema: {
 			appId: appIdSchema,
+			country: z
+				.string()
+				.length(2)
+				.optional()
+				.describe("Filter by storefront country (ISO alpha-2, e.g. pl, us)"),
 			hasReply: z
 				.boolean()
 				.optional()
 				.describe("Filter by whether a reply exists"),
 			language: z.string().optional(),
 			rating: z.number().min(1).max(5).optional(),
+			scope: reviewScopeSchema,
 			storeType: z
 				.string()
 				.optional()
 				.describe("Filter by store type (e.g. app_store, google_play)"),
 		},
 		name: "reviews_list",
+	}),
+	defineTool({
+		description:
+			"Store ratings of an app: every star rating (star-only included) " +
+			"per store (App Store, Google Play) and per country, with average, " +
+			"rating count, reviews with text and histogram (Google Play), plus " +
+			"the total over all countries (weighted average). scope=group sums " +
+			"the app group (e.g. the iPhone and Android apps of one product); a " +
+			"listing shared by two records counts once. Refreshed daily.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.reviews.ratings.get({
+					query: input.scope ? { scope: input.scope } : {},
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			scope: reviewScopeSchema,
+		},
+		name: "reviews_ratings_summary",
 	}),
 	defineTool({
 		description: "Reply to a review by its UUID.",
@@ -702,6 +742,44 @@ export const tools: RegisteredTool[] = [
 			rankTrackingEnabled: z.boolean().optional(),
 		},
 		name: "tracking_update_config",
+	}),
+	// Workspace daily summary (one morning email for every tracked app)
+	defineTool({
+		description:
+			"Read the workspace daily summary email setting: enabled, email (set " +
+			"on the setting, null = fallback), effectiveEmail (where it goes), " +
+			"schedule (07:30 local), lastSentAt and trackedApps it covers.",
+		handler: (client) =>
+			client.api.tracking["daily-summary"].get().then(unwrap),
+		inputSchema: {},
+		name: "daily_summary_get",
+	}),
+	defineTool({
+		description:
+			"Turn the workspace daily summary on/off or set its recipient. One " +
+			"email at 07:30 local covers every app with rank tracking or " +
+			"auto-research; while it is on, the per-app rank digests and research " +
+			"reports are not sent. email null or empty = first per-app report " +
+			"email, then the workspace owner.",
+		handler: (client, input) =>
+			client.api.tracking["daily-summary"].patch(input).then(unwrap),
+		inputSchema: {
+			email: z
+				.union([z.string().email(), z.literal("")])
+				.nullable()
+				.optional(),
+			enabled: z.boolean().optional(),
+		},
+		name: "daily_summary_update",
+	}),
+	defineTool({
+		description:
+			"Send the daily summary now to its recipient (a test; today's " +
+			"scheduled summary still goes out). Returns { sent, to, apps }.",
+		handler: (client) =>
+			client.api.tracking["daily-summary"].test.post().then(unwrap),
+		inputSchema: {},
+		name: "daily_summary_send_test",
 	}),
 	// Research runs
 	defineTool({

@@ -1,0 +1,17 @@
+{
+	"resultCount": 1,
+	"results": [
+		{
+			"averageUserRating": 4.59259,
+			"averageUserRatingForCurrentVersion": 4.59259,
+			"bundleId": "tech.ravenlab.buzzin",
+			"currentVersionReleaseDate": "2026-11-02T23:23:18Z",
+			"kind": "software",
+			"trackId": 6787068440,
+			"trackName": "Buzzin: TV Party Game Show",
+			"userRatingCount": 27,
+			"userRatingCountForCurrentVersion": 27,
+			"version": "1.7.5"
+		}
+	]
+}
