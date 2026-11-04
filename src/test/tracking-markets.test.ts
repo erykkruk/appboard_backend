@@ -455,6 +455,7 @@ describe("GET /apps/:appId/tracking/markets", () => {
 		const pl = body.markets.find((m) => m.country === "pl");
 		expect(pl).toMatchObject({
 			bestEarned: { delta: 3, keyword: "trivia", position: 12 },
+			earnedMedianPosition: 26,
 			earnedRanked: 2,
 			earnedTop10: 0,
 			earnedTop50: 2,
@@ -464,6 +465,7 @@ describe("GET /apps/:appId/tracking/markets", () => {
 		const cn = body.markets.find((m) => m.country === "cn");
 		expect(cn).toMatchObject({
 			bestEarned: null,
+			earnedMedianPosition: null,
 			earnedRanked: 0,
 			earnedTop10: 0,
 			ranked: 1,

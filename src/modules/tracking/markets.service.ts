@@ -109,6 +109,7 @@ function aggregate(
 		dropped,
 		earnedRanked: earnedPositions.length,
 		earnedTop10: earnedPositions.filter((p) => p <= TOP_VISIBLE).length,
+		earnedMedianPosition: median(earnedPositions),
 		earnedTop50: earnedPositions.filter((p) => p <= TOP_SCANNED).length,
 		entered,
 		failedLastRun: tracked.filter((k) => failedKeywords.has(k)).length,
