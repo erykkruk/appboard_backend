@@ -7,8 +7,13 @@ import {
 	marketsForResearchRun,
 	nextAutoResearchAt,
 	primaryResearchMarket,
+	RANK_CHECK_MIN_GAP_MS_BY_STORE,
+	rankedKeywordsByCountry,
 } from "@/modules/tracking/scheduler.service";
-import { RESEARCH_ROTATION_DAYS } from "@/modules/tracking/tracking.types";
+import {
+	RANK_CHECK_HOURS_BY_STORE,
+	RESEARCH_ROTATION_DAYS,
+} from "@/modules/tracking/tracking.types";
 
 const TZ = "UTC";
 const HOUR = 60 * 60 * 1000;
@@ -37,35 +42,94 @@ describe("localHourMinute", () => {
 });
 
 describe("isRankCheckDue", () => {
-	it("fires at 00:00 and 12:00 when never run", () => {
+	const appstore = (lastRankCheckAt: Date | null) => ({
+		lastRankCheckAt,
+		store: "appstore" as const,
+	});
+	const playstore = (lastRankCheckAt: Date | null) => ({
+		lastRankCheckAt,
+		store: "playstore" as const,
+	});
+
+	it("fires at 00:00 and 12:00 for the App Store when never run", () => {
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T00:00:00Z"), TZ)).toBe(
+			true,
+		);
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T12:00:00Z"), TZ)).toBe(
+			true,
+		);
+	});
+
+	it("fires only at 00:00 for Google Play", () => {
 		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T00:00:00Z"), TZ),
+			isRankCheckDue(playstore(null), at("2026-07-10T00:00:00Z"), TZ),
 		).toBe(true);
 		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T12:00:00Z"), TZ),
+			isRankCheckDue(playstore(null), at("2026-07-10T12:00:00Z"), TZ),
+		).toBe(false);
+		expect(
+			isRankCheckDue(
+				playstore(at("2026-07-09T00:40:00Z")),
+				at("2026-07-10T00:00:00Z"),
+				TZ,
+			),
 		).toBe(true);
 	});
 
+	it("a manual Play check in the evening does not skip the 00:00 slot", () => {
+		// Manual check finished 19:00, next slot 00:00: Play still runs.
+		expect(
+			isRankCheckDue(
+				playstore(at("2026-07-09T19:00:00Z")),
+				at("2026-07-10T00:00:00Z"),
+				TZ,
+			),
+		).toBe(true);
+		// The App Store keeps its 6 h guard between its two slots.
+		expect(
+			isRankCheckDue(
+				appstore(at("2026-07-09T19:00:00Z")),
+				at("2026-07-10T00:00:00Z"),
+				TZ,
+			),
+		).toBe(false);
+	});
+
+	it("dedupes a double tick at the Play 00:00 slot", () => {
+		const slot = at("2026-07-10T00:00:00Z");
+		const justRan = new Date(slot.getTime() - 30_000);
+		expect(isRankCheckDue(playstore(justRan), slot, TZ)).toBe(false);
+		expect(
+			isRankCheckDue(
+				playstore(new Date(slot.getTime() - 90 * 60_000)),
+				slot,
+				TZ,
+			),
+		).toBe(false);
+		expect(RANK_CHECK_MIN_GAP_MS_BY_STORE.playstore).toBe(2 * HOUR);
+	});
+
+	it("keeps the slots in one named table", () => {
+		expect(RANK_CHECK_HOURS_BY_STORE.appstore).toEqual([0, 12]);
+		expect(RANK_CHECK_HOURS_BY_STORE.playstore).toEqual([0]);
+	});
+
 	it("does not fire off-slot", () => {
-		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T12:30:00Z"), TZ),
-		).toBe(false);
-		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T06:00:00Z"), TZ),
-		).toBe(false);
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T12:30:00Z"), TZ)).toBe(
+			false,
+		);
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T06:00:00Z"), TZ)).toBe(
+			false,
+		);
 	});
 
 	it("is idempotent within a slot (6h gap)", () => {
 		const now = at("2026-07-10T12:00:00Z");
+		expect(isRankCheckDue(appstore(at("2026-07-10T11:00:00Z")), now, TZ)).toBe(
+			false,
+		);
 		expect(
-			isRankCheckDue({ lastRankCheckAt: at("2026-07-10T11:00:00Z") }, now, TZ),
-		).toBe(false);
-		expect(
-			isRankCheckDue(
-				{ lastRankCheckAt: new Date(now.getTime() - 7 * HOUR) },
-				now,
-				TZ,
-			),
+			isRankCheckDue(appstore(new Date(now.getTime() - 7 * HOUR)), now, TZ),
 		).toBe(true);
 	});
 });
@@ -192,6 +256,47 @@ describe("primaryResearchMarket", () => {
 
 	it("uses us when nothing is tracked", () => {
 		expect(primaryResearchMarket([], null)).toBe("us");
+	});
+
+	it("prefers the market where most keywords rank over the alphabet", () => {
+		const atCap = [
+			{ country: "be" },
+			{ country: "be" },
+			{ country: "pl" },
+			{ country: "pl" },
+		];
+		expect(primaryResearchMarket(atCap, null)).toBe("be");
+		expect(
+			primaryResearchMarket(
+				atCap,
+				null,
+				new Map([
+					["be", 1],
+					["pl", 9],
+				]),
+			),
+		).toBe("pl");
+	});
+
+	it("still prefers the home storefront over rankings", () => {
+		expect(primaryResearchMarket(tracked, "de", new Map([["pl", 9]]))).toBe(
+			"de",
+		);
+	});
+});
+
+describe("rankedKeywordsByCountry", () => {
+	it("counts keywords whose newest measurement ranks", () => {
+		const older = new Date("2026-11-03T00:00:00Z");
+		const newer = new Date("2026-11-04T00:00:00Z");
+		const ranked = rankedKeywordsByCountry([
+			{ country: "PL", createdAt: newer, keyword: "quiz", position: 3 },
+			{ country: "pl", createdAt: older, keyword: "quiz", position: null },
+			{ country: "pl", createdAt: newer, keyword: "mafia", position: null },
+			{ country: "pl", createdAt: older, keyword: "mafia", position: 20 },
+			{ country: "be", createdAt: newer, keyword: "quiz", position: 40 },
+		]);
+		expect(Object.fromEntries(ranked)).toEqual({ be: 1, pl: 1 });
 	});
 });
 

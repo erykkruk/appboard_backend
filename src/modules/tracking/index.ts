@@ -1,9 +1,14 @@
 import Elysia from "elysia";
+import { AppsService } from "@/modules/apps/apps.service";
 import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
+import { platformToStore } from "@/modules/research/research.types";
 import { TrackingBoardService } from "./board.service";
+import { KeywordDownloadsService } from "./keyword-downloads.service";
+import { ListingVersionService } from "./listing-versions.service";
 import { TrackingMarketsService } from "./markets.service";
+import { TrackingMarketsHistoryService } from "./markets-history.service";
 import { RankCheckJobs } from "./rank-check.jobs";
 import { trackingSchedule } from "./scheduler.service";
 import { KeywordSuggestionsService } from "./suggestions.service";
@@ -13,10 +18,12 @@ import {
 	boardQuery,
 	bulkAddKeywordsBody,
 	bulkStarKeywordsBody,
+	byVersionQuery,
 	checkRunParams,
 	configPatchBody,
 	historyQuery,
 	keywordParams,
+	marketsHistoryQuery,
 	runForAppBody,
 	runParams,
 	starKeywordBody,
@@ -32,7 +39,7 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 	.get(
 		"/:appId/tracking",
 		async ({ params, workspaceId }) => {
-			await verifyAppOwnership(params.appId, workspaceId!);
+			const app = await AppsService.findOne(workspaceId!, params.appId);
 			const [config, keywords, positions] = await Promise.all([
 				TrackingService.getConfig(params.appId, workspaceId!),
 				TrackingService.getKeywords(params.appId),
@@ -42,7 +49,7 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 				config,
 				keywords,
 				positions,
-				schedule: trackingSchedule(config),
+				schedule: trackingSchedule(config, platformToStore(app.platform)),
 			};
 		},
 		{
@@ -250,6 +257,26 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.get(
+		"/:appId/tracking/markets/history",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return TrackingMarketsHistoryService.getHistory(
+				params.appId,
+				workspaceId!,
+				{ days: query.days },
+			);
+		},
+		{
+			detail: {
+				description:
+					"Day-by-day history of the markets table (default 90 days, max 180; days in the scheduler time zone, Europe/Warsaw by default). Per country and day: tracked keywords, keywords measured that day, and ranked / top 10 / top 50 / median position not counting keywords with the app's own name. A day counts every tracked keyword at its last measurement on or before that day, like the live table; days without any measurement in a market are left out.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: marketsHistoryQuery,
+		},
+	)
+	.get(
 		"/:appId/tracking/board",
 		async ({ params, query, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
@@ -265,6 +292,40 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 			},
 			params: appIdParams,
 			query: boardQuery,
+		},
+	)
+	.get(
+		"/:appId/tracking/keyword-downloads",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return KeywordDownloadsService.forMarket(params.appId, workspaceId!, {
+				country: query.country,
+			});
+		},
+		{
+			detail: {
+				description:
+					"How many downloads each tracked keyword of one market brings. Google Play apps: real store listing installs and visitors per search term from the Play Console bulk report (latest full month and month to date; Play reports search terms for all countries together and omits small volumes, so a keyword missing from the report has `play.latestMonth: null`). App Store apps: an ESTIMATE, not Apple data (Apple publishes no per-keyword downloads): the download curve of the keyword score (searches x tap-through rate at the position x conversion range) read at the latest tracked position, the same model as the keyword score summary, per day and per month (x30). Keywords without a score or a rank have `estimate: null`.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: boardQuery,
+		},
+	)
+	.get(
+		"/:appId/tracking/by-version",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return ListingVersionService.getByVersion(params.appId, query.country);
+		},
+		{
+			detail: {
+				description:
+					"Positions of one market per store version: per keyword the last and best position while each version was live, measurements and the change vs the previous version; per version its release date, measured period, listing text (title, subtitle / short description, keywords) and which fields changed. Versions newest first. Omit country for the first tracked market.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: byVersionQuery,
 		},
 	)
 	.get(

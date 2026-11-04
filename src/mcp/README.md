@@ -97,8 +97,9 @@ For the hosted backend use `"APPBOARD_API_URL": "https://api.appboard.dev"`.
 | `ai_translate_localization`      | Translate localization fields with ASO context                  |
 | `ai_generate_release_notes`      | Generate release notes (What's New)                             |
 | `ai_generate_listing_field`      | Generate / rephrase a single listing field                      |
-| `reviews_list`                   | List reviews (filter by rating, language, reply, store)         |
+| `reviews_list`                   | List reviews (filter by rating, language, reply, store, country; scope=group) |
 | `reviews_reply`                  | Reply to a review                                               |
+| `reviews_ratings_summary`        | Store ratings per store and country (star-only included), totals |
 | `research_keyword_scores`        | Score keywords: popularity, difficulty + tiers, opportunity, classification, download estimates |
 | `purchases_list`                 | List in-app purchases for an app                                |
 | `publishing_validate_screenshot` | Validate a screenshot's dimensions for a display type           |
@@ -106,13 +107,18 @@ For the hosted backend use `"APPBOARD_API_URL": "https://api.appboard.dev"`.
 | `stores_import_app`              | Add an app from a public store link (no credentials); `devices` marks Apple TV / Android TV |
 | `apps_update_devices`            | Set the form factors of an app record (`phone`, `tablet`, `tv`) |
 | `tracking_get_markets`           | Per-market rank overview: tracked / ranked / top 10 / top 50, median and average position, movement, failed lookups, last check |
+| `tracking_get_markets_history`   | Day-by-day history of the per-market overview (tracked, measured, ranked / top 10 / top 50 / median without the app name), 1-180 days |
 | `tracking_get_board`             | Tracker board for one market (positions, scores, movement, metadata gaps) |
+| `tracking_get_by_version`        | Positions of one market per store version (last / best per keyword, change vs previous version, listing text per version) |
 | `tracking_add_keywords`          | Track keywords in many markets in one call (`items: [{ country, keywords[] }]`) |
 | `tracking_star_keywords`         | Star / unstar tracked keywords as the team's own targets (`items: [{ country, keywords[] }]`, `starred`) |
 | `tracking_remove_keyword`        | Stop tracking a keyword (by `keywordId` or `country` + `keyword`) |
 | `tracking_run_check`             | Start a background rank check (throttled per store) |
 | `tracking_check_status`          | Status / progress / failures of the latest or a given rank check |
 | `tracking_update_config`         | Rank tracking, auto-research, digest email settings |
+| `daily_summary_get`              | Workspace daily summary email: on/off, recipient, schedule, last send |
+| `daily_summary_update`           | Turn the daily summary on/off or set its recipient (replaces per-app digests and research reports while on) |
+| `daily_summary_send_test`        | Send the daily summary now (test, does not count as today's) |
 | `research_runs_list`             | Saved research runs for an app |
 | `research_run_start`             | Run research for an app in one country and save it |
 | `store_performance_get`          | Google Play store listing acquisitions / visitors / conversion per month by traffic source, search term, campaign and country, from the Play bulk reports bucket |

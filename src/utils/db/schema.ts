@@ -15,9 +15,11 @@ import {
 import type { AppDevice } from "@/config/const";
 import type { AppAuditReport } from "@/modules/audit/audit.types";
 import type {
+	KeywordCompetitor,
 	KeywordScore,
 	ResearchRunReport,
 } from "@/modules/research/research.types";
+import type { RatingHistogram } from "@/modules/reviews/ratings.types";
 import type { SceneData } from "@/modules/screenshot-scenes/screenshot-scenes.types";
 import type { RankLookupFailure } from "@/modules/tracking/tracking.types";
 
@@ -368,6 +370,55 @@ export const reviews = pgTable(
 	},
 	(t) => [index().on(t.appId)],
 );
+
+// Daily public store rating per app and storefront country: every star
+// rating (star-only included), from the iTunes Lookup API and the Google Play
+// store page. Only countries with at least one rating get a row.
+export const appRatingSnapshots = pgTable(
+	"app_rating_snapshots",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		average: real(),
+		country: varchar({ length: 2 }).notNull(),
+		currentVersionAverage: real(),
+		currentVersionRatingCount: integer(),
+		/** Local day (scheduler timezone) the snapshot belongs to. */
+		day: date({ mode: "string" }).notNull(),
+		fetchedAt: timestamp().notNull(),
+		histogram: jsonb().$type<RatingHistogram>(),
+		ratingCount: integer().notNull(),
+		storeType: varchar({ length: 50 }).notNull(),
+		version: varchar({ length: 50 }),
+		writtenReviews: integer(),
+	},
+	(t) => [unique().on(t.appId, t.country, t.day), index().on(t.appId, t.day)],
+);
+
+// Progress of the day's rating refresh per app, so a run cut short by a
+// restart or a throttling store resumes where it stopped.
+export const appRatingRefreshes = pgTable("app_rating_refreshes", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	appId: uuid()
+		.notNull()
+		.references(() => apps.id, { onDelete: "cascade" })
+		.unique(),
+	completedAt: timestamp(),
+	/** Local day of the run in progress or last finished. */
+	day: date({ mode: "string" }).notNull(),
+	doneCountries: jsonb().$type<string[]>().notNull().default([]),
+	fullSweep: boolean().notNull().default(false),
+	lastError: text(),
+	/** Last day every storefront was checked, not only the rated ones. */
+	lastFullSweepDay: date({ mode: "string" }),
+	/** Set when a store throttled the run: no retry before this. */
+	nextAttemptAt: timestamp(),
+	reviewsSynced: boolean().notNull().default(false),
+});
 
 export const appAsoProfiles = pgTable("app_aso_profiles", {
 	id: uuid().defaultRandom().primaryKey(),
@@ -830,6 +881,24 @@ export const appTrackingConfig = pgTable(
 	(t) => [index().on(t.workspaceId)],
 );
 
+// One morning email per workspace that replaces the per-app rank digests and
+// research reports while it is enabled. Off by default (backward compatible).
+export const workspaceDailySummary = pgTable("workspace_daily_summary", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	// NULL = the first per-app notifyEmail of the workspace, then the owner.
+	email: varchar({ length: 255 }),
+	enabled: boolean().notNull().default(false),
+	lastSentAt: timestamp(),
+	// Local calendar day (scheduler timezone, YYYY-MM-DD) of the last
+	// scheduled send. Claimed atomically before sending: never twice a day.
+	lastSentOn: varchar({ length: 10 }),
+	workspaceId: uuid()
+		.notNull()
+		.references(() => workspaces.id, { onDelete: "cascade" })
+		.unique(),
+});
+
 // Keywords the user wants to track per app + country. Capped at 40 per
 // (appId, country) in the service.
 export const trackedKeywords = pgTable(
@@ -848,6 +917,36 @@ export const trackedKeywords = pgTable(
 	(t) => [unique().on(t.appId, t.country, t.keyword), index().on(t.appId)],
 );
 
+// One state of an app's live store listing for one listing language: the
+// store version plus the text that ranks (title, subtitle / short
+// description, keyword field). A new row is written only when the state
+// differs from the previous row of the same (app, language), so A -> B -> A
+// gives three rows and every row is one contiguous period. `language` NULL =
+// the market's listing language is unknown, only the version is. `inferred`
+// rows were rebuilt afterwards from the store's version history, not seen by
+// a rank check.
+export const listingVersions = pgTable(
+	"listing_versions",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		fingerprint: varchar({ length: 64 }).notNull(),
+		firstSeenAt: timestamp().notNull(),
+		inferred: boolean().notNull().default(false),
+		keywords: text(),
+		language: varchar({ length: 20 }),
+		lastSeenAt: timestamp().notNull(),
+		subtitle: varchar({ length: 255 }),
+		title: varchar({ length: 255 }),
+		versionReleasedAt: timestamp(),
+		versionString: varchar({ length: 50 }),
+	},
+	(t) => [index().on(t.appId, t.language, t.firstSeenAt)],
+);
+
 // Time-series of a tracked keyword's search-ranking position. `createdAt` is
 // the capture time; `position` NULL means "not in the top 50".
 export const rankSnapshots = pgTable(
@@ -860,6 +959,11 @@ export const rankSnapshots = pgTable(
 			.references(() => apps.id, { onDelete: "cascade" }),
 		country: varchar({ length: 2 }).notNull(),
 		keyword: varchar({ length: 255 }).notNull(),
+		// The listing state live when this was measured; NULL = unknown
+		// (measured before versions were recorded and not recoverable).
+		listingVersionId: uuid().references(() => listingVersions.id, {
+			onDelete: "set null",
+		}),
 		platform: varchar({ length: 20 }).notNull(),
 		position: integer(),
 	},
@@ -937,6 +1041,44 @@ export const keywordScoreSnapshots = pgTable(
 		index().on(t.workspaceId, t.day),
 	],
 );
+
+// Global keyword score cache: the App Store search behind a keyword score
+// depends only on (keyword, country), never on the asking app or workspace,
+// so one row serves every workspace. Holds the raw top-25 search result the
+// score is derived from (difficulty, tiers, internal popularity are pure math
+// over it, recomputed on read) and when the store was asked. Nothing app- or
+// workspace-specific (own rank, Apple Ads source) is stored here.
+export const keywordScoreCache = pgTable(
+	"keyword_score_cache",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		competitors: jsonb().$type<KeywordCompetitor[]>().notNull(),
+		country: varchar({ length: 2 }).notNull(),
+		keyword: varchar({ length: 255 }).notNull(),
+		scoredAt: timestamp().notNull(),
+	},
+	(t) => [unique().on(t.keyword, t.country), index().on(t.scoredAt)],
+);
+
+// One row per local day of the nightly cache refresh: how many stale
+// (keyword, country) pairs that day's slice takes and how far it got, so a
+// restart resumes the slice instead of starting a new one.
+export const keywordScoreRefreshRuns = pgTable("keyword_score_refresh_runs", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	day: date({ mode: "string" }).notNull().unique(),
+	due: integer().notNull().default(0),
+	error: text(),
+	failed: integer().notNull().default(0),
+	finishedAt: timestamp(),
+	pairs: integer().notNull().default(0),
+	refreshed: integer().notNull().default(0),
+	startedAt: timestamp().notNull().defaultNow(),
+	// running | completed | failed
+	status: varchar({ length: 16 }).notNull().default("running"),
+	target: integer().notNull().default(0),
+});
 
 // ── Public ASO check-up reports ─────────────────────────────────────
 // Anonymous crowd data from the free browser-side ASO check (no account):
@@ -1125,6 +1267,8 @@ export const schema = {
 	appGroupMembers,
 	appGroups,
 	appPrivacyDeclarations,
+	appRatingRefreshes,
+	appRatingSnapshots,
 	apps,
 	appTrackingConfig,
 	appVersions,
@@ -1132,6 +1276,8 @@ export const schema = {
 	errorLogs,
 	groupAsoProfiles,
 	inAppPurchases,
+	keywordScoreCache,
+	keywordScoreRefreshRuns,
 	keywordScoreSnapshots,
 	listingHistory,
 	listings,
@@ -1154,6 +1300,7 @@ export const schema = {
 	user,
 	verification,
 	versionLocalizations,
+	workspaceDailySummary,
 	workspaceMembers,
 	workspaces,
 	workspaceVault,

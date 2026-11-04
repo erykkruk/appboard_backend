@@ -1,11 +1,13 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { HistoryService } from "@/modules/history/history.service";
 import type { ResearchStore } from "@/modules/research/research.types";
 import { db } from "@/utils/db";
 import {
 	appAsoProfiles,
+	apps,
 	appTrackingConfig,
+	listingVersions,
 	rankSnapshots,
 	trackedKeywords,
 	user,
@@ -14,6 +16,10 @@ import {
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import { AppEventsService, CHART_EVENT_TYPES } from "./app-events.service";
+import {
+	type ListingVersionApp,
+	ListingVersionService,
+} from "./listing-versions.service";
 import { RankCheckJobs } from "./rank-check.jobs";
 import {
 	getRankLookupRuntime,
@@ -21,6 +27,7 @@ import {
 	type RankLookupRuntime,
 	StoreBreaker,
 	type StoreBreakerLimits,
+	throwStoreDeferred,
 	throwStoreThrottled,
 } from "./rank-lookup";
 import { rankTrackingSupport } from "./rank-support";
@@ -547,20 +554,27 @@ export class TrackingService {
 		}
 		// One run per store at a time: the breaker and the keyword list are
 		// built once it is our turn, so waiting does not count against the run.
-		return runtime.runs.run(store, () =>
-			TrackingService.measureKeywords(
-				app,
+		return runtime.runs.run(store, () => {
+			// The run ahead of us got the store blocked: every lookup would be
+			// refused, so end as deferred before the first store request.
+			const deferred = runtime.throttles[store].deferredReason();
+			if (deferred) {
+				log.warn({ appId, kind, store }, "Rank check deferred: store blocked");
+				throwStoreDeferred(deferred);
+			}
+			return TrackingService.measureKeywords(
+				{ ...app, id: appId },
 				appId,
 				store,
 				kind,
 				runtime,
 				options,
-			),
-		);
+			);
+		});
 	}
 
 	private static async measureKeywords(
-		app: { externalId: string },
+		app: ListingVersionApp,
 		appId: string,
 		store: ResearchStore,
 		kind: RankCheckKind,
@@ -580,7 +594,27 @@ export class TrackingService {
 			ranked: 0,
 			total: keywords.length,
 		};
+		// Which store version and listing text each measurement was taken
+		// against. Attributing the snapshots from before this existed comes
+		// first, so it can tell old snapshots from this run's.
+		const countries = keywords.map((k) => k.country);
+		await ListingVersionService.backfill(
+			app,
+			store,
+			countries[0] ?? DEFAULT_TRACKING_COUNTRY,
+			runtime,
+		);
+		const listingVersionByCountry = await ListingVersionService.recordForRun(
+			app,
+			store,
+			countries,
+			runtime,
+		);
 		const breaker = new StoreBreaker(runtime.now, options.breakerLimits);
+		// Scheduled slots share Play searches between apps; a manual check
+		// always asks the store, so "Check now" is a fresh measurement.
+		const reuseSearch = kind === "scheduled";
+		let reused = 0;
 		const stopIfTripped = () => {
 			const reason = breaker.trippedReason;
 			if (!reason) return;
@@ -600,6 +634,7 @@ export class TrackingService {
 				country,
 				runtime,
 				breaker.deadlineAt(),
+				{ reuseSearch },
 			);
 			if (!outcome.ok && outcome.storeBlocked) {
 				breaker.recordStoreBlocked(outcome.storeBlocked);
@@ -615,12 +650,17 @@ export class TrackingService {
 					appId,
 					country,
 					keyword,
+					listingVersionId:
+						listingVersionByCountry.get(country.toLowerCase()) ?? null,
 					platform: store,
 					position: outcome.position,
 				});
 				progress.measured++;
 				if (outcome.position !== null) progress.ranked++;
-				breaker.recordSuccess();
+				// A reused search is not a store answer: it must not hide a
+				// failure streak or a stalled store from the breaker.
+				if (outcome.reused) reused++;
+				else breaker.recordSuccess();
 			} else {
 				// No snapshot: a NULL row would read as "fell out of the results".
 				progress.failed++;
@@ -651,6 +691,7 @@ export class TrackingService {
 				failed: progress.failed,
 				kind,
 				ranked: progress.ranked,
+				reused,
 				snapshots: progress.measured,
 			},
 			"Rank check complete",
@@ -678,9 +719,17 @@ export class TrackingService {
 		if (filters?.keyword) {
 			conditions.push(eq(rankSnapshots.keyword, filters.keyword));
 		}
+		// The store version live at each measurement (NULL = unknown).
 		const snapshots = await db
-			.select()
+			.select({
+				...getTableColumns(rankSnapshots),
+				version: listingVersions.versionString,
+			})
 			.from(rankSnapshots)
+			.leftJoin(
+				listingVersions,
+				eq(rankSnapshots.listingVersionId, listingVersions.id),
+			)
 			.where(and(...conditions))
 			.orderBy(asc(rankSnapshots.createdAt));
 
@@ -828,10 +877,15 @@ export class TrackingService {
 
 	// ── Scheduler helpers (cross-workspace) ──────────────────────────
 
+	/** Rank-tracking configs plus the app platform (it picks the slots). */
 	static async listRankTrackingConfigs() {
 		return db
-			.select()
+			.select({
+				...getTableColumns(appTrackingConfig),
+				platform: apps.platform,
+			})
 			.from(appTrackingConfig)
+			.innerJoin(apps, eq(apps.id, appTrackingConfig.appId))
 			.where(eq(appTrackingConfig.rankTrackingEnabled, true));
 	}
 

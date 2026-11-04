@@ -1,4 +1,5 @@
 import type { AppDevice } from "@/config/const";
+import type { ResearchStore } from "@/modules/research/research.types";
 import type { RankCheckRunView } from "./rank-check.jobs";
 import type { RankTrackingSupport } from "./rank-support";
 
@@ -15,9 +16,21 @@ export const AUTO_RESEARCH_FREQUENCIES = [
 ] as const;
 export type AutoResearchFrequency = (typeof AUTO_RESEARCH_FREQUENCIES)[number];
 
-// The two daily slots (local hours) the scheduled rank check runs at:
-// 00:00 ("12:00 am") and 12:00 ("12:00 pm").
-export const RANK_CHECK_HOURS = [0, 12] as const;
+// Scheduled rank-check slots (local hours) per store. The App Store runs at
+// 00:00 and 12:00. Google Play runs once, at 00:00: two full checks a day of
+// two Play apps (~4,000 Play web searches a slot for Buzzin) drew HTTP 429
+// from Google on 2026-11-04. Manual checks are not limited by this.
+export const RANK_CHECK_HOURS_BY_STORE: Record<
+	ResearchStore,
+	readonly number[]
+> = {
+	appstore: [0, 12],
+	playstore: [0],
+};
+
+export function rankCheckHoursFor(store: ResearchStore): readonly number[] {
+	return RANK_CHECK_HOURS_BY_STORE[store];
+}
 
 export const DEFAULT_SCHEDULER_TZ = "Europe/Warsaw";
 
@@ -174,4 +187,41 @@ export interface TrackingMarketsOverview {
 	markets: TrackingMarket[];
 	rankTracking: RankTrackingSupport;
 	totals: TrackingMarketTotals;
+}
+
+/** Days of market history the dashboard asks for by default. */
+export const MARKET_HISTORY_DEFAULT_DAYS = 90;
+/** Same horizon as the tracker board. */
+export const MARKET_HISTORY_MAX_DAYS = 180;
+
+/**
+ * One market on one local day, counted like the markets table: every tracked
+ * keyword at its last measurement on or before that day. `ranked`, `top10`,
+ * `top50` and `median` leave out keywords that carry the app's own name.
+ */
+export interface TrackingMarketHistoryPoint {
+	/** Local calendar day in the scheduler time zone, "2026-11-04". */
+	day: string;
+	/** Keywords measured on this very day (the rest carry an older position). */
+	measured: number;
+	median: number | null;
+	ranked: number;
+	top10: number;
+	top50: number;
+	/** Currently tracked keywords already tracked (or measured) by that day. */
+	tracked: number;
+}
+
+export interface TrackingMarketHistory {
+	country: string;
+	/** Oldest first; only days with at least one measurement in the market. */
+	points: TrackingMarketHistoryPoint[];
+}
+
+export interface TrackingMarketsHistory {
+	/** First and last day of the window, inclusive. */
+	from: string;
+	markets: TrackingMarketHistory[];
+	timeZone: string;
+	to: string;
 }

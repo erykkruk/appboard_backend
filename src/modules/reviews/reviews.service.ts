@@ -1,4 +1,14 @@
-import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import {
+	and,
+	desc,
+	eq,
+	getTableColumns,
+	inArray,
+	isNotNull,
+	isNull,
+	or,
+	sql,
+} from "drizzle-orm";
 import type { StoreType } from "@/config/const";
 import { appstoreMeta } from "@/modules/research/appstore.client";
 import { playstoreMeta } from "@/modules/research/playstore.client";
@@ -9,9 +19,17 @@ import {
 import { storeFactsFrom } from "@/providers/public/shared";
 import type { StoreFacts } from "@/providers/store-provider";
 import { db } from "@/utils/db";
-import { apps, reviews, stores } from "@/utils/db/schema";
+import {
+	appGroupMembers,
+	appGroups,
+	apps,
+	reviews,
+	stores,
+} from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
+import type { RatingScope } from "./ratings.types";
+import { alpha3ForCountry, countryFromTerritory } from "./store-countries";
 
 const log = createLogger("reviews-service");
 
@@ -52,6 +70,67 @@ function assertReplyAllowed(
 			});
 		}
 	}
+}
+
+export interface ReviewScope {
+	appIds: string[];
+	group: { id: string; name: string } | null;
+}
+
+/**
+ * The apps a Reviews request covers: the app alone, or with `scope=group`
+ * every app of its app group (the iPhone and Android records of one product).
+ * Members are re-checked against the workspace. An app in no group falls
+ * back to itself.
+ */
+export async function resolveReviewScope(
+	appId: string,
+	workspaceId: string,
+	scope: RatingScope = "app",
+): Promise<ReviewScope> {
+	if (scope !== "group") return { appIds: [appId], group: null };
+	const [membership] = await db
+		.select({ groupId: appGroups.id, name: appGroups.name })
+		.from(appGroupMembers)
+		.innerJoin(appGroups, eq(appGroupMembers.groupId, appGroups.id))
+		.where(
+			and(
+				eq(appGroupMembers.appId, appId),
+				eq(appGroups.workspaceId, workspaceId),
+			),
+		)
+		.limit(1);
+	if (!membership) return { appIds: [appId], group: null };
+	const members = await db
+		.select({ appId: appGroupMembers.appId })
+		.from(appGroupMembers)
+		.innerJoin(apps, eq(appGroupMembers.appId, apps.id))
+		.innerJoin(stores, eq(apps.storeId, stores.id))
+		.where(
+			and(
+				eq(appGroupMembers.groupId, membership.groupId),
+				eq(stores.workspaceId, workspaceId),
+			),
+		)
+		.orderBy(appGroupMembers.sortOrder);
+	const appIds = members.map((m) => m.appId);
+	return {
+		appIds: appIds.includes(appId) ? appIds : [appId, ...appIds],
+		group: { id: membership.groupId, name: membership.name },
+	};
+}
+
+/** Reviews of one country, whether stored as "us" or as ASC's "USA". */
+function countryCondition(country: string) {
+	const alpha2 = country.toLowerCase();
+	const alpha3 = alpha3ForCountry(alpha2);
+	const lower = sql`lower(${reviews.territory})`;
+	return alpha3
+		? or(
+				sql`${lower} = ${alpha2}`,
+				sql`upper(${reviews.territory}) = ${alpha3}`,
+			)
+		: sql`${lower} = ${alpha2}`;
 }
 
 export class ReviewsService {
@@ -138,15 +217,17 @@ export class ReviewsService {
 	}
 
 	static async list(
-		appId: string,
+		appIds: string | string[],
 		filters?: {
+			country?: string;
 			hasReply?: boolean;
 			language?: string;
 			rating?: number;
 			storeType?: string;
 		},
 	) {
-		const conditions = [eq(reviews.appId, appId)];
+		const ids = Array.isArray(appIds) ? appIds : [appIds];
+		const conditions = [inArray(reviews.appId, ids)];
 
 		if (filters?.rating) {
 			conditions.push(eq(reviews.rating, filters.rating));
@@ -157,17 +238,48 @@ export class ReviewsService {
 		if (filters?.storeType) {
 			conditions.push(eq(reviews.storeType, filters.storeType));
 		}
+		if (filters?.country) {
+			const condition = countryCondition(filters.country);
+			if (condition) conditions.push(condition);
+		}
 		if (filters?.hasReply === true) {
 			conditions.push(isNotNull(reviews.replyText));
 		} else if (filters?.hasReply === false) {
 			conditions.push(isNull(reviews.replyText));
 		}
 
-		return db
-			.select()
+		const rows = await db
+			.select({
+				...getTableColumns(reviews),
+				appName: apps.name,
+				connectionMode: stores.connectionMode,
+			})
 			.from(reviews)
+			.innerJoin(apps, eq(reviews.appId, apps.id))
+			.innerJoin(stores, eq(apps.storeId, stores.id))
 			.where(and(...conditions))
 			.orderBy(desc(reviews.reviewDate));
+
+		return rows.map(({ connectionMode, ...row }) => ({
+			...row,
+			// Replies go out through the store API; a link-imported app has none.
+			canReply: connectionMode !== "public",
+			country: countryFromTerritory(row.territory),
+		}));
+	}
+
+	/** Countries the reviews of these apps come from, for the filter. */
+	static async countries(appIds: string[]): Promise<string[]> {
+		const rows = await db
+			.selectDistinct({ territory: reviews.territory })
+			.from(reviews)
+			.where(inArray(reviews.appId, appIds));
+		const countries = new Set<string>();
+		for (const row of rows) {
+			const country = countryFromTerritory(row.territory);
+			if (country) countries.add(country);
+		}
+		return [...countries].sort();
 	}
 
 	static async reply(appId: string, reviewId: string, text: string) {
@@ -195,7 +307,9 @@ export class ReviewsService {
 		return { success: true };
 	}
 
-	static async getStats(appId: string) {
+	static async getStats(appIds: string | string[]) {
+		const ids = Array.isArray(appIds) ? appIds : [appIds];
+		const appId = ids[0];
 		const result = await db
 			.select({
 				avgRating: sql<number>`avg(${reviews.rating})::float`,
@@ -203,7 +317,7 @@ export class ReviewsService {
 				rating: reviews.rating,
 			})
 			.from(reviews)
-			.where(eq(reviews.appId, appId))
+			.where(inArray(reviews.appId, ids))
 			.groupBy(reviews.rating);
 
 		const totalReviews = result.reduce((sum, r) => sum + r.count, 0);
@@ -227,7 +341,7 @@ export class ReviewsService {
 		const [noReplyResult] = await db
 			.select({ count: sql<number>`count(*)::int` })
 			.from(reviews)
-			.where(and(eq(reviews.appId, appId), isNull(reviews.replyText)));
+			.where(and(inArray(reviews.appId, ids), isNull(reviews.replyText)));
 
 		// The synced reviews are only the ones with text. The store's own
 		// average counts every star rating, so it is the number to show first -

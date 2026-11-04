@@ -1,10 +1,11 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { researchController } from "@/modules/research";
 import { ResearchService } from "@/modules/research/research.service";
 import type { KeywordScore } from "@/modules/research/research.types";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import { authGuard, authRequest } from "./setup";
+import { clearKeywordScoreCache } from "./test-helpers";
 
 const app = new Elysia()
 	.use(errorHandler)
@@ -28,6 +29,8 @@ function itunesResult(i: number, term: string) {
 }
 
 const originalFetch = globalThis.fetch;
+// Scores are cached across requests; every test here stubs its own store.
+beforeEach(clearKeywordScoreCache);
 afterEach(() => {
 	globalThis.fetch = originalFetch;
 });
