@@ -68,6 +68,10 @@ export const boardQuery = t.Object({
 	country: t.Optional(country),
 });
 
+export const byVersionQuery = t.Object({
+	country: t.Optional(country),
+});
+
 export const suggestionsQuery = t.Object({
 	country,
 });

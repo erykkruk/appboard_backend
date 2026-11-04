@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { HistoryService } from "@/modules/history/history.service";
 import type { ResearchStore } from "@/modules/research/research.types";
@@ -6,6 +6,7 @@ import { db } from "@/utils/db";
 import {
 	appAsoProfiles,
 	appTrackingConfig,
+	listingVersions,
 	rankSnapshots,
 	trackedKeywords,
 	user,
@@ -14,6 +15,10 @@ import {
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
 import { AppEventsService, CHART_EVENT_TYPES } from "./app-events.service";
+import {
+	type ListingVersionApp,
+	ListingVersionService,
+} from "./listing-versions.service";
 import { RankCheckJobs } from "./rank-check.jobs";
 import {
 	getRankLookupRuntime,
@@ -549,7 +554,7 @@ export class TrackingService {
 		// built once it is our turn, so waiting does not count against the run.
 		return runtime.runs.run(store, () =>
 			TrackingService.measureKeywords(
-				app,
+				{ ...app, id: appId },
 				appId,
 				store,
 				kind,
@@ -560,7 +565,7 @@ export class TrackingService {
 	}
 
 	private static async measureKeywords(
-		app: { externalId: string },
+		app: ListingVersionApp,
 		appId: string,
 		store: ResearchStore,
 		kind: RankCheckKind,
@@ -580,6 +585,22 @@ export class TrackingService {
 			ranked: 0,
 			total: keywords.length,
 		};
+		// Which store version and listing text each measurement was taken
+		// against. Attributing the snapshots from before this existed comes
+		// first, so it can tell old snapshots from this run's.
+		const countries = keywords.map((k) => k.country);
+		await ListingVersionService.backfill(
+			app,
+			store,
+			countries[0] ?? DEFAULT_TRACKING_COUNTRY,
+			runtime,
+		);
+		const listingVersionByCountry = await ListingVersionService.recordForRun(
+			app,
+			store,
+			countries,
+			runtime,
+		);
 		const breaker = new StoreBreaker(runtime.now, options.breakerLimits);
 		const stopIfTripped = () => {
 			const reason = breaker.trippedReason;
@@ -615,6 +636,8 @@ export class TrackingService {
 					appId,
 					country,
 					keyword,
+					listingVersionId:
+						listingVersionByCountry.get(country.toLowerCase()) ?? null,
 					platform: store,
 					position: outcome.position,
 				});
@@ -678,9 +701,17 @@ export class TrackingService {
 		if (filters?.keyword) {
 			conditions.push(eq(rankSnapshots.keyword, filters.keyword));
 		}
+		// The store version live at each measurement (NULL = unknown).
 		const snapshots = await db
-			.select()
+			.select({
+				...getTableColumns(rankSnapshots),
+				version: listingVersions.versionString,
+			})
 			.from(rankSnapshots)
+			.leftJoin(
+				listingVersions,
+				eq(rankSnapshots.listingVersionId, listingVersions.id),
+			)
 			.where(and(...conditions))
 			.orderBy(asc(rankSnapshots.createdAt));
 

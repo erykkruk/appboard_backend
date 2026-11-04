@@ -1,8 +1,14 @@
+import config from "@/config";
 import { ResearchService } from "@/modules/research/research.service";
 import type { ResearchStore } from "@/modules/research/research.types";
 import { parseRetryAfterMs, sleep } from "@/utils/backoff";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
+import {
+	NO_STORE_VERSIONS,
+	publicStoreVersions,
+	type StoreVersionSource,
+} from "./store-versions";
 
 const log = createLogger("rank-lookup");
 
@@ -313,6 +319,8 @@ export interface RankLookupRuntime {
 	runs: StoreRunQueue;
 	sleep: Sleeper;
 	throttles: Record<ResearchStore, StoreThrottle>;
+	/** Which store version is live, recorded next to every measurement. */
+	versions: StoreVersionSource;
 }
 
 function buildRuntime(
@@ -321,6 +329,7 @@ function buildRuntime(
 		now?: Clock;
 		sleep?: Sleeper;
 		spacingMs?: Partial<Record<ResearchStore, number>>;
+		versions?: StoreVersionSource;
 	} = {},
 ): RankLookupRuntime {
 	const now = overrides.now ?? Date.now;
@@ -339,6 +348,10 @@ function buildRuntime(
 			appstore: new StoreThrottle(spacing.appstore, now, wait, "appstore"),
 			playstore: new StoreThrottle(spacing.playstore, now, wait, "playstore"),
 		},
+		// Tests never reach a store; they inject `versions` to exercise it.
+		versions:
+			overrides.versions ??
+			(config.NODE_ENV === "test" ? NO_STORE_VERSIONS : publicStoreVersions),
 	};
 }
 

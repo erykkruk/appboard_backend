@@ -3,6 +3,7 @@ import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import { TrackingBoardService } from "./board.service";
+import { ListingVersionService } from "./listing-versions.service";
 import { TrackingMarketsService } from "./markets.service";
 import { RankCheckJobs } from "./rank-check.jobs";
 import { trackingSchedule } from "./scheduler.service";
@@ -13,6 +14,7 @@ import {
 	boardQuery,
 	bulkAddKeywordsBody,
 	bulkStarKeywordsBody,
+	byVersionQuery,
 	checkRunParams,
 	configPatchBody,
 	historyQuery,
@@ -265,6 +267,22 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 			},
 			params: appIdParams,
 			query: boardQuery,
+		},
+	)
+	.get(
+		"/:appId/tracking/by-version",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return ListingVersionService.getByVersion(params.appId, query.country);
+		},
+		{
+			detail: {
+				description:
+					"Positions of one market per store version: per keyword the last and best position while each version was live, measurements and the change vs the previous version; per version its release date, measured period, listing text (title, subtitle / short description, keywords) and which fields changed. Versions newest first. Omit country for the first tracked market.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: byVersionQuery,
 		},
 	)
 	.get(

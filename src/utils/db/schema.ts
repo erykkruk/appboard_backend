@@ -848,6 +848,36 @@ export const trackedKeywords = pgTable(
 	(t) => [unique().on(t.appId, t.country, t.keyword), index().on(t.appId)],
 );
 
+// One state of an app's live store listing for one listing language: the
+// store version plus the text that ranks (title, subtitle / short
+// description, keyword field). A new row is written only when the state
+// differs from the previous row of the same (app, language), so A -> B -> A
+// gives three rows and every row is one contiguous period. `language` NULL =
+// the market's listing language is unknown, only the version is. `inferred`
+// rows were rebuilt afterwards from the store's version history, not seen by
+// a rank check.
+export const listingVersions = pgTable(
+	"listing_versions",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		appId: uuid()
+			.notNull()
+			.references(() => apps.id, { onDelete: "cascade" }),
+		fingerprint: varchar({ length: 64 }).notNull(),
+		firstSeenAt: timestamp().notNull(),
+		inferred: boolean().notNull().default(false),
+		keywords: text(),
+		language: varchar({ length: 20 }),
+		lastSeenAt: timestamp().notNull(),
+		subtitle: varchar({ length: 255 }),
+		title: varchar({ length: 255 }),
+		versionReleasedAt: timestamp(),
+		versionString: varchar({ length: 50 }),
+	},
+	(t) => [index().on(t.appId, t.language, t.firstSeenAt)],
+);
+
 // Time-series of a tracked keyword's search-ranking position. `createdAt` is
 // the capture time; `position` NULL means "not in the top 50".
 export const rankSnapshots = pgTable(
@@ -860,6 +890,11 @@ export const rankSnapshots = pgTable(
 			.references(() => apps.id, { onDelete: "cascade" }),
 		country: varchar({ length: 2 }).notNull(),
 		keyword: varchar({ length: 255 }).notNull(),
+		// The listing state live when this was measured; NULL = unknown
+		// (measured before versions were recorded and not recoverable).
+		listingVersionId: uuid().references(() => listingVersions.id, {
+			onDelete: "set null",
+		}),
 		platform: varchar({ length: 20 }).notNull(),
 		position: integer(),
 	},

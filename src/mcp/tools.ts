@@ -519,6 +519,28 @@ export const tools: RegisteredTool[] = [
 	}),
 	defineTool({
 		description:
+			"Rank positions of ONE market per store version: for every keyword " +
+			"the last and best position while each version was live, how many " +
+			"measurements, and the change vs the previous version; for every " +
+			"version its release date, measured period, listing text (title, " +
+			"subtitle / short description, keyword field) and which of those " +
+			"changed. Versions newest first; key 'unknown' = measured before " +
+			"versions were recorded. Omit country to get the first tracked market.",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.tracking["by-version"].get({
+					query: input.country ? { country: input.country } : {},
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			country: countrySchema.optional(),
+		},
+		name: "tracking_get_by_version",
+	}),
+	defineTool({
+		description:
 			"Track keywords in many markets at once: items = [{ country, " +
 			"keywords[] }] (up to 250 markets, 100 keywords each per call). " +
 			"Keywords are lowercased and deduped; each market holds at most 80. " +
