@@ -20,6 +20,7 @@ import { auditController } from "@/modules/audit";
 import { authGuard } from "@/modules/auth";
 import { apiKeysController } from "@/modules/auth/api-keys.controller";
 import { bulkController } from "@/modules/bulk";
+import { dailySummaryController } from "@/modules/daily-summary";
 import { demoController } from "@/modules/demo";
 import { devSessionController, devSessionEnabled } from "@/modules/dev-session";
 import { featuresController } from "@/modules/features";
@@ -116,6 +117,7 @@ const app = new Elysia()
 			.use(appleAdsController)
 			.use(researchController)
 			.use(trackingController)
+			.use(dailySummaryController)
 			.use(storePerformanceController),
 	)
 	.listen(port);

@@ -12,7 +12,8 @@ export type AppEventType =
 	| "listing_published"
 	| "screenshots_published"
 	| "draft_reminder_sent"
-	| "audit_scored";
+	| "audit_scored"
+	| "auto_research_completed";
 
 /**
  * Events that can plausibly move rankings, and so belong on the chart.

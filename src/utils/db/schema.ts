@@ -831,6 +831,24 @@ export const appTrackingConfig = pgTable(
 	(t) => [index().on(t.workspaceId)],
 );
 
+// One morning email per workspace that replaces the per-app rank digests and
+// research reports while it is enabled. Off by default (backward compatible).
+export const workspaceDailySummary = pgTable("workspace_daily_summary", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	// NULL = the first per-app notifyEmail of the workspace, then the owner.
+	email: varchar({ length: 255 }),
+	enabled: boolean().notNull().default(false),
+	lastSentAt: timestamp(),
+	// Local calendar day (scheduler timezone, YYYY-MM-DD) of the last
+	// scheduled send. Claimed atomically before sending: never twice a day.
+	lastSentOn: varchar({ length: 10 }),
+	workspaceId: uuid()
+		.notNull()
+		.references(() => workspaces.id, { onDelete: "cascade" })
+		.unique(),
+});
+
 // Keywords the user wants to track per app + country. Capped at 40 per
 // (appId, country) in the service.
 export const trackedKeywords = pgTable(
@@ -1195,6 +1213,7 @@ export const schema = {
 	user,
 	verification,
 	versionLocalizations,
+	workspaceDailySummary,
 	workspaceMembers,
 	workspaces,
 	workspaceVault,
