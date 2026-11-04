@@ -11,6 +11,7 @@ export const errors = {
 		code: "INVALID_SCREENSHOT_DIMENSIONS",
 		status: 422,
 	},
+	mailUnavailable: { code: "MAIL_UNAVAILABLE", status: 503 },
 	notFound: { code: "NOT_FOUND", status: 404 },
 	rateLimitExceeded: { code: "RATE_LIMIT_EXCEEDED", status: 429 },
 	somethingWentWrong: { code: "SOMETHING_WENT_WRONG", status: 500 },

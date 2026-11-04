@@ -46,6 +46,9 @@ const configSchema = type({
 	OPENROUTER_API_KEY: "string?",
 	OPENROUTER_MODEL: "string?",
 	OPENROUTER_URL: "string?",
+	// Public URL of the panel, used for links in emails. Defaults to
+	// https://app.appboard.dev when unset.
+	PANEL_URL: "string?",
 	PORT: "string?",
 	// Product analytics (PostHog). Optional - unset means no events are sent.
 	// POSTHOG_KEY is the project's public ingest key, not a personal API key.

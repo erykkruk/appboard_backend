@@ -2,6 +2,10 @@ import config from "@/config";
 import { AppleAdsService } from "@/modules/apple-ads/apple-ads.service";
 import { AppsService } from "@/modules/apps/apps.service";
 import { AuditService } from "@/modules/audit/audit.service";
+import {
+	AUTO_RESEARCH_EVENT,
+	DailySummaryService,
+} from "@/modules/daily-summary/daily-summary.service";
 import { PublicReportsService } from "@/modules/public-reports/public-reports.service";
 import { FreeToolQuotaService } from "@/modules/public-reports/quota.service";
 import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
@@ -11,8 +15,9 @@ import {
 	type StorePacer,
 } from "@/modules/research/research.service";
 import type { ResearchRunReport } from "@/modules/research/research.types";
+import type { KeywordScore } from "@/modules/research/scoring-types";
 import { createLogger } from "@/utils/logger";
-import { sendMail } from "@/utils/mailer";
+import { AppEventsService } from "./app-events.service";
 import { DraftReminderService } from "./draft-reminder.service";
 import { RankCheckJobs } from "./rank-check.jobs";
 import {
@@ -22,6 +27,7 @@ import {
 	type StoreBreakerLimits,
 } from "./rank-lookup";
 import { ReportService } from "./report.service";
+import { reportMail } from "./report-mail";
 import { KeywordSuggestionsService } from "./suggestions.service";
 import { TrackingService } from "./tracking.service";
 import {
@@ -64,6 +70,8 @@ const FREQUENCY_GRACE_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** How far ahead "next run" is searched (a monthly run plus slack). */
 const NEXT_RUN_SEARCH_DAYS = 40;
+/** Best scored ideas kept on the auto-research event for the daily summary. */
+const TOP_IDEAS_RECORDED = 3;
 
 interface RankSchedulable {
 	lastRankCheckAt: Date | null;
@@ -246,23 +254,61 @@ export function trackingSchedule(
 	};
 }
 
-async function sendRankDigest(cfg: {
+/**
+ * Per-app rank digest after a scheduled check. Not sent while the workspace
+ * daily summary is on: that one morning mail replaces it.
+ */
+export async function sendRankDigest(cfg: {
 	appId: string;
 	emailRankDigest: boolean;
 	notifyEmail: string | null;
 	workspaceId: string;
-}) {
-	if (!cfg.emailRankDigest) return;
+}): Promise<boolean> {
+	if (!cfg.emailRankDigest) return false;
+	if (await DailySummaryService.isEnabled(cfg.workspaceId)) {
+		log.info(
+			{ appId: cfg.appId },
+			"Rank digest replaced by the daily summary - not sent",
+		);
+		return false;
+	}
 	const positions = await TrackingService.getLatestPositions(cfg.appId);
-	if (!positions.length) return;
+	if (!positions.length) return false;
 	const email = await TrackingService.resolveNotifyEmail(
 		cfg.workspaceId,
 		cfg.notifyEmail,
 	);
-	if (!email) return;
+	if (!email) return false;
 	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
 	const message = ReportService.buildRankDigest(app.name, positions);
-	await sendMail({ ...message, to: email });
+	return reportMail.send({ ...message, to: email });
+}
+
+/**
+ * Per-app research report after the scheduled auto-research. Not sent while
+ * the workspace daily summary is on (it carries the research result).
+ */
+export async function sendAutoResearchReport(
+	cfg: { appId: string; notifyEmail: string | null; workspaceId: string },
+	run: { report: unknown; title: string | null },
+): Promise<boolean> {
+	if (await DailySummaryService.isEnabled(cfg.workspaceId)) {
+		log.info(
+			{ appId: cfg.appId },
+			"Research report replaced by the daily summary - not sent",
+		);
+		return false;
+	}
+	const email = await TrackingService.resolveNotifyEmail(
+		cfg.workspaceId,
+		cfg.notifyEmail,
+	);
+	if (!email) return false;
+	const message = ReportService.buildAutoResearchEmail(
+		run.title ?? "your app",
+		run.report as ResearchRunReport,
+	);
+	return reportMail.send({ ...message, to: email });
 }
 
 /**
@@ -286,7 +332,11 @@ export async function runScheduledRankCheck(cfg: {
 		cfg.appId,
 		cfg.workspaceId,
 		"scheduled",
-		{ onComplete: () => sendRankDigest(cfg) },
+		{
+			onComplete: async () => {
+				await sendRankDigest(cfg);
+			},
+		},
 	);
 	if (!started) {
 		log.info({ appId: cfg.appId }, "Store has no searchable results - skipped");
@@ -358,6 +408,15 @@ export async function scoreMarketIdeas(
 	country: string,
 	options: { appstoreId?: string; now?: Date; pace?: StorePacer } = {},
 ): Promise<number> {
+	return (await scoreMarketIdeasDetailed(cfg, country, options)).due;
+}
+
+/** `scoreMarketIdeas` plus the scores themselves (for the run's best ideas). */
+export async function scoreMarketIdeasDetailed(
+	cfg: { appId: string; workspaceId: string },
+	country: string,
+	options: { appstoreId?: string; now?: Date; pace?: StorePacer } = {},
+): Promise<{ due: number; scores: KeywordScore[] }> {
 	const { suggestions } = await KeywordSuggestionsService.forMarket(
 		cfg.appId,
 		cfg.workspaceId,
@@ -371,15 +430,31 @@ export async function scoreMarketIdeas(
 		.filter((s) => !s.scoredAt || s.scoredAt < staleBefore)
 		.slice(0, IDEAS_SCORED_PER_MARKET)
 		.map((s) => s.keyword);
-	if (!due.length) return 0;
-	await ResearchService.keywordScores(
+	if (!due.length) return { due: 0, scores: [] };
+	const scores = await ResearchService.keywordScores(
 		due,
 		country,
 		options.appstoreId,
 		cfg.workspaceId,
 		{ pace: options.pace },
 	);
-	return due.length;
+	return { due: due.length, scores };
+}
+
+/** The run's best new ideas by opportunity (scored ones, no errors). */
+export function bestIdeas(
+	scores: KeywordScore[],
+	limit = TOP_IDEAS_RECORDED,
+): Array<{ country: string; keyword: string; opportunity: number }> {
+	return scores
+		.filter((s) => !s.error && Number.isFinite(s.opportunity))
+		.sort((a, b) => b.opportunity - a.opportunity)
+		.slice(0, limit)
+		.map((s) => ({
+			country: s.country,
+			keyword: s.keyword,
+			opportunity: s.opportunity,
+		}));
 }
 
 /**
@@ -426,6 +501,7 @@ export async function runScheduledAutoResearch(
 	const appstoreId =
 		app.platform === "ios" ? (app.externalId ?? undefined) : undefined;
 	let scored = 0;
+	const scores: KeywordScore[] = [];
 	for (const market of markets) {
 		if (breaker.trippedReason) {
 			log.warn(
@@ -434,23 +510,34 @@ export async function runScheduledAutoResearch(
 			);
 			break;
 		}
-		scored += await scoreMarketIdeas(cfg, market, { appstoreId, now, pace });
+		const result = await scoreMarketIdeasDetailed(cfg, market, {
+			appstoreId,
+			now,
+			pace,
+		});
+		scored += result.due;
+		scores.push(...result.scores);
 	}
 	log.info(
 		{ appId: cfg.appId, country, markets: markets.length, scored },
 		"Scheduled auto-research complete",
 	);
 
-	const email = await TrackingService.resolveNotifyEmail(
-		cfg.workspaceId,
-		cfg.notifyEmail,
+	// Read back by the daily summary ("N ideas scored, best: ...").
+	await AppEventsService.record(
+		cfg.appId,
+		AUTO_RESEARCH_EVENT,
+		`Auto-research (${country.toUpperCase()})`,
+		{
+			country,
+			markets: markets.length,
+			runId: run.id,
+			scored,
+			topIdeas: bestIdeas(scores),
+		},
 	);
-	if (!email) return;
-	const message = ReportService.buildAutoResearchEmail(
-		run.title ?? "your app",
-		run.report as ResearchRunReport,
-	);
-	await sendMail({ ...message, to: email });
+
+	await sendAutoResearchReport(cfg, run);
 }
 
 /** Apps whose detached auto-research is still running. */
@@ -458,6 +545,15 @@ const researching = new Set<string>();
 
 /** Apps whose detached keyword-score refresh is still running. */
 const scoreRefreshing = new Set<string>();
+
+/** Still measuring or researching: the daily summary waits for these. */
+function isAppBusy(appId: string): boolean {
+	return (
+		RankCheckJobs.isRunning(appId) ||
+		researching.has(appId) ||
+		scoreRefreshing.has(appId)
+	);
+}
 
 async function runDailyCleanups(refreshed: boolean[]) {
 	if (!refreshed.some(Boolean)) return;
@@ -542,6 +638,10 @@ async function runTick(now: Date, tz: string) {
 		if (refreshes.length) {
 			void Promise.all(refreshes).then(runDailyCleanups);
 		}
+
+		await DailySummaryService.runScheduled(now, tz, isAppBusy).catch((err) => {
+			log.error({ err }, "Daily summaries failed");
+		});
 
 		const { hour, minute } = localHourMinute(now, tz);
 		if (hour === DRAFT_REMINDER_HOUR && minute === 0) {
