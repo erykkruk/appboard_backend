@@ -266,13 +266,6 @@
       "when": 1793760772232,
       "tag": "0037_optimal_lorna_dane",
       "breakpoints": true
-    },
-    {
-      "idx": 39,
-      "version": "7",
-      "when": 1793773267539,
-      "tag": "0039_keyword_score_cache",
-      "breakpoints": true
     }
   ],
   "version": "7"
