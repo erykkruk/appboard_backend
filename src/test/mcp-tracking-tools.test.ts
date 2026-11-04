@@ -3,6 +3,7 @@ import { Elysia } from "elysia";
 import { createClient } from "@/mcp/client";
 import { getTool } from "@/mcp/tools";
 import { appsController } from "@/modules/apps";
+import { dailySummaryController } from "@/modules/daily-summary";
 import { trackingController } from "@/modules/tracking";
 import { authGuard, authRequest, cleanupStores } from "@/test/setup";
 import { seedTestApp, seedTestStore } from "@/test/test-helpers";
@@ -16,7 +17,9 @@ import { errorHandler } from "@/utils/errors/errorHandler";
 const backend = new Elysia()
 	.use(errorHandler)
 	.use(authGuard)
-	.group("/api", (a) => a.use(appsController).use(trackingController));
+	.group("/api", (a) =>
+		a.use(appsController).use(trackingController).use(dailySummaryController),
+	);
 
 const realFetch = globalThis.fetch;
 const storeIds: string[] = [];
@@ -68,6 +71,15 @@ describe("MCP tracking tools against the real endpoints", () => {
 		expect(markets.markets).toEqual([
 			expect.objectContaining({ country: "de", tracked: 1 }),
 			expect.objectContaining({ country: "us", tracked: 2 }),
+		]);
+
+		const history = (await call("tracking_get_markets_history", {
+			appId,
+			days: 7,
+		})) as { from: string; markets: Array<{ country: string; points: [] }> };
+		expect(history.markets).toEqual([
+			{ country: "de", points: [] },
+			{ country: "us", points: [] },
 		]);
 
 		const board = (await call("tracking_get_board", {
@@ -129,6 +141,25 @@ describe("MCP tracking tools against the real endpoints", () => {
 			run: unknown;
 		};
 		expect(status.run).toBeNull();
+	});
+
+	it("reads and updates the workspace daily summary", async () => {
+		const before = (await call("daily_summary_get", {})) as {
+			enabled: boolean;
+			schedule: { hour: number; minute: number };
+		};
+		expect(before.schedule).toEqual(
+			expect.objectContaining({ hour: 7, minute: 30 }),
+		);
+		const updated = (await call("daily_summary_update", {
+			email: "summary-mcp@example.com",
+			enabled: before.enabled,
+		})) as { email: string | null };
+		expect(updated.email).toBe("summary-mcp@example.com");
+		const cleared = (await call("daily_summary_update", { email: null })) as {
+			email: string | null;
+		};
+		expect(cleared.email).toBeNull();
 	});
 
 	it("updates devices", async () => {

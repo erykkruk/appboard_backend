@@ -106,6 +106,7 @@ export const researchController = new Elysia({ prefix: "/research" })
 				body.country,
 				body.appstoreId,
 				workspaceId ?? undefined,
+				{ refresh: body.refresh },
 			);
 			return { scores };
 		},
@@ -113,7 +114,7 @@ export const researchController = new Elysia({ prefix: "/research" })
 			body: keywordScoresBody,
 			detail: {
 				description:
-					"Score keywords for ASO: popularity, difficulty (with breakdown and ranking tiers), opportunity, classification and download estimates. Results are stored as today's history snapshots.",
+					"Score keywords for ASO: popularity, difficulty (with breakdown and ranking tiers), opportunity, classification and download estimates. The App Store search behind a score is cached per keyword+country for 7 days and shared by every workspace (`scoredAt` says when it was made, `cached` whether this answer came from the cache); `refresh: true` asks the store again. Results are stored as history snapshots of the measurement day.",
 				tags: ["Research"],
 			},
 		},

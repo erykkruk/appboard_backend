@@ -389,6 +389,11 @@ const MARKET_LANGUAGE: Record<string, string> = {
 	vn: "vi",
 };
 
+/** The local listing language of a store country, when it is not English. */
+export function marketLanguage(country: string): string | null {
+	return MARKET_LANGUAGE[country.toLowerCase()] ?? null;
+}
+
 function hasLanguage(languages: string[], want: string): boolean {
 	return languages.some((l) => l.toLowerCase().split(/[-_]/)[0] === want);
 }

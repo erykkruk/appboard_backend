@@ -20,6 +20,7 @@ import { auditController } from "@/modules/audit";
 import { authGuard } from "@/modules/auth";
 import { apiKeysController } from "@/modules/auth/api-keys.controller";
 import { bulkController } from "@/modules/bulk";
+import { dailySummaryController } from "@/modules/daily-summary";
 import { demoController } from "@/modules/demo";
 import { devSessionController, devSessionEnabled } from "@/modules/dev-session";
 import { featuresController } from "@/modules/features";
@@ -38,6 +39,10 @@ import { publishingController } from "@/modules/publishing";
 import { purchasesController } from "@/modules/purchases";
 import { researchController } from "@/modules/research";
 import { reviewsController } from "@/modules/reviews";
+import {
+	startRatingsScheduler,
+	stopRatingsScheduler,
+} from "@/modules/reviews/ratings.scheduler";
 import { screenshotScenesController } from "@/modules/screenshot-scenes";
 import { settingsController } from "@/modules/settings";
 import { storePerformanceController } from "@/modules/store-performance";
@@ -116,6 +121,7 @@ const app = new Elysia()
 			.use(appleAdsController)
 			.use(researchController)
 			.use(trackingController)
+			.use(dailySummaryController)
 			.use(storePerformanceController),
 	)
 	.listen(port);
@@ -124,11 +130,13 @@ export type App = typeof app;
 
 await bootstrap();
 startScheduler();
+startRatingsScheduler();
 
 log.info(`AppBoard backend running on http://localhost:${port}`);
 
 async function shutdown() {
 	log.info("Shutting down...");
+	stopRatingsScheduler();
 	app.stop();
 	await shutdownAnalytics();
 	process.exit(0);

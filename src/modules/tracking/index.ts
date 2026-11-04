@@ -3,7 +3,9 @@ import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import { TrackingBoardService } from "./board.service";
+import { ListingVersionService } from "./listing-versions.service";
 import { TrackingMarketsService } from "./markets.service";
+import { TrackingMarketsHistoryService } from "./markets-history.service";
 import { RankCheckJobs } from "./rank-check.jobs";
 import { trackingSchedule } from "./scheduler.service";
 import { KeywordSuggestionsService } from "./suggestions.service";
@@ -13,10 +15,12 @@ import {
 	boardQuery,
 	bulkAddKeywordsBody,
 	bulkStarKeywordsBody,
+	byVersionQuery,
 	checkRunParams,
 	configPatchBody,
 	historyQuery,
 	keywordParams,
+	marketsHistoryQuery,
 	runForAppBody,
 	runParams,
 	starKeywordBody,
@@ -103,7 +107,7 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 		{
 			body: addKeywordsBody,
 			detail: {
-				description: "Add tracked keywords for a country (max 40 per language)",
+				description: "Add tracked keywords for a country (max 80 per language)",
 				tags: ["Tracking"],
 			},
 			params: appIdParams,
@@ -250,6 +254,26 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 		},
 	)
 	.get(
+		"/:appId/tracking/markets/history",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return TrackingMarketsHistoryService.getHistory(
+				params.appId,
+				workspaceId!,
+				{ days: query.days },
+			);
+		},
+		{
+			detail: {
+				description:
+					"Day-by-day history of the markets table (default 90 days, max 180; days in the scheduler time zone, Europe/Warsaw by default). Per country and day: tracked keywords, keywords measured that day, and ranked / top 10 / top 50 / median position not counting keywords with the app's own name. A day counts every tracked keyword at its last measurement on or before that day, like the live table; days without any measurement in a market are left out.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: marketsHistoryQuery,
+		},
+	)
+	.get(
 		"/:appId/tracking/board",
 		async ({ params, query, workspaceId }) => {
 			await verifyAppOwnership(params.appId, workspaceId!);
@@ -265,6 +289,22 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 			},
 			params: appIdParams,
 			query: boardQuery,
+		},
+	)
+	.get(
+		"/:appId/tracking/by-version",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return ListingVersionService.getByVersion(params.appId, query.country);
+		},
+		{
+			detail: {
+				description:
+					"Positions of one market per store version: per keyword the last and best position while each version was live, measurements and the change vs the previous version; per version its release date, measured period, listing text (title, subtitle / short description, keywords) and which fields changed. Versions newest first. Omit country for the first tracked market.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: byVersionQuery,
 		},
 	)
 	.get(
