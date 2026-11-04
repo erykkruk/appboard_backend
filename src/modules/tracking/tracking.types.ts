@@ -133,6 +133,8 @@ export interface TrackingMarket {
 	 * Ranked / top 10 / top 50 counted over keywords that are not the app's
 	 * own name: "#1 for buzzin" proves nothing about discovery.
 	 */
+	/** Median position of the ranked keywords that are not the app's name. */
+	earnedMedianPosition: number | null;
 	earnedRanked: number;
 	earnedTop10: number;
 	earnedTop50: number;
