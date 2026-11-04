@@ -7,6 +7,7 @@ import {
 	marketsForResearchRun,
 	nextAutoResearchAt,
 	primaryResearchMarket,
+	RANK_CHECK_MIN_GAP_MS_BY_STORE,
 	rankedKeywordsByCountry,
 } from "@/modules/tracking/scheduler.service";
 import {
@@ -73,6 +74,39 @@ describe("isRankCheckDue", () => {
 				TZ,
 			),
 		).toBe(true);
+	});
+
+	it("a manual Play check in the evening does not skip the 00:00 slot", () => {
+		// Manual check finished 19:00, next slot 00:00: Play still runs.
+		expect(
+			isRankCheckDue(
+				playstore(at("2026-07-09T19:00:00Z")),
+				at("2026-07-10T00:00:00Z"),
+				TZ,
+			),
+		).toBe(true);
+		// The App Store keeps its 6 h guard between its two slots.
+		expect(
+			isRankCheckDue(
+				appstore(at("2026-07-09T19:00:00Z")),
+				at("2026-07-10T00:00:00Z"),
+				TZ,
+			),
+		).toBe(false);
+	});
+
+	it("dedupes a double tick at the Play 00:00 slot", () => {
+		const slot = at("2026-07-10T00:00:00Z");
+		const justRan = new Date(slot.getTime() - 30_000);
+		expect(isRankCheckDue(playstore(justRan), slot, TZ)).toBe(false);
+		expect(
+			isRankCheckDue(
+				playstore(new Date(slot.getTime() - 90 * 60_000)),
+				slot,
+				TZ,
+			),
+		).toBe(false);
+		expect(RANK_CHECK_MIN_GAP_MS_BY_STORE.playstore).toBe(2 * HOUR);
 	});
 
 	it("keeps the slots in one named table", () => {

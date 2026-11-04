@@ -53,9 +53,19 @@ import {
 const log = createLogger("scheduler");
 
 const TICK_MS = 60_000;
-// Guard against a slot re-firing within the same window (e.g. after a restart
-// at 12:00). Rank-check slots are at least 12h apart, so 6h is a safe gap.
-const MIN_RANK_GAP_MS = 6 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+/**
+ * A slot is skipped when the app's last rank check finished less than this
+ * long ago: guards a slot re-firing (restart, overlapping tick) and skips a
+ * slot right after a manual check. With two App Store slots 12 h apart, 6 h
+ * is half the interval. Google Play has one slot a day, so the gap is short:
+ * with 6 h a manual Play check in the evening skipped the 00:00 slot and the
+ * next scheduled measurement came 48 h after the previous one.
+ */
+export const RANK_CHECK_MIN_GAP_MS_BY_STORE: Record<ResearchStore, number> = {
+	appstore: 6 * HOUR_MS,
+	playstore: 2 * HOUR_MS,
+};
 // Keyword-score cache refresh starts daily at 01:00 local (offset from the
 // midnight rank check so the two batches never hammer iTunes at the same
 // time). A run a restart cut off resumes on the next tick of the same day.
@@ -139,7 +149,8 @@ export function isRankCheckDue(
 	}
 	if (!cfg.lastRankCheckAt) return true;
 	return (
-		now.getTime() - new Date(cfg.lastRankCheckAt).getTime() >= MIN_RANK_GAP_MS
+		now.getTime() - new Date(cfg.lastRankCheckAt).getTime() >=
+		RANK_CHECK_MIN_GAP_MS_BY_STORE[cfg.store]
 	);
 }
 
@@ -275,7 +286,6 @@ export function nextAutoResearchAt(
 	const start = new Date(now);
 	start.setUTCSeconds(0, 0);
 	start.setUTCMinutes(0);
-	const HOUR_MS = 60 * 60 * 1000;
 	for (let i = 0; i <= NEXT_RUN_SEARCH_DAYS * 24; i++) {
 		const candidate = new Date(start.getTime() + i * HOUR_MS);
 		if (candidate.getTime() < now.getTime()) continue;
