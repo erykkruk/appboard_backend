@@ -7,6 +7,7 @@ import {
 	marketsForResearchRun,
 	nextAutoResearchAt,
 	primaryResearchMarket,
+	rankedKeywordsByCountry,
 } from "@/modules/tracking/scheduler.service";
 import { RESEARCH_ROTATION_DAYS } from "@/modules/tracking/tracking.types";
 
@@ -192,6 +193,47 @@ describe("primaryResearchMarket", () => {
 
 	it("uses us when nothing is tracked", () => {
 		expect(primaryResearchMarket([], null)).toBe("us");
+	});
+
+	it("prefers the market where most keywords rank over the alphabet", () => {
+		const atCap = [
+			{ country: "be" },
+			{ country: "be" },
+			{ country: "pl" },
+			{ country: "pl" },
+		];
+		expect(primaryResearchMarket(atCap, null)).toBe("be");
+		expect(
+			primaryResearchMarket(
+				atCap,
+				null,
+				new Map([
+					["be", 1],
+					["pl", 9],
+				]),
+			),
+		).toBe("pl");
+	});
+
+	it("still prefers the home storefront over rankings", () => {
+		expect(primaryResearchMarket(tracked, "de", new Map([["pl", 9]]))).toBe(
+			"de",
+		);
+	});
+});
+
+describe("rankedKeywordsByCountry", () => {
+	it("counts keywords whose newest measurement ranks", () => {
+		const older = new Date("2026-11-03T00:00:00Z");
+		const newer = new Date("2026-11-04T00:00:00Z");
+		const ranked = rankedKeywordsByCountry([
+			{ country: "PL", createdAt: newer, keyword: "quiz", position: 3 },
+			{ country: "pl", createdAt: older, keyword: "quiz", position: null },
+			{ country: "pl", createdAt: newer, keyword: "mafia", position: null },
+			{ country: "pl", createdAt: older, keyword: "mafia", position: 20 },
+			{ country: "be", createdAt: newer, keyword: "quiz", position: 40 },
+		]);
+		expect(Object.fromEntries(ranked)).toEqual({ be: 1, pl: 1 });
 	});
 });
 

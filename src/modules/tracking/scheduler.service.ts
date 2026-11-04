@@ -188,11 +188,14 @@ export function marketsForResearchRun(
 
 /**
  * Where the full research run (store page, reviews, AI) goes: the app's home
- * storefront when it is tracked, otherwise the market with most keywords.
+ * storefront when it is tracked; otherwise the market where most tracked
+ * keywords rank, then the one with most keywords. With every market at the
+ * keyword cap, "most keywords" alone picked the first market alphabetically.
  */
 export function primaryResearchMarket(
 	tracked: Array<{ country: string }>,
 	homeCountry: string | null | undefined,
+	rankedByCountry: ReadonlyMap<string, number> = new Map(),
 ): string {
 	const counts = new Map<string, number>();
 	for (const k of tracked) {
@@ -202,14 +205,44 @@ export function primaryResearchMarket(
 	const home = homeCountry?.toLowerCase();
 	if (home && counts.has(home)) return home;
 	let best = "us";
-	let most = 0;
+	let bestRanked = -1;
+	let bestCount = 0;
 	for (const [country, count] of [...counts.entries()].sort()) {
-		if (count > most) {
+		const ranked = rankedByCountry.get(country) ?? 0;
+		if (ranked > bestRanked || (ranked === bestRanked && count > bestCount)) {
 			best = country;
-			most = count;
+			bestRanked = ranked;
+			bestCount = count;
 		}
 	}
 	return best;
+}
+
+/** Tracked keywords per market whose newest measurement is a ranking. */
+export function rankedKeywordsByCountry(
+	rows: Array<{
+		country: string;
+		createdAt: Date;
+		keyword: string;
+		position: number | null;
+	}>,
+): Map<string, number> {
+	const newest = new Map<
+		string,
+		{ createdAt: Date; position: number | null }
+	>();
+	for (const row of rows) {
+		const key = `${row.country.toLowerCase()}|${row.keyword}`;
+		const seen = newest.get(key);
+		if (!seen || row.createdAt > seen.createdAt) newest.set(key, row);
+	}
+	const ranked = new Map<string, number>();
+	for (const [key, row] of newest) {
+		if (row.position === null) continue;
+		const country = key.slice(0, key.indexOf("|"));
+		ranked.set(country, (ranked.get(country) ?? 0) + 1);
+	}
+	return ranked;
 }
 
 /** First minute at or after `now` when the auto-research slot fires. */
@@ -402,7 +435,13 @@ export async function runScheduledAutoResearch(
 	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
 	const home = (app.rawData as { publicCountry?: string } | null)
 		?.publicCountry;
-	const country = primaryResearchMarket(tracked, home);
+	const country = primaryResearchMarket(
+		tracked,
+		home,
+		rankedKeywordsByCountry(
+			await TrackingService.getLatestMeasurements(cfg.appId),
+		),
+	);
 	const keywords = tracked
 		.filter((k) => k.country.toLowerCase() === country)
 		.map((k) => k.keyword);
