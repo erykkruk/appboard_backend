@@ -175,3 +175,40 @@ export interface TrackingMarketsOverview {
 	rankTracking: RankTrackingSupport;
 	totals: TrackingMarketTotals;
 }
+
+/** Days of market history the dashboard asks for by default. */
+export const MARKET_HISTORY_DEFAULT_DAYS = 90;
+/** Same horizon as the tracker board. */
+export const MARKET_HISTORY_MAX_DAYS = 180;
+
+/**
+ * One market on one local day, counted like the markets table: every tracked
+ * keyword at its last measurement on or before that day. `ranked`, `top10`,
+ * `top50` and `median` leave out keywords that carry the app's own name.
+ */
+export interface TrackingMarketHistoryPoint {
+	/** Local calendar day in the scheduler time zone, "2026-11-04". */
+	day: string;
+	/** Keywords measured on this very day (the rest carry an older position). */
+	measured: number;
+	median: number | null;
+	ranked: number;
+	top10: number;
+	top50: number;
+	/** Currently tracked keywords already tracked (or measured) by that day. */
+	tracked: number;
+}
+
+export interface TrackingMarketHistory {
+	country: string;
+	/** Oldest first; only days with at least one measurement in the market. */
+	points: TrackingMarketHistoryPoint[];
+}
+
+export interface TrackingMarketsHistory {
+	/** First and last day of the window, inclusive. */
+	from: string;
+	markets: TrackingMarketHistory[];
+	timeZone: string;
+	to: string;
+}

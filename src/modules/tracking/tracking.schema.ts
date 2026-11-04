@@ -1,4 +1,5 @@
 import { t } from "elysia";
+import { MARKET_HISTORY_MAX_DAYS } from "./tracking.types";
 
 const country = t.String({ maxLength: 2, minLength: 2 });
 
@@ -70,6 +71,15 @@ export const boardQuery = t.Object({
 
 export const suggestionsQuery = t.Object({
 	country,
+});
+
+export const marketsHistoryQuery = t.Object({
+	days: t.Optional(
+		t.Numeric({
+			maximum: MARKET_HISTORY_MAX_DAYS,
+			minimum: 1,
+		}),
+	),
 });
 
 export const historyQuery = t.Object({

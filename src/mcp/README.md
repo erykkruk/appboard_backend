@@ -106,6 +106,7 @@ For the hosted backend use `"APPBOARD_API_URL": "https://api.appboard.dev"`.
 | `stores_import_app`              | Add an app from a public store link (no credentials); `devices` marks Apple TV / Android TV |
 | `apps_update_devices`            | Set the form factors of an app record (`phone`, `tablet`, `tv`) |
 | `tracking_get_markets`           | Per-market rank overview: tracked / ranked / top 10 / top 50, median and average position, movement, failed lookups, last check |
+| `tracking_get_markets_history`   | Day-by-day history of the per-market overview (tracked, measured, ranked / top 10 / top 50 / median without the app name), 1-180 days |
 | `tracking_get_board`             | Tracker board for one market (positions, scores, movement, metadata gaps) |
 | `tracking_add_keywords`          | Track keywords in many markets in one call (`items: [{ country, keywords[] }]`) |
 | `tracking_star_keywords`         | Star / unstar tracked keywords as the team's own targets (`items: [{ country, keywords[] }]`, `starred`) |

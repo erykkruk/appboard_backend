@@ -499,6 +499,34 @@ export const tools: RegisteredTool[] = [
 	}),
 	defineTool({
 		description:
+			"Day-by-day history of the per-market overview, for trends: per " +
+			"country and local day (scheduler time zone) the tracked keywords, " +
+			"keywords measured that day, and ranked / top 10 / top 50 / median " +
+			"position not counting keywords with the app's own name. Each day " +
+			"counts every tracked keyword at its last measurement on or before " +
+			"that day; days without a measurement in a market are left out. " +
+			"days = 1-180 (default 90).",
+		handler: (client, input) =>
+			client.api
+				.apps({ appId: input.appId })
+				.tracking.markets.history.get({
+					query: input.days ? { days: input.days } : {},
+				})
+				.then(unwrap),
+		inputSchema: {
+			appId: appIdSchema,
+			days: z
+				.number()
+				.int()
+				.min(1)
+				.max(180)
+				.optional()
+				.describe("Window length in days (default 90)"),
+		},
+		name: "tracking_get_markets_history",
+	}),
+	defineTool({
+		description:
 			"The tracker board for ONE market: per keyword position, previous " +
 			"position, delta, best position, difficulty/popularity, the phrase " +
 			"leader, which listing fields carry it and starred (one of the " +

@@ -70,6 +70,15 @@ describe("MCP tracking tools against the real endpoints", () => {
 			expect.objectContaining({ country: "us", tracked: 2 }),
 		]);
 
+		const history = (await call("tracking_get_markets_history", {
+			appId,
+			days: 7,
+		})) as { from: string; markets: Array<{ country: string; points: [] }> };
+		expect(history.markets).toEqual([
+			{ country: "de", points: [] },
+			{ country: "us", points: [] },
+		]);
+
 		const board = (await call("tracking_get_board", {
 			appId,
 			country: "us",
