@@ -722,7 +722,9 @@ export const tools: RegisteredTool[] = [
 	}),
 	defineTool({
 		description:
-			"Status of a rank check: running / completed / failed / interrupted, " +
+			"Status of a rank check: running / completed / failed / interrupted " +
+			"(restart, or deferred: error starts with 'Deferred:' when the store " +
+			"was throttled before the run started), " +
 			"progress (0-1), measured, ranked and failed lookups (with the store " +
 			"error per keyword). Omit runId for the latest run.",
 		handler: (client, input) => {

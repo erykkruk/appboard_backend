@@ -265,16 +265,19 @@ export class ResearchService {
 	 * results; THROWS when the store could not be asked (throttled, 5xx,
 	 * network), so rank tracking can tell "not ranked" from "not measured".
 	 * A single seam so callers (rank tracking) can mock store lookups in tests.
+	 * `onRanking` gets the ordered Play package ids the position was read
+	 * from (Play only), so one search can serve several tracked apps.
 	 */
 	static async positionFor(
 		store: ResearchStore,
 		keyword: string,
 		id: string,
 		country: string,
+		onRanking?: (ranking: string[]) => void,
 	): Promise<number | null> {
 		return store === "appstore"
 			? appstoreSearchPosition(keyword, id, country)
-			: playstoreSearchPosition(keyword, id, country);
+			: playstoreSearchPosition(keyword, id, country, onRanking);
 	}
 
 	static async keywordPositions(

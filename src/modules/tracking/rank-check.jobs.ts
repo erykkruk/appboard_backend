@@ -4,7 +4,11 @@ import { db } from "@/utils/db";
 import { rankCheckRuns, trackedKeywords } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
-import { describeStoreError } from "./rank-lookup";
+import {
+	describeStoreError,
+	STORE_DEFERRED_CODE,
+	storeErrorCode,
+} from "./rank-lookup";
 import { rankTrackingSupport } from "./rank-support";
 import { type RankCheckProgress, TrackingService } from "./tracking.service";
 import type {
@@ -277,14 +281,25 @@ export class RankCheckJobs {
 			}
 		} catch (err) {
 			const message = describeStoreError(err).message;
-			log.error({ appId: row.appId, err, runId: row.id }, "Rank check failed");
+			// A run queued behind one the store refused is not broken: it never
+			// started. "interrupted" (not "failed") + the reason, so the panel
+			// shows it as stopped early rather than as an error of its own.
+			const deferred = storeErrorCode(err) === STORE_DEFERRED_CODE;
+			if (deferred) {
+				log.warn({ appId: row.appId, runId: row.id }, "Rank check deferred");
+			} else {
+				log.error(
+					{ appId: row.appId, err, runId: row.id },
+					"Rank check failed",
+				);
+			}
 			await db
 				.update(rankCheckRuns)
 				.set({
 					...(last ? progressColumns(last) : {}),
 					error: message.slice(0, 1000),
 					finishedAt: new Date(),
-					status: "failed",
+					status: deferred ? "interrupted" : "failed",
 				})
 				.where(eq(rankCheckRuns.id, row.id));
 		}
