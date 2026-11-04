@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/utils/db";
 import { keywordScoreSnapshots } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
@@ -28,19 +28,25 @@ function dayCutoff(days: number): string {
  * trends stay one-point-per-day regardless of how often a keyword is scored.
  */
 export class KeywordScoresHistoryService {
-	/** Best-effort upsert of today's snapshots. Failed scores are skipped. */
-	static async upsertToday(
+	/**
+	 * Best-effort upsert of the snapshots for these scores. Failed scores are
+	 * skipped. The row's day is the day the store search behind the score was
+	 * made (`scoredAt`, UTC), not the day of the request: a score served from
+	 * the weekly cache lands on its measurement day, so the trend never shows
+	 * a week-old measurement as a new point.
+	 */
+	static async upsertScores(
 		workspaceId: string,
 		scores: KeywordScore[],
 	): Promise<void> {
-		const day = todayUtc();
+		const today = todayUtc();
 		const rows = scores
 			.filter((score) => !score.error)
 			.map((score) => ({
 				appRank: score.appRank ?? null,
 				classification: score.classification,
 				country: score.country,
-				day,
+				day: score.scoredAt ? score.scoredAt.slice(0, 10) : today,
 				difficulty: score.difficulty,
 				keyword: score.keyword,
 				opportunity: score.opportunity,
@@ -69,6 +75,30 @@ export class KeywordScoresHistoryService {
 					keywordScoreSnapshots.day,
 				],
 			});
+	}
+
+	/** Newest snapshot day per keyword of one workspace in one country. */
+	static async latestDays(
+		workspaceId: string,
+		country: string,
+		keywords: string[],
+	): Promise<Map<string, string>> {
+		if (!keywords.length) return new Map();
+		const rows = await db
+			.select({
+				day: sql<string>`max(${keywordScoreSnapshots.day})`,
+				keyword: keywordScoreSnapshots.keyword,
+			})
+			.from(keywordScoreSnapshots)
+			.where(
+				and(
+					eq(keywordScoreSnapshots.workspaceId, workspaceId),
+					eq(keywordScoreSnapshots.country, country),
+					inArray(keywordScoreSnapshots.keyword, keywords),
+				),
+			)
+			.groupBy(keywordScoreSnapshots.keyword);
+		return new Map(rows.map((r) => [r.keyword, String(r.day)]));
 	}
 
 	/**

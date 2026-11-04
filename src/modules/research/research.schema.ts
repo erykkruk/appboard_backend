@@ -84,6 +84,8 @@ export const keywordScoresBody = t.Object({
 		maxItems: 10,
 		minItems: 1,
 	}),
+	/** Skip the 7-day cache and ask the App Store for these keywords now. */
+	refresh: t.Optional(t.Boolean()),
 });
 
 export const keywordHistoryQuery = t.Object({

@@ -15,6 +15,7 @@ import {
 import type { AppDevice } from "@/config/const";
 import type { AppAuditReport } from "@/modules/audit/audit.types";
 import type {
+	KeywordCompetitor,
 	KeywordScore,
 	ResearchRunReport,
 } from "@/modules/research/research.types";
@@ -938,6 +939,44 @@ export const keywordScoreSnapshots = pgTable(
 	],
 );
 
+// Global keyword score cache: the App Store search behind a keyword score
+// depends only on (keyword, country), never on the asking app or workspace,
+// so one row serves every workspace. Holds the raw top-25 search result the
+// score is derived from (difficulty, tiers, internal popularity are pure math
+// over it, recomputed on read) and when the store was asked. Nothing app- or
+// workspace-specific (own rank, Apple Ads source) is stored here.
+export const keywordScoreCache = pgTable(
+	"keyword_score_cache",
+	{
+		id: uuid().defaultRandom().primaryKey(),
+		...timeColumns,
+		competitors: jsonb().$type<KeywordCompetitor[]>().notNull(),
+		country: varchar({ length: 2 }).notNull(),
+		keyword: varchar({ length: 255 }).notNull(),
+		scoredAt: timestamp().notNull(),
+	},
+	(t) => [unique().on(t.keyword, t.country), index().on(t.scoredAt)],
+);
+
+// One row per local day of the nightly cache refresh: how many stale
+// (keyword, country) pairs that day's slice takes and how far it got, so a
+// restart resumes the slice instead of starting a new one.
+export const keywordScoreRefreshRuns = pgTable("keyword_score_refresh_runs", {
+	id: uuid().defaultRandom().primaryKey(),
+	...timeColumns,
+	day: date({ mode: "string" }).notNull().unique(),
+	due: integer().notNull().default(0),
+	error: text(),
+	failed: integer().notNull().default(0),
+	finishedAt: timestamp(),
+	pairs: integer().notNull().default(0),
+	refreshed: integer().notNull().default(0),
+	startedAt: timestamp().notNull().defaultNow(),
+	// running | completed | failed
+	status: varchar({ length: 16 }).notNull().default("running"),
+	target: integer().notNull().default(0),
+});
+
 // ── Public ASO check-up reports ─────────────────────────────────────
 // Anonymous crowd data from the free browser-side ASO check (no account):
 // the visitor's browser computes the scores and posts the results here.
@@ -1132,6 +1171,8 @@ export const schema = {
 	errorLogs,
 	groupAsoProfiles,
 	inAppPurchases,
+	keywordScoreCache,
+	keywordScoreRefreshRuns,
 	keywordScoreSnapshots,
 	listingHistory,
 	listings,
