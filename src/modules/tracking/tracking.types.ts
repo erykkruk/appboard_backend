@@ -2,7 +2,7 @@ import type { AppDevice } from "@/config/const";
 import type { RankCheckRunView } from "./rank-check.jobs";
 import type { RankTrackingSupport } from "./rank-support";
 
-export const MAX_KEYWORDS_PER_COUNTRY = 40;
+export const MAX_KEYWORDS_PER_COUNTRY = 80;
 
 // Country used when auto-importing keywords from the ASO profile, which has
 // no country dimension of its own.

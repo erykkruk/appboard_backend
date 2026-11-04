@@ -127,7 +127,7 @@ Loading hundreds of phrases across dozens of markets and measuring them:
    Android TV package, or `devices: ["phone", "tv"]` for an iOS app that also
    ships on Apple TV).
 2. `tracking_add_keywords` with one item per market. Each market holds at most
-   40 keywords; anything over the cap comes back under `rejected`.
+   80 keywords; anything over the cap comes back under `rejected`.
 3. `tracking_update_config` with `rankTrackingEnabled: true` (checks at 00:00
    and 12:00 server time).
 4. `tracking_run_check`, then poll `tracking_check_status` until `status` is
