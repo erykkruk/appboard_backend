@@ -3,6 +3,7 @@ import { db } from "@/utils/db";
 import { keywordScoreSnapshots } from "@/utils/db/schema";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
+import { estimatedDailyDownloadsAt } from "./download-estimate";
 import type { KeywordScore } from "./research.types";
 
 const log = createLogger("keyword-scores-history");
@@ -258,10 +259,13 @@ export class KeywordScoresHistoryService {
 				(entry.classifications[row.classification] ?? 0) + 1;
 			if (row.appRank && row.appRank >= 1) {
 				entry.ranked++;
-				const position = row.payload.downloads.positions[row.appRank - 1];
-				if (position) {
-					entry.downloadsLow += position.low;
-					entry.downloadsHigh += position.high;
+				const range = estimatedDailyDownloadsAt(
+					row.payload.downloads,
+					row.appRank,
+				);
+				if (range) {
+					entry.downloadsLow += range.low;
+					entry.downloadsHigh += range.high;
 				}
 			}
 			entry.topOpportunities.push({

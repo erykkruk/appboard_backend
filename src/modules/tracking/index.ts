@@ -3,6 +3,7 @@ import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import { TrackingBoardService } from "./board.service";
+import { KeywordDownloadsService } from "./keyword-downloads.service";
 import { ListingVersionService } from "./listing-versions.service";
 import { TrackingMarketsService } from "./markets.service";
 import { TrackingMarketsHistoryService } from "./markets-history.service";
@@ -285,6 +286,24 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 			detail: {
 				description:
 					"Everything the tracker view shows for one market in a single call: per keyword the position, its score and trend, the leader of the phrase and which listing fields already carry it; plus what moved since the previous run, the runs themselves, our listing changes and the terms our metadata targets without ranking.",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+			query: boardQuery,
+		},
+	)
+	.get(
+		"/:appId/tracking/keyword-downloads",
+		async ({ params, query, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return KeywordDownloadsService.forMarket(params.appId, workspaceId!, {
+				country: query.country,
+			});
+		},
+		{
+			detail: {
+				description:
+					"How many downloads each tracked keyword of one market brings. Google Play apps: real store listing installs and visitors per search term from the Play Console bulk report (latest full month and month to date; Play reports search terms for all countries together and omits small volumes, so a keyword missing from the report has `play.latestMonth: null`). App Store apps: an ESTIMATE, not Apple data (Apple publishes no per-keyword downloads): the download curve of the keyword score (searches x tap-through rate at the position x conversion range) read at the latest tracked position, the same model as the keyword score summary, per day and per month (x30). Keywords without a score or a rank have `estimate: null`.",
 				tags: ["Tracking"],
 			},
 			params: appIdParams,
