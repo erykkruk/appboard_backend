@@ -259,6 +259,13 @@
       "when": 1793755543572,
       "tag": "0036_useful_amphibian",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793760772232,
+      "tag": "0037_optimal_lorna_dane",
+      "breakpoints": true
     }
   ],
   "version": "7"

@@ -176,6 +176,10 @@ export const stores = pgTable(
 		credentials: text(),
 		lastSyncedAt: timestamp(),
 		name: varchar({ length: 255 }).notNull(),
+		// Google Play only: the developer account's bulk-report bucket
+		// (`pubsite_prod_...`, from Play Console > Download reports). NULL until
+		// the user pastes it; Play exposes no API that returns it.
+		playReportsBucket: varchar({ length: 255 }),
 		status: varchar({ length: 50 }).notNull().default("disconnected"),
 		type: varchar({ length: 50 }).notNull(),
 		workspaceId: uuid()

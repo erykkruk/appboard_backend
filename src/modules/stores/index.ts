@@ -126,6 +126,7 @@ export const storesController = new Elysia({ prefix: "/stores" })
 					id: s.id,
 					lastSyncedAt: s.lastSyncedAt,
 					name: s.name,
+					playReportsBucket: s.playReportsBucket,
 					status: s.status,
 					type: s.type,
 				})),
