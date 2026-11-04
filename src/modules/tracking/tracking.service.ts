@@ -5,6 +5,7 @@ import type { ResearchStore } from "@/modules/research/research.types";
 import { db } from "@/utils/db";
 import {
 	appAsoProfiles,
+	apps,
 	appTrackingConfig,
 	listingVersions,
 	rankSnapshots,
@@ -26,6 +27,7 @@ import {
 	type RankLookupRuntime,
 	StoreBreaker,
 	type StoreBreakerLimits,
+	throwStoreDeferred,
 	throwStoreThrottled,
 } from "./rank-lookup";
 import { rankTrackingSupport } from "./rank-support";
@@ -552,16 +554,23 @@ export class TrackingService {
 		}
 		// One run per store at a time: the breaker and the keyword list are
 		// built once it is our turn, so waiting does not count against the run.
-		return runtime.runs.run(store, () =>
-			TrackingService.measureKeywords(
+		return runtime.runs.run(store, () => {
+			// The run ahead of us got the store blocked: every lookup would be
+			// refused, so end as deferred before the first store request.
+			const deferred = runtime.throttles[store].deferredReason();
+			if (deferred) {
+				log.warn({ appId, kind, store }, "Rank check deferred: store blocked");
+				throwStoreDeferred(deferred);
+			}
+			return TrackingService.measureKeywords(
 				{ ...app, id: appId },
 				appId,
 				store,
 				kind,
 				runtime,
 				options,
-			),
-		);
+			);
+		});
 	}
 
 	private static async measureKeywords(
@@ -602,6 +611,10 @@ export class TrackingService {
 			runtime,
 		);
 		const breaker = new StoreBreaker(runtime.now, options.breakerLimits);
+		// Scheduled slots share Play searches between apps; a manual check
+		// always asks the store, so "Check now" is a fresh measurement.
+		const reuseSearch = kind === "scheduled";
+		let reused = 0;
 		const stopIfTripped = () => {
 			const reason = breaker.trippedReason;
 			if (!reason) return;
@@ -621,6 +634,7 @@ export class TrackingService {
 				country,
 				runtime,
 				breaker.deadlineAt(),
+				{ reuseSearch },
 			);
 			if (!outcome.ok && outcome.storeBlocked) {
 				breaker.recordStoreBlocked(outcome.storeBlocked);
@@ -643,7 +657,10 @@ export class TrackingService {
 				});
 				progress.measured++;
 				if (outcome.position !== null) progress.ranked++;
-				breaker.recordSuccess();
+				// A reused search is not a store answer: it must not hide a
+				// failure streak or a stalled store from the breaker.
+				if (outcome.reused) reused++;
+				else breaker.recordSuccess();
 			} else {
 				// No snapshot: a NULL row would read as "fell out of the results".
 				progress.failed++;
@@ -674,6 +691,7 @@ export class TrackingService {
 				failed: progress.failed,
 				kind,
 				ranked: progress.ranked,
+				reused,
 				snapshots: progress.measured,
 			},
 			"Rank check complete",
@@ -859,10 +877,15 @@ export class TrackingService {
 
 	// ── Scheduler helpers (cross-workspace) ──────────────────────────
 
+	/** Rank-tracking configs plus the app platform (it picks the slots). */
 	static async listRankTrackingConfigs() {
 		return db
-			.select()
+			.select({
+				...getTableColumns(appTrackingConfig),
+				platform: apps.platform,
+			})
 			.from(appTrackingConfig)
+			.innerJoin(apps, eq(apps.id, appTrackingConfig.appId))
 			.where(eq(appTrackingConfig.rankTrackingEnabled, true));
 	}
 

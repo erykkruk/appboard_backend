@@ -1,7 +1,9 @@
 import Elysia from "elysia";
+import { AppsService } from "@/modules/apps/apps.service";
 import { authGuard } from "@/modules/auth";
 import { verifyAppOwnership } from "@/modules/auth/verify-ownership";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
+import { platformToStore } from "@/modules/research/research.types";
 import { TrackingBoardService } from "./board.service";
 import { ListingVersionService } from "./listing-versions.service";
 import { TrackingMarketsService } from "./markets.service";
@@ -36,7 +38,7 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 	.get(
 		"/:appId/tracking",
 		async ({ params, workspaceId }) => {
-			await verifyAppOwnership(params.appId, workspaceId!);
+			const app = await AppsService.findOne(workspaceId!, params.appId);
 			const [config, keywords, positions] = await Promise.all([
 				TrackingService.getConfig(params.appId, workspaceId!),
 				TrackingService.getKeywords(params.appId),
@@ -46,7 +48,7 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 				config,
 				keywords,
 				positions,
-				schedule: trackingSchedule(config),
+				schedule: trackingSchedule(config, platformToStore(app.platform)),
 			};
 		},
 		{

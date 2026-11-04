@@ -9,7 +9,10 @@ import {
 	primaryResearchMarket,
 	rankedKeywordsByCountry,
 } from "@/modules/tracking/scheduler.service";
-import { RESEARCH_ROTATION_DAYS } from "@/modules/tracking/tracking.types";
+import {
+	RANK_CHECK_HOURS_BY_STORE,
+	RESEARCH_ROTATION_DAYS,
+} from "@/modules/tracking/tracking.types";
 
 const TZ = "UTC";
 const HOUR = 60 * 60 * 1000;
@@ -38,35 +41,61 @@ describe("localHourMinute", () => {
 });
 
 describe("isRankCheckDue", () => {
-	it("fires at 00:00 and 12:00 when never run", () => {
+	const appstore = (lastRankCheckAt: Date | null) => ({
+		lastRankCheckAt,
+		store: "appstore" as const,
+	});
+	const playstore = (lastRankCheckAt: Date | null) => ({
+		lastRankCheckAt,
+		store: "playstore" as const,
+	});
+
+	it("fires at 00:00 and 12:00 for the App Store when never run", () => {
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T00:00:00Z"), TZ)).toBe(
+			true,
+		);
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T12:00:00Z"), TZ)).toBe(
+			true,
+		);
+	});
+
+	it("fires only at 00:00 for Google Play", () => {
 		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T00:00:00Z"), TZ),
+			isRankCheckDue(playstore(null), at("2026-07-10T00:00:00Z"), TZ),
 		).toBe(true);
 		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T12:00:00Z"), TZ),
+			isRankCheckDue(playstore(null), at("2026-07-10T12:00:00Z"), TZ),
+		).toBe(false);
+		expect(
+			isRankCheckDue(
+				playstore(at("2026-07-09T00:40:00Z")),
+				at("2026-07-10T00:00:00Z"),
+				TZ,
+			),
 		).toBe(true);
 	});
 
+	it("keeps the slots in one named table", () => {
+		expect(RANK_CHECK_HOURS_BY_STORE.appstore).toEqual([0, 12]);
+		expect(RANK_CHECK_HOURS_BY_STORE.playstore).toEqual([0]);
+	});
+
 	it("does not fire off-slot", () => {
-		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T12:30:00Z"), TZ),
-		).toBe(false);
-		expect(
-			isRankCheckDue({ lastRankCheckAt: null }, at("2026-07-10T06:00:00Z"), TZ),
-		).toBe(false);
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T12:30:00Z"), TZ)).toBe(
+			false,
+		);
+		expect(isRankCheckDue(appstore(null), at("2026-07-10T06:00:00Z"), TZ)).toBe(
+			false,
+		);
 	});
 
 	it("is idempotent within a slot (6h gap)", () => {
 		const now = at("2026-07-10T12:00:00Z");
+		expect(isRankCheckDue(appstore(at("2026-07-10T11:00:00Z")), now, TZ)).toBe(
+			false,
+		);
 		expect(
-			isRankCheckDue({ lastRankCheckAt: at("2026-07-10T11:00:00Z") }, now, TZ),
-		).toBe(false);
-		expect(
-			isRankCheckDue(
-				{ lastRankCheckAt: new Date(now.getTime() - 7 * HOUR) },
-				now,
-				TZ,
-			),
+			isRankCheckDue(appstore(new Date(now.getTime() - 7 * HOUR)), now, TZ),
 		).toBe(true);
 	});
 });

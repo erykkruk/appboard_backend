@@ -124,10 +124,25 @@ export async function playstoreReviews(
 		}));
 }
 
+/** 1-based position of `appId` in an ordered list of package ids, or null. */
+export function rankOf(
+	ranking: readonly string[],
+	appId: string,
+): number | null {
+	const idx = ranking.indexOf(appId);
+	return idx >= 0 ? idx + 1 : null;
+}
+
+/**
+ * Position of `appId` in the Play web search (top 50). `onRanking` receives
+ * the ordered package ids of the same answer, so a rank check can reuse one
+ * search for every tracked app that needs the same keyword and country.
+ */
 export async function playstoreSearchPosition(
 	keyword: string,
 	appId: string,
 	country: string,
+	onRanking?: (ranking: string[]) => void,
 ): Promise<number | null> {
 	const results = await gplay.search({
 		country,
@@ -135,8 +150,9 @@ export async function playstoreSearchPosition(
 		num: SEARCH_LIMIT,
 		term: keyword,
 	});
-	const idx = results.findIndex((r) => r.appId === appId);
-	return idx >= 0 ? idx + 1 : null;
+	const ranking = results.map((r) => r.appId);
+	onRanking?.(ranking);
+	return rankOf(ranking, appId);
 }
 
 function sameDeveloper(a: string, b: string): boolean {

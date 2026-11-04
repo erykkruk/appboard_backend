@@ -1,9 +1,11 @@
 import config from "@/config";
+import { rankOf } from "@/modules/research/playstore.client";
 import { ResearchService } from "@/modules/research/research.service";
 import type { ResearchStore } from "@/modules/research/research.types";
 import { parseRetryAfterMs, sleep } from "@/utils/backoff";
 import { buildError } from "@/utils/errors";
 import { createLogger } from "@/utils/logger";
+import { PlaySearchCache } from "./play-search-cache";
 import {
 	NO_STORE_VERSIONS,
 	publicStoreVersions,
@@ -66,6 +68,8 @@ export const STORE_BREAKER_MAX_STALL_MS = 30 * 60_000;
 export const STORE_BREAKER_MAX_RUN_MS = 4 * 60 * 60_000;
 /** Error code on a run (or refresh) the breaker stopped. */
 export const STORE_THROTTLED_CODE = "STORE_THROTTLED";
+/** Error code on a run that never started because its store was blocked. */
+export const STORE_DEFERRED_CODE = "STORE_DEFERRED";
 
 export type Sleeper = (ms: number) => Promise<void>;
 export type Clock = () => number;
@@ -159,7 +163,18 @@ export class StoreThrottle {
 	blockedReason(): string | null {
 		const recent = this.recentThrottles(this.now());
 		if (recent.length < STORE_THROTTLE_MAX_EVENTS) return null;
-		return `Store throttled: ${recent.length} throttle answers in ${Math.round(STORE_THROTTLE_WINDOW_MS / 60_000)} min, the rest is measured at the next scheduled check`;
+		return `Store throttled: ${throttleSummary(recent.length)}, the rest is measured at the next scheduled check`;
+	}
+
+	/**
+	 * Why a batch run must not even start on this store right now, or null.
+	 * Same condition as `blockedReason`, worded for a run that measured
+	 * nothing (it was queued behind the run the store refused).
+	 */
+	deferredReason(): string | null {
+		const recent = this.recentThrottles(this.now());
+		if (recent.length < STORE_THROTTLE_MAX_EVENTS) return null;
+		return `Deferred: the store throttled the check before this one (${throttleSummary(recent.length)}), so this check was not started. Every keyword is measured at the next scheduled check`;
 	}
 
 	private recentThrottles(now: number): number[] {
@@ -167,6 +182,10 @@ export class StoreThrottle {
 			(at) => now - at < STORE_THROTTLE_WINDOW_MS,
 		);
 	}
+}
+
+function throttleSummary(count: number): string {
+	return `${count} throttle answers in ${Math.round(STORE_THROTTLE_WINDOW_MS / 60_000)} min`;
 }
 
 /**
@@ -293,8 +312,30 @@ export function throwStoreThrottled(reason: string): never {
 	buildError("storeUnavailable", { code: STORE_THROTTLED_CODE, info: reason });
 }
 
+/**
+ * Throw the typed error of a run that is not started at all: its store is
+ * blocked for batch work (typically by the run queued ahead of it), so every
+ * lookup would be refused. Nothing is measured, nothing is marked failed.
+ */
+export function throwStoreDeferred(reason: string): never {
+	buildError("storeUnavailable", { code: STORE_DEFERRED_CODE, info: reason });
+}
+
+/** The `code` our typed store errors carry (STORE_THROTTLED, ...), or null. */
+export function storeErrorCode(err: unknown): string | null {
+	const code = (err as { response?: { data?: { code?: unknown } } } | null)
+		?.response?.data?.code;
+	return typeof code === "string" ? code : null;
+}
+
 export type RankLookupOutcome =
-	| { attempts: number; ok: true; position: number | null }
+	| {
+			attempts: number;
+			ok: true;
+			position: number | null;
+			/** Read from a Play search another app's lookup made (no request). */
+			reused?: true;
+	  }
 	| {
 			attempts: number;
 			/** Gave up without waiting: the next store slot was past the deadline. */
@@ -316,6 +357,8 @@ export type PositionFetcher = (
 export interface RankLookupRuntime {
 	fetchPosition: PositionFetcher;
 	now: Clock;
+	/** Play searches the default fetcher made, shared by every Play app. */
+	playSearches: PlaySearchCache;
 	runs: StoreRunQueue;
 	sleep: Sleeper;
 	throttles: Record<ResearchStore, StoreThrottle>;
@@ -335,13 +378,18 @@ function buildRuntime(
 	const now = overrides.now ?? Date.now;
 	const wait = overrides.sleep ?? sleep;
 	const spacing = { ...RANK_LOOKUP_SPACING_MS, ...overrides.spacingMs };
+	const playSearches = new PlaySearchCache(now);
 	return {
 		// Resolved at call time so tests can spy on ResearchService.positionFor.
+		// Every Play answer is remembered for the other apps of the slot.
 		fetchPosition:
 			overrides.fetchPosition ??
 			((store, keyword, id, country) =>
-				ResearchService.positionFor(store, keyword, id, country)),
+				ResearchService.positionFor(store, keyword, id, country, (ranking) =>
+					playSearches.set(keyword, country, ranking),
+				)),
 		now,
+		playSearches,
 		runs: new StoreRunQueue(),
 		sleep: wait,
 		throttles: {
@@ -577,11 +625,21 @@ export function breakerPacer(
 	};
 }
 
+export interface LookupRankOptions {
+	/**
+	 * Answer Play lookups from a search another app made within
+	 * PLAY_SEARCH_REUSE_TTL_MS (scheduled checks). Manual checks always ask.
+	 */
+	reuseSearch?: boolean;
+}
+
 /**
  * One keyword's position, throttled per store and retried with backoff.
  * `ok: true` with `position: null` means the store answered and we are not in
  * the scanned results; `ok: false` means we could not measure at all - the
- * caller must not record that as "not ranked".
+ * caller must not record that as "not ranked". With `reuseSearch`, a Play
+ * search already made for the same keyword and country answers without a
+ * request (no throttle slot, no breaker tick).
  */
 export async function lookupRank(
 	store: ResearchStore,
@@ -590,7 +648,19 @@ export async function lookupRank(
 	country: string,
 	rt: RankLookupRuntime = runtime,
 	deadlineAt?: number,
+	options: LookupRankOptions = {},
 ): Promise<RankLookupOutcome> {
+	if (options.reuseSearch && store === "playstore") {
+		const ranking = rt.playSearches.get(keyword, country);
+		if (ranking) {
+			return {
+				attempts: 0,
+				ok: true,
+				position: rankOf(ranking, externalId),
+				reused: true,
+			};
+		}
+	}
 	const outcome = await callThrottled(
 		store,
 		() => rt.fetchPosition(store, keyword, externalId, country),

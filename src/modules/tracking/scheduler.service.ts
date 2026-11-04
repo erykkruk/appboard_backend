@@ -15,7 +15,11 @@ import {
 	ResearchService,
 	type StorePacer,
 } from "@/modules/research/research.service";
-import type { ResearchRunReport } from "@/modules/research/research.types";
+import {
+	platformToStore,
+	type ResearchRunReport,
+	type ResearchStore,
+} from "@/modules/research/research.types";
 import type { KeywordScore } from "@/modules/research/scoring-types";
 import { createLogger } from "@/utils/logger";
 import { AppEventsService } from "./app-events.service";
@@ -41,8 +45,8 @@ import {
 	DEFAULT_SCHEDULER_TZ,
 	IDEA_RESCORE_DAYS,
 	IDEAS_SCORED_PER_MARKET,
-	RANK_CHECK_HOURS,
 	RESEARCH_ROTATION_DAYS,
+	rankCheckHoursFor,
 	type TrackingSchedule,
 } from "./tracking.types";
 
@@ -50,7 +54,7 @@ const log = createLogger("scheduler");
 
 const TICK_MS = 60_000;
 // Guard against a slot re-firing within the same window (e.g. after a restart
-// at 12:00). The two rank-check slots are 12h apart, so 6h is a safe gap.
+// at 12:00). Rank-check slots are at least 12h apart, so 6h is a safe gap.
 const MIN_RANK_GAP_MS = 6 * 60 * 60 * 1000;
 // Keyword-score cache refresh starts daily at 01:00 local (offset from the
 // midnight rank check so the two batches never hammer iTunes at the same
@@ -79,6 +83,8 @@ const TOP_IDEAS_RECORDED = 3;
 
 interface RankSchedulable {
 	lastRankCheckAt: Date | null;
+	/** Picks the slots: see RANK_CHECK_HOURS_BY_STORE. */
+	store: ResearchStore;
 }
 interface ResearchSchedulable {
 	autoResearchFrequency: string;
@@ -128,7 +134,9 @@ export function isRankCheckDue(
 	tz: string,
 ): boolean {
 	const { hour, minute } = localHourMinute(now, tz);
-	if (minute !== 0 || !RANK_CHECK_HOURS.includes(hour as 0 | 12)) return false;
+	if (minute !== 0 || !rankCheckHoursFor(cfg.store).includes(hour)) {
+		return false;
+	}
 	if (!cfg.lastRankCheckAt) return true;
 	return (
 		now.getTime() - new Date(cfg.lastRankCheckAt).getTime() >= MIN_RANK_GAP_MS
@@ -279,13 +287,14 @@ export function nextAutoResearchAt(
 /** Fixed slots of every scheduled job, for the panel's "Next run" line. */
 export function trackingSchedule(
 	cfg: ResearchSchedulable & { autoResearchEnabled: boolean },
+	store: ResearchStore,
 	now = new Date(),
 ): TrackingSchedule {
 	const tz = config.SCHEDULER_TZ || DEFAULT_SCHEDULER_TZ;
 	return {
 		autoResearchHour: AUTO_RESEARCH_HOUR,
 		nextAutoResearchAt: nextAutoResearchAt(cfg, now, tz)?.toISOString() ?? null,
-		rankCheckHours: RANK_CHECK_HOURS,
+		rankCheckHours: rankCheckHoursFor(store),
 		scoreRefreshHour: SCORE_REFRESH_HOUR,
 		timezone: tz,
 	};
@@ -596,7 +605,8 @@ async function runTick(now: Date, tz: string) {
 	try {
 		const rankConfigs = await TrackingService.listRankTrackingConfigs();
 		for (const cfg of rankConfigs) {
-			if (!isRankCheckDue(cfg, now, tz)) continue;
+			const store = platformToStore(cfg.platform);
+			if (!isRankCheckDue({ ...cfg, store }, now, tz)) continue;
 			try {
 				await runScheduledRankCheck(cfg);
 			} catch (err) {
