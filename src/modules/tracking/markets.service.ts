@@ -46,6 +46,7 @@ function aggregate(
 	measurements: Map<string, Measurement[]>,
 	failedKeywords: Set<string>,
 	isBrand: (keyword: string) => boolean,
+	isStarred: (keyword: string) => boolean,
 ): Omit<TrackingMarket, "country"> {
 	const positions: number[] = [];
 	const earnedPositions: number[] = [];
@@ -56,6 +57,7 @@ function aggregate(
 	let entered = 0;
 	let dropped = 0;
 	let lastCheckedAt: Date | null = null;
+	let starredTop10 = 0;
 
 	for (const keyword of tracked) {
 		const list = measurements.get(keyword);
@@ -66,6 +68,13 @@ function aggregate(
 			lastCheckedAt = latest.createdAt;
 		}
 		if (latest.position !== null) positions.push(latest.position);
+		if (
+			latest.position !== null &&
+			latest.position <= TOP_VISIBLE &&
+			isStarred(keyword)
+		) {
+			starredTop10++;
+		}
 
 		const previous = list?.[1];
 		if (latest.position !== null && !isBrand(keyword)) {
@@ -108,6 +117,8 @@ function aggregate(
 		measured,
 		medianPosition: median(positions),
 		ranked: positions.length,
+		starred: tracked.filter(isStarred).length,
+		starredTop10,
 		top10: positions.filter((p) => p <= TOP_VISIBLE).length,
 		top50: positions.filter((p) => p <= TOP_SCANNED).length,
 		tracked: tracked.length,
@@ -133,6 +144,7 @@ export class TrackingMarketsService {
 			.select({
 				country: trackedKeywords.country,
 				keyword: trackedKeywords.keyword,
+				starred: trackedKeywords.starred,
 			})
 			.from(trackedKeywords)
 			.where(eq(trackedKeywords.appId, appId))
@@ -157,6 +169,9 @@ export class TrackingMarketsService {
 			failedByCountry.set(failure.country, set);
 		}
 
+		const starredKeys = new Set(
+			tracked.filter((r) => r.starred).map((r) => `${r.country}|${r.keyword}`),
+		);
 		const trackedByCountry = new Map<string, string[]>();
 		for (const row of tracked) {
 			trackedByCountry.set(row.country, [
@@ -173,6 +188,7 @@ export class TrackingMarketsService {
 					byCountry.get(country) ?? new Map(),
 					failedByCountry.get(country) ?? new Set(),
 					isBrand,
+					(keyword) => starredKeys.has(`${country}|${keyword}`),
 				),
 			}),
 		);
@@ -191,8 +207,12 @@ export class TrackingMarketsService {
 			}
 		}
 		const totals: TrackingMarketTotals = {
-			...aggregate(allTracked, allMeasurements, allFailed, (key) =>
-				isBrand(key.slice(key.indexOf("|") + 1)),
+			...aggregate(
+				allTracked,
+				allMeasurements,
+				allFailed,
+				(key) => isBrand(key.slice(key.indexOf("|") + 1)),
+				(key) => starredKeys.has(key),
 			),
 			markets: markets.length,
 		};

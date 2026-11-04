@@ -37,6 +37,18 @@ export const bulkAddKeywordsBody = t.Object({
 	),
 });
 
+export const starKeywordParams = t.Object({
+	appId: t.String(),
+	keywordId: t.String({ format: "uuid" }),
+});
+
+export const starKeywordBody = t.Object({ starred: t.Boolean() });
+
+export const bulkStarKeywordsBody = t.Object({
+	items: bulkAddKeywordsBody.properties.items,
+	starred: t.Boolean(),
+});
+
 export const configPatchBody = t.Object({
 	autoResearchEnabled: t.Optional(t.Boolean()),
 	autoResearchFrequency: t.Optional(

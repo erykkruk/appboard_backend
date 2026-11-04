@@ -81,6 +81,13 @@ export interface BulkAddMarketResult {
 	skipped: string[];
 }
 
+export interface BulkStarMarketResult {
+	country: string;
+	/** Requested phrases this market does not track - starring never tracks. */
+	notTracked: string[];
+	updated: string[];
+}
+
 export interface LatestPosition {
 	keyword: string;
 	country: string;
@@ -140,6 +147,10 @@ export interface TrackingMarket {
 	measured: number;
 	medianPosition: number | null;
 	ranked: number;
+	/** Tracked keywords marked as the team's own targets. */
+	starred: number;
+	/** Starred keywords whose latest position is in the top 10. */
+	starredTop10: number;
 	top10: number;
 	top50: number;
 	tracked: number;

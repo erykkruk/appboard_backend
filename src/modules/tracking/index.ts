@@ -12,15 +12,19 @@ import {
 	appIdParams,
 	boardQuery,
 	bulkAddKeywordsBody,
+	bulkStarKeywordsBody,
 	checkRunParams,
 	configPatchBody,
 	historyQuery,
 	keywordParams,
 	runForAppBody,
 	runParams,
+	starKeywordBody,
+	starKeywordParams,
 	suggestionsQuery,
 } from "./tracking.schema";
 import { TrackingService } from "./tracking.service";
+import { MAX_KEYWORDS_PER_COUNTRY } from "./tracking.types";
 
 export const trackingController = new Elysia({ prefix: "/apps" })
 	.use(authGuard)
@@ -114,11 +118,51 @@ export const trackingController = new Elysia({ prefix: "/apps" })
 		{
 			body: bulkAddKeywordsBody,
 			detail: {
-				description:
-					"Add tracked keywords for many markets in one call: { items: [{ country, keywords[] }] }. Never fails the whole request on the per-market cap (20): each market reports added, skipped (already tracked) and rejected (over the cap).",
+				description: `Add tracked keywords for many markets in one call: { items: [{ country, keywords[] }] }. Never fails the whole request on the per-market cap (${MAX_KEYWORDS_PER_COUNTRY}): each market reports added, skipped (already tracked) and rejected (over the cap).`,
 				tags: ["Tracking"],
 			},
 			params: appIdParams,
+		},
+	)
+	.patch(
+		"/:appId/tracking/keywords",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			return TrackingService.setStarredBulk(
+				params.appId,
+				body.items,
+				body.starred,
+			);
+		},
+		{
+			body: bulkStarKeywordsBody,
+			detail: {
+				description:
+					"Star or unstar tracked keywords in many markets: { items: [{ country, keywords[] }], starred }. Phrases that are not tracked come back as notTracked (starring never tracks).",
+				tags: ["Tracking"],
+			},
+			params: appIdParams,
+		},
+	)
+	.patch(
+		"/:appId/tracking/keywords/:keywordId",
+		async ({ body, params, workspaceId }) => {
+			await verifyAppOwnership(params.appId, workspaceId!);
+			const keyword = await TrackingService.setStarred(
+				params.appId,
+				params.keywordId,
+				body.starred,
+			);
+			return { keyword };
+		},
+		{
+			body: starKeywordBody,
+			detail: {
+				description:
+					"Star (or unstar) a tracked keyword as one of the team's own targets",
+				tags: ["Tracking"],
+			},
+			params: starKeywordParams,
 		},
 	)
 	.delete(

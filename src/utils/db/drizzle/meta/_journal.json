@@ -252,6 +252,13 @@
       "when": 1793699067834,
       "tag": "0035_slim_bloodscream",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1793755543572,
+      "tag": "0036_useful_amphibian",
+      "breakpoints": true
     }
   ],
   "version": "7"
