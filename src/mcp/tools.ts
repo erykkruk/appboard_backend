@@ -526,7 +526,7 @@ export const tools: RegisteredTool[] = [
 		description:
 			"Track keywords in many markets at once: items = [{ country, " +
 			"keywords[] }] (up to 250 markets, 100 keywords each per call). " +
-			"Keywords are lowercased and deduped; each market holds at most 40. " +
+			"Keywords are lowercased and deduped; each market holds at most 80. " +
 			"Returns per market what was added, skipped (already tracked) and " +
 			"rejected (over the cap) - the call never fails as a whole on the cap.",
 		handler: (client, input) =>
