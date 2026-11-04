@@ -4,7 +4,10 @@ import { researchController } from "@/modules/research";
 import { extractSsrAppIds } from "@/modules/research/appstore.client";
 import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
 import type { KeywordScore } from "@/modules/research/research.types";
-import { isScoreRefreshDue } from "@/modules/tracking/scheduler.service";
+import {
+	isScoreRefreshDue,
+	localDayKey,
+} from "@/modules/tracking/scheduler.service";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import {
 	authGuard,
@@ -96,10 +99,10 @@ afterEach(clearAll);
 
 describe("KeywordScoresHistoryService", () => {
 	it("upserts one row per keyword+country+day", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			score("fitness"),
 		]);
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			{ ...score("fitness"), difficulty: 50, opportunity: 10 },
 		]);
 		const entries = await KeywordScoresHistoryService.list(TEST_WORKSPACE_ID);
@@ -109,7 +112,7 @@ describe("KeywordScoresHistoryService", () => {
 	});
 
 	it("skips failed scores", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			{ ...score("broken"), error: "iTunes down" },
 		]);
 		const entries = await KeywordScoresHistoryService.list(TEST_WORKSPACE_ID);
@@ -117,7 +120,7 @@ describe("KeywordScoresHistoryService", () => {
 	});
 
 	it("filters by keyword and country", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			score("fitness", "us"),
 			score("fitness", "pl"),
 			score("yoga", "us"),
@@ -134,7 +137,7 @@ describe("KeywordScoresHistoryService", () => {
 	});
 
 	it("returns trend points with today's snapshot", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			score("fitness"),
 		]);
 		const points = await KeywordScoresHistoryService.trend(
@@ -148,7 +151,7 @@ describe("KeywordScoresHistoryService", () => {
 	});
 
 	it("get returns the full payload and delete removes the row", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			score("fitness"),
 		]);
 		const [entry] = await KeywordScoresHistoryService.list(TEST_WORKSPACE_ID);
@@ -163,7 +166,7 @@ describe("KeywordScoresHistoryService", () => {
 	});
 
 	it("cleanup drops rows older than retention only", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			score("fitness"),
 		]);
 		const removed = await KeywordScoresHistoryService.cleanup(90);
@@ -175,7 +178,7 @@ describe("KeywordScoresHistoryService", () => {
 
 describe("keyword score history endpoints", () => {
 	it("workspace B cannot see or delete workspace A snapshots", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			score("fitness"),
 		]);
 		const [entry] = await KeywordScoresHistoryService.list(TEST_WORKSPACE_ID);
@@ -204,7 +207,7 @@ describe("keyword score history endpoints", () => {
 	});
 
 	it("lists, fetches and deletes through the API", async () => {
-		await KeywordScoresHistoryService.upsertToday(TEST_WORKSPACE_ID, [
+		await KeywordScoresHistoryService.upsertScores(TEST_WORKSPACE_ID, [
 			score("fitness"),
 		]);
 		const list = await app.handle(
@@ -238,39 +241,25 @@ describe("keyword score history endpoints", () => {
 
 describe("isScoreRefreshDue", () => {
 	const at = (iso: string) => new Date(iso);
-	it("fires only at the refresh hour", () => {
+	it("opens at the refresh hour and stays open for the rest of the day", () => {
 		expect(
-			isScoreRefreshDue(
-				{ lastScoreRefreshAt: null },
-				at("2026-08-31T01:00:00+02:00"),
-				"Europe/Warsaw",
-			),
-		).toBe(true);
-		expect(
-			isScoreRefreshDue(
-				{ lastScoreRefreshAt: null },
-				at("2026-08-31T02:00:00+02:00"),
-				"Europe/Warsaw",
-			),
+			isScoreRefreshDue(at("2026-08-31T00:59:00+02:00"), "Europe/Warsaw"),
 		).toBe(false);
+		expect(
+			isScoreRefreshDue(at("2026-08-31T01:00:00+02:00"), "Europe/Warsaw"),
+		).toBe(true);
+		// A run a restart cut off resumes later the same day.
+		expect(
+			isScoreRefreshDue(at("2026-08-31T03:17:00+02:00"), "Europe/Warsaw"),
+		).toBe(true);
 	});
 
-	it("respects the minimum gap", () => {
-		const now = at("2026-08-31T01:00:00+02:00");
-		expect(
-			isScoreRefreshDue(
-				{ lastScoreRefreshAt: at("2026-08-31T00:30:00+02:00") },
-				now,
-				"Europe/Warsaw",
-			),
-		).toBe(false);
-		expect(
-			isScoreRefreshDue(
-				{ lastScoreRefreshAt: at("2026-08-30T01:00:00+02:00") },
-				now,
-				"Europe/Warsaw",
-			),
-		).toBe(true);
+	it("keys the run by the local calendar day", () => {
+		// 23:30 UTC on the 30th is already the 31st in Warsaw.
+		expect(localDayKey(at("2026-08-30T23:30:00Z"), "Europe/Warsaw")).toBe(
+			"2026-08-31",
+		);
+		expect(localDayKey(at("2026-08-30T23:30:00Z"), "UTC")).toBe("2026-08-30");
 	});
 });
 

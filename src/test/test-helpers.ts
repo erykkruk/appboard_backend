@@ -11,7 +11,12 @@ import { systemController } from "@/modules/system";
 import { authGuard, authRequest, getTestWorkspaceId } from "@/test/setup";
 import { encrypt } from "@/utils/crypto";
 import { db } from "@/utils/db";
-import { apps, stores } from "@/utils/db/schema";
+import {
+	apps,
+	keywordScoreCache,
+	keywordScoreRefreshRuns,
+	stores,
+} from "@/utils/db/schema";
 import { errorHandler } from "@/utils/errors/errorHandler";
 
 export function createTestApp() {
@@ -30,6 +35,16 @@ export function createTestApp() {
 				.use(aiController)
 				.use(settingsController),
 		);
+}
+
+/**
+ * Empty the global keyword score cache (and its refresh runs). Scores are
+ * shared across workspaces and test files, so a suite that stubs the App
+ * Store must start without another suite's cached answers.
+ */
+export async function clearKeywordScoreCache() {
+	await db.delete(keywordScoreCache);
+	await db.delete(keywordScoreRefreshRuns);
 }
 
 export async function seedTestStore(workspaceId?: string) {

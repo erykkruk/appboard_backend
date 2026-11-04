@@ -2,8 +2,13 @@ import config from "@/config";
 import { AppleAdsService } from "@/modules/apple-ads/apple-ads.service";
 import { AppsService } from "@/modules/apps/apps.service";
 import { AuditService } from "@/modules/audit/audit.service";
+import {
+	AUTO_RESEARCH_EVENT,
+	DailySummaryService,
+} from "@/modules/daily-summary/daily-summary.service";
 import { PublicReportsService } from "@/modules/public-reports/public-reports.service";
 import { FreeToolQuotaService } from "@/modules/public-reports/quota.service";
+import { KeywordScoreCacheService } from "@/modules/research/keyword-score-cache.service";
 import { KeywordScoresHistoryService } from "@/modules/research/keyword-scores-history.service";
 import { ResearchRunsService } from "@/modules/research/research.runs.service";
 import {
@@ -11,8 +16,9 @@ import {
 	type StorePacer,
 } from "@/modules/research/research.service";
 import type { ResearchRunReport } from "@/modules/research/research.types";
+import type { KeywordScore } from "@/modules/research/scoring-types";
 import { createLogger } from "@/utils/logger";
-import { sendMail } from "@/utils/mailer";
+import { AppEventsService } from "./app-events.service";
 import { DraftReminderService } from "./draft-reminder.service";
 import { RankCheckJobs } from "./rank-check.jobs";
 import {
@@ -22,6 +28,11 @@ import {
 	type StoreBreakerLimits,
 } from "./rank-lookup";
 import { ReportService } from "./report.service";
+import { reportMail } from "./report-mail";
+import {
+	runScoreCacheRefresh,
+	type ScoreRefreshSummary,
+} from "./score-refresh.service";
 import { KeywordSuggestionsService } from "./suggestions.service";
 import { TrackingService } from "./tracking.service";
 import {
@@ -41,8 +52,9 @@ const TICK_MS = 60_000;
 // Guard against a slot re-firing within the same window (e.g. after a restart
 // at 12:00). The two rank-check slots are 12h apart, so 6h is a safe gap.
 const MIN_RANK_GAP_MS = 6 * 60 * 60 * 1000;
-// Keyword-score refresh runs daily at 01:00 local (offset from the midnight
-// rank check so the two batches never hammer iTunes at the same time).
+// Keyword-score cache refresh starts daily at 01:00 local (offset from the
+// midnight rank check so the two batches never hammer iTunes at the same
+// time). A run a restart cut off resumes on the next tick of the same day.
 const SCORE_REFRESH_HOUR = 1;
 // Apple Ads dataset sync runs daily at 02:00; it no-ops for countries whose
 // newest completed week is already active, so it only downloads on Mondays.
@@ -52,8 +64,6 @@ const DRAFT_REMINDER_HOUR = 9;
 /** Weekly listing audit sweep: Monday, a quiet hour, all stored audits. */
 const AUDIT_REFRESH_WEEKDAY = 1;
 const AUDIT_REFRESH_HOUR = 3;
-const MIN_SCORE_REFRESH_GAP_MS = 20 * 60 * 60 * 1000;
-const SCORE_KEYWORDS_PER_CALL = 10;
 const FREQUENCY_DAYS: Record<AutoResearchFrequency, number> = {
 	daily: 1,
 	monthly: 30,
@@ -64,6 +74,8 @@ const FREQUENCY_GRACE_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** How far ahead "next run" is searched (a monthly run plus slack). */
 const NEXT_RUN_SEARCH_DAYS = 40;
+/** Best scored ideas kept on the auto-research event for the daily summary. */
+const TOP_IDEAS_RECORDED = 3;
 
 interface RankSchedulable {
 	lastRankCheckAt: Date | null;
@@ -123,18 +135,18 @@ export function isRankCheckDue(
 	);
 }
 
-export function isScoreRefreshDue(
-	cfg: { lastScoreRefreshAt: Date | null },
-	now: Date,
-	tz: string,
-): boolean {
-	const { hour, minute } = localHourMinute(now, tz);
-	if (minute !== 0 || hour !== SCORE_REFRESH_HOUR) return false;
-	if (!cfg.lastScoreRefreshAt) return true;
-	return (
-		now.getTime() - new Date(cfg.lastScoreRefreshAt).getTime() >=
-		MIN_SCORE_REFRESH_GAP_MS
-	);
+/**
+ * The day's score refresh may run from 01:00 local until midnight; whether
+ * it already ran (or is still running) is decided by its run row, so a run
+ * a deploy restart killed at 03:00 picks up again at 03:01.
+ */
+export function isScoreRefreshDue(now: Date, tz: string): boolean {
+	return localHourMinute(now, tz).hour >= SCORE_REFRESH_HOUR;
+}
+
+/** Local calendar date (YYYY-MM-DD) in the scheduler timezone. */
+export function localDayKey(now: Date, tz: string): string {
+	return new Date(localDayNumber(now, tz) * DAY_MS).toISOString().slice(0, 10);
 }
 
 export function isAutoResearchDue(
@@ -246,23 +258,61 @@ export function trackingSchedule(
 	};
 }
 
-async function sendRankDigest(cfg: {
+/**
+ * Per-app rank digest after a scheduled check. Not sent while the workspace
+ * daily summary is on: that one morning mail replaces it.
+ */
+export async function sendRankDigest(cfg: {
 	appId: string;
 	emailRankDigest: boolean;
 	notifyEmail: string | null;
 	workspaceId: string;
-}) {
-	if (!cfg.emailRankDigest) return;
+}): Promise<boolean> {
+	if (!cfg.emailRankDigest) return false;
+	if (await DailySummaryService.isEnabled(cfg.workspaceId)) {
+		log.info(
+			{ appId: cfg.appId },
+			"Rank digest replaced by the daily summary - not sent",
+		);
+		return false;
+	}
 	const positions = await TrackingService.getLatestPositions(cfg.appId);
-	if (!positions.length) return;
+	if (!positions.length) return false;
 	const email = await TrackingService.resolveNotifyEmail(
 		cfg.workspaceId,
 		cfg.notifyEmail,
 	);
-	if (!email) return;
+	if (!email) return false;
 	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
 	const message = ReportService.buildRankDigest(app.name, positions);
-	await sendMail({ ...message, to: email });
+	return reportMail.send({ ...message, to: email });
+}
+
+/**
+ * Per-app research report after the scheduled auto-research. Not sent while
+ * the workspace daily summary is on (it carries the research result).
+ */
+export async function sendAutoResearchReport(
+	cfg: { appId: string; notifyEmail: string | null; workspaceId: string },
+	run: { report: unknown; title: string | null },
+): Promise<boolean> {
+	if (await DailySummaryService.isEnabled(cfg.workspaceId)) {
+		log.info(
+			{ appId: cfg.appId },
+			"Research report replaced by the daily summary - not sent",
+		);
+		return false;
+	}
+	const email = await TrackingService.resolveNotifyEmail(
+		cfg.workspaceId,
+		cfg.notifyEmail,
+	);
+	if (!email) return false;
+	const message = ReportService.buildAutoResearchEmail(
+		run.title ?? "your app",
+		run.report as ResearchRunReport,
+	);
+	return reportMail.send({ ...message, to: email });
 }
 
 /**
@@ -286,7 +336,11 @@ export async function runScheduledRankCheck(cfg: {
 		cfg.appId,
 		cfg.workspaceId,
 		"scheduled",
-		{ onComplete: () => sendRankDigest(cfg) },
+		{
+			onComplete: async () => {
+				await sendRankDigest(cfg);
+			},
+		},
 	);
 	if (!started) {
 		log.info({ appId: cfg.appId }, "Store has no searchable results - skipped");
@@ -294,56 +348,18 @@ export async function runScheduledRankCheck(cfg: {
 }
 
 /**
- * Refresh keyword-score snapshots for every tracked keyword of an app, one
- * country at a time. iOS apps also get their rank refreshed via the app's
- * store id. The scoring path persists snapshots itself (workspaceId given).
- * Every iTunes request goes through the same process-wide throttle and retry
- * policy as rank checks, so a few hundred keywords never burst the store, and
- * the same circuit breaker stops the refresh when the store stays blocked.
+ * The nightly keyword-score refresh: one global run for every workspace (see
+ * `runScoreCacheRefresh`). Tracked keywords are deduplicated across apps and
+ * workspaces and only the stale cache entries of today's slice ask the App
+ * Store, through the same process-wide throttle, retry policy and circuit
+ * breaker as rank checks. Returns null when today's run already finished.
  */
 export async function runScheduledScoreRefresh(
-	cfg: {
-		appId: string;
-		workspaceId: string;
-	},
+	now = new Date(),
 	options: { breakerLimits?: StoreBreakerLimits } = {},
-) {
-	const tracked = await TrackingService.getKeywords(cfg.appId);
-	if (!tracked.length) return;
-	const app = await AppsService.findOne(cfg.workspaceId, cfg.appId);
-	const appstoreId =
-		app.platform === "ios" ? (app.externalId ?? undefined) : undefined;
-
-	const byCountry = new Map<string, string[]>();
-	for (const k of tracked) {
-		byCountry.set(k.country, [...(byCountry.get(k.country) ?? []), k.keyword]);
-	}
-	const rt = getRankLookupRuntime();
-	const breaker = new StoreBreaker(rt.now, options.breakerLimits);
-	const pace = breakerPacer("appstore", breaker, rt);
-	for (const [country, keywords] of byCountry) {
-		for (
-			let start = 0;
-			start < keywords.length;
-			start += SCORE_KEYWORDS_PER_CALL
-		) {
-			if (breaker.trippedReason) {
-				log.warn(
-					{ appId: cfg.appId, country, reason: breaker.trippedReason },
-					"Score refresh stopped by the store breaker",
-				);
-				return;
-			}
-			await ResearchService.keywordScores(
-				keywords.slice(start, start + SCORE_KEYWORDS_PER_CALL),
-				country,
-				appstoreId,
-				cfg.workspaceId,
-				{ pace },
-			);
-		}
-	}
-	await TrackingService.markScoreRefreshRun(cfg.appId);
+): Promise<ScoreRefreshSummary | null> {
+	const tz = config.SCHEDULER_TZ || DEFAULT_SCHEDULER_TZ;
+	return runScoreCacheRefresh(localDayKey(now, tz), { ...options, now });
 }
 
 /**
@@ -358,6 +374,15 @@ export async function scoreMarketIdeas(
 	country: string,
 	options: { appstoreId?: string; now?: Date; pace?: StorePacer } = {},
 ): Promise<number> {
+	return (await scoreMarketIdeasDetailed(cfg, country, options)).due;
+}
+
+/** `scoreMarketIdeas` plus the scores themselves (for the run's best ideas). */
+export async function scoreMarketIdeasDetailed(
+	cfg: { appId: string; workspaceId: string },
+	country: string,
+	options: { appstoreId?: string; now?: Date; pace?: StorePacer } = {},
+): Promise<{ due: number; scores: KeywordScore[] }> {
 	const { suggestions } = await KeywordSuggestionsService.forMarket(
 		cfg.appId,
 		cfg.workspaceId,
@@ -371,15 +396,31 @@ export async function scoreMarketIdeas(
 		.filter((s) => !s.scoredAt || s.scoredAt < staleBefore)
 		.slice(0, IDEAS_SCORED_PER_MARKET)
 		.map((s) => s.keyword);
-	if (!due.length) return 0;
-	await ResearchService.keywordScores(
+	if (!due.length) return { due: 0, scores: [] };
+	const scores = await ResearchService.keywordScores(
 		due,
 		country,
 		options.appstoreId,
 		cfg.workspaceId,
 		{ pace: options.pace },
 	);
-	return due.length;
+	return { due: due.length, scores };
+}
+
+/** The run's best new ideas by opportunity (scored ones, no errors). */
+export function bestIdeas(
+	scores: KeywordScore[],
+	limit = TOP_IDEAS_RECORDED,
+): Array<{ country: string; keyword: string; opportunity: number }> {
+	return scores
+		.filter((s) => !s.error && Number.isFinite(s.opportunity))
+		.sort((a, b) => b.opportunity - a.opportunity)
+		.slice(0, limit)
+		.map((s) => ({
+			country: s.country,
+			keyword: s.keyword,
+			opportunity: s.opportunity,
+		}));
 }
 
 /**
@@ -426,6 +467,7 @@ export async function runScheduledAutoResearch(
 	const appstoreId =
 		app.platform === "ios" ? (app.externalId ?? undefined) : undefined;
 	let scored = 0;
+	const scores: KeywordScore[] = [];
 	for (const market of markets) {
 		if (breaker.trippedReason) {
 			log.warn(
@@ -434,35 +476,63 @@ export async function runScheduledAutoResearch(
 			);
 			break;
 		}
-		scored += await scoreMarketIdeas(cfg, market, { appstoreId, now, pace });
+		const result = await scoreMarketIdeasDetailed(cfg, market, {
+			appstoreId,
+			now,
+			pace,
+		});
+		scored += result.due;
+		scores.push(...result.scores);
 	}
 	log.info(
 		{ appId: cfg.appId, country, markets: markets.length, scored },
 		"Scheduled auto-research complete",
 	);
 
-	const email = await TrackingService.resolveNotifyEmail(
-		cfg.workspaceId,
-		cfg.notifyEmail,
+	// Read back by the daily summary ("N ideas scored, best: ...").
+	await AppEventsService.record(
+		cfg.appId,
+		AUTO_RESEARCH_EVENT,
+		`Auto-research (${country.toUpperCase()})`,
+		{
+			country,
+			markets: markets.length,
+			runId: run.id,
+			scored,
+			topIdeas: bestIdeas(scores),
+		},
 	);
-	if (!email) return;
-	const message = ReportService.buildAutoResearchEmail(
-		run.title ?? "your app",
-		run.report as ResearchRunReport,
-	);
-	await sendMail({ ...message, to: email });
+
+	await sendAutoResearchReport(cfg, run);
 }
 
 /** Apps whose detached auto-research is still running. */
 const researching = new Set<string>();
 
-/** Apps whose detached keyword-score refresh is still running. */
-const scoreRefreshing = new Set<string>();
+/** Day key of the score refresh running in this process, if any. */
+let scoreRefreshDay: string | null = null;
+/** Last day whose score refresh settled (ran or was already done). */
+let scoreRefreshSettledDay: string | null = null;
 
-async function runDailyCleanups(refreshed: boolean[]) {
-	if (!refreshed.some(Boolean)) return;
+/**
+ * Still measuring or researching: the daily summary waits for these. The
+ * score refresh is global (one run for every workspace), so while it runs
+ * every app counts as busy.
+ */
+function isAppBusy(appId: string): boolean {
+	return (
+		RankCheckJobs.isRunning(appId) ||
+		researching.has(appId) ||
+		scoreRefreshDay !== null
+	);
+}
+
+async function runDailyCleanups() {
 	await KeywordScoresHistoryService.cleanup().catch((err) => {
 		log.error({ err }, "Keyword score cleanup failed");
+	});
+	await KeywordScoreCacheService.cleanup().catch((err) => {
+		log.error({ err }, "Keyword score cache cleanup failed");
 	});
 	await FreeToolQuotaService.cleanup().catch((err) => {
 		log.error({ err }, "Free-tool quota cleanup failed");
@@ -521,27 +591,31 @@ async function runTick(now: Date, tz: string) {
 			})();
 		}
 
-		const refreshes = rankConfigs
-			.filter((cfg) => isScoreRefreshDue(cfg, now, tz))
-			.filter((cfg) => !scoreRefreshing.has(cfg.appId))
-			.map((cfg) => {
-				scoreRefreshing.add(cfg.appId);
-				return runScheduledScoreRefresh(cfg)
-					.then(() => true)
-					.catch((err) => {
-						log.error(
-							{ appId: cfg.appId, err },
-							"Scheduled score refresh failed",
-						);
-						return false;
-					})
-					.finally(() => scoreRefreshing.delete(cfg.appId));
-			});
-		// Throttled refreshes take tens of minutes for large keyword sets, so
-		// they run detached; the cleanups follow once they are all done.
-		if (refreshes.length) {
-			void Promise.all(refreshes).then(runDailyCleanups);
+		// Detached: the slice is throttled (minutes to tens of minutes). The
+		// cleanups follow a run that actually happened today.
+		const refreshDay = localDayKey(now, tz);
+		if (
+			isScoreRefreshDue(now, tz) &&
+			scoreRefreshDay === null &&
+			scoreRefreshSettledDay !== refreshDay
+		) {
+			scoreRefreshDay = refreshDay;
+			void runScheduledScoreRefresh(now)
+				.then(async (summary) => {
+					if (summary) await runDailyCleanups();
+				})
+				.catch((err) => {
+					log.error({ err }, "Scheduled score refresh failed");
+				})
+				.finally(() => {
+					scoreRefreshSettledDay = refreshDay;
+					scoreRefreshDay = null;
+				});
 		}
+
+		await DailySummaryService.runScheduled(now, tz, isAppBusy).catch((err) => {
+			log.error({ err }, "Daily summaries failed");
+		});
 
 		const { hour, minute } = localHourMinute(now, tz);
 		if (hour === DRAFT_REMINDER_HOUR && minute === 0) {

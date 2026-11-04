@@ -159,6 +159,20 @@ export async function appstoreMeta(
 	};
 }
 
+/**
+ * The raw iTunes Lookup answer for one storefront: the ratings fields
+ * (`averageUserRating`, `userRatingCount`, current-version ones) are read by
+ * the ratings parser. `resultCount: 0` means the app is not sold there.
+ */
+export async function appstoreLookupRaw(
+	id: string,
+	country: string,
+): Promise<Record<string, unknown>> {
+	return itunesFetch(
+		`https://itunes.apple.com/lookup?id=${encodeURIComponent(id)}&country=${encodeURIComponent(country)}`,
+	);
+}
+
 export async function appstoreSearch(
 	term: string,
 	country: string,

@@ -1,5 +1,6 @@
 import type { ApiResource } from "node-app-store-connect-api";
 import { type AppDevice, normalizeDevices } from "@/config/const";
+import { countryFromTerritory } from "@/modules/reviews/store-countries";
 import { probeAccess } from "@/providers/capability-access";
 import {
 	getMockAssets,
@@ -1057,16 +1058,19 @@ export class AppStoreProvider implements StoreProvider {
 					? new Date(response.attributes.lastModifiedDate as string)
 					: undefined;
 
+				// ASC reports the storefront as alpha-3 ("USA"), and no language.
+				// Stored as alpha-2 like every other source, so the country
+				// filter and the per-country rating table line up.
+				const territory = attrs.territory as string | undefined;
 				reviews.push({
 					authorName: (attrs.reviewerNickname as string) ?? "Anonymous",
 					body: (attrs.body as string) ?? "",
 					externalId: raw.id,
-					language: (attrs.territory as string) ?? undefined,
 					rating: (attrs.rating as number) ?? 0,
 					repliedAt,
 					replyText,
 					reviewDate: new Date((attrs.createdDate as string) ?? Date.now()),
-					territory: (attrs.territory as string) ?? undefined,
+					territory: countryFromTerritory(territory) ?? territory,
 					title: (attrs.title as string) ?? undefined,
 				});
 			}

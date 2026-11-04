@@ -110,5 +110,13 @@ export interface KeywordScore {
 	downloads: DownloadEstimates;
 	appRank?: number | null;
 	competitors: KeywordCompetitor[];
+	/**
+	 * When the App Store search behind this score was made (ISO). Scores are
+	 * served from a cross-workspace cache for up to 7 days, so this can be
+	 * older than the request.
+	 */
+	scoredAt?: string;
+	/** True when the search came from the cache, not a fresh store call. */
+	cached?: boolean;
 	error?: string;
 }

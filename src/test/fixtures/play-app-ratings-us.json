@@ -1,0 +1,12 @@
+{
+	"appId": "tech.ravenlab.buzzin",
+	"histogram": {
+		"1": 0,
+		"2": 0,
+		"3": 0,
+		"4": 0,
+		"5": 0
+	},
+	"title": "Buzzin: TV Party Game Show",
+	"version": "1.7.5"
+}

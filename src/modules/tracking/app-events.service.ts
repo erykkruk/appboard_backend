@@ -13,6 +13,7 @@ export type AppEventType =
 	| "screenshots_published"
 	| "draft_reminder_sent"
 	| "audit_scored"
+	| "auto_research_completed"
 	| "listing_versions_backfilled";
 
 /**

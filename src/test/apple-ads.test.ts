@@ -21,6 +21,7 @@ import { db } from "@/utils/db";
 import { appleDatasetWeeks, appleTopTerms } from "@/utils/db/schema";
 import { errorHandler } from "@/utils/errors/errorHandler";
 import { authGuard, authRequest, getTestWorkspaceId } from "./setup";
+import { clearKeywordScoreCache } from "./test-helpers";
 
 const TEST_WORKSPACE_ID = getTestWorkspaceId();
 
@@ -167,6 +168,8 @@ describe("popularity context + dual source", () => {
 	const WEEK = "2026-08-23";
 
 	beforeEach(async () => {
+		// The store answers below are stubbed per test; never reuse a cached one.
+		await clearKeywordScoreCache();
 		await db
 			.insert(appleDatasetWeeks)
 			.values({ country: "us", status: "active", termCount: 3, week: WEEK })
