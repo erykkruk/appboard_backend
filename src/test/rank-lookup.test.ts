@@ -7,13 +7,21 @@ import {
 	lookupRank,
 	RANK_LOOKUP_MAX_ATTEMPTS,
 	RANK_LOOKUP_MAX_SLOWDOWN,
+	RANK_LOOKUP_MAX_SPACING_MS,
 	RANK_LOOKUP_RECOVERY_STREAK,
 	RANK_LOOKUP_SPACING_MS,
 	RANK_LOOKUP_THROTTLE_PAUSE_MS,
 	rankBackoffMs,
+	STORE_THROTTLE_MAX_EVENTS,
+	STORE_THROTTLE_WINDOW_MS,
+	StoreRunQueue,
 	StoreThrottle,
 } from "@/modules/tracking/rank-lookup";
 import { rankTrackingSupport } from "@/modules/tracking/rank-support";
+import {
+	measurementKey,
+	orderLeastRecentlyMeasured,
+} from "@/modules/tracking/tracking.service";
 import { parseRetryAfterMs } from "@/utils/backoff";
 import { buildError } from "@/utils/errors";
 
@@ -110,12 +118,44 @@ describe("StoreThrottle", () => {
 		}
 		expect(throttle.currentSpacingMs).toBe(4_000);
 		throttle.recordSuccess();
-		expect(throttle.currentSpacingMs).toBe(2_000);
+		// Additive recovery: half the base spacing per streak, not halving.
+		expect(throttle.currentSpacingMs).toBe(3_500);
 
+		for (let i = 0; i < RANK_LOOKUP_RECOVERY_STREAK * 5; i++) {
+			throttle.recordSuccess();
+		}
+		expect(throttle.currentSpacingMs).toBe(1_000);
 		for (let i = 0; i < RANK_LOOKUP_RECOVERY_STREAK * 3; i++) {
 			throttle.recordSuccess();
 		}
 		expect(throttle.currentSpacingMs).toBe(1_000);
+	});
+
+	it("never slows down past the absolute spacing cap", () => {
+		const time = fakeTime();
+		const throttle = new StoreThrottle(10_000, time.now, time.sleep);
+		for (let i = 0; i < 5; i++) throttle.throttled(0);
+		expect(throttle.currentSpacingMs).toBe(RANK_LOOKUP_MAX_SPACING_MS);
+	});
+
+	it("blocks batch work after 3 throttle answers in 30 minutes", async () => {
+		const time = fakeTime();
+		const throttle = new StoreThrottle(
+			1_000,
+			time.now,
+			time.sleep,
+			"playstore",
+		);
+		throttle.throttled(0, 429);
+		throttle.throttled(0, 403);
+		expect(throttle.blockedReason()).toBeNull();
+		throttle.throttled(0, 429);
+		expect(throttle.blockedReason()).toContain(
+			`${STORE_THROTTLE_MAX_EVENTS} throttle answers in 30 min`,
+		);
+		// Once the oldest answer leaves the window the store is usable again.
+		await time.sleep(STORE_THROTTLE_WINDOW_MS + 1);
+		expect(throttle.blockedReason()).toBeNull();
 	});
 
 	it("a throttle answer resets the recovery streak", () => {
@@ -355,5 +395,63 @@ describe("rankTrackingSupport", () => {
 		});
 		expect(support.supported).toBe(true);
 		expect(support.surface).toBe("play-search");
+	});
+});
+
+describe("StoreRunQueue", () => {
+	it("runs one job per store at a time, other stores in parallel", async () => {
+		const queue = new StoreRunQueue();
+		const events: string[] = [];
+		let releaseA: () => void = () => {};
+		const gateA = new Promise<void>((resolve) => {
+			releaseA = resolve;
+		});
+
+		const a = queue.run("playstore", async () => {
+			events.push("a start");
+			await gateA;
+			events.push("a end");
+		});
+		const b = queue.run("playstore", async () => {
+			events.push("b start");
+		});
+		const c = queue.run("appstore", async () => {
+			events.push("c start");
+		});
+		await c;
+		expect(queue.depth("playstore")).toBe(2);
+		expect(events).toEqual(["a start", "c start"]);
+
+		releaseA();
+		await Promise.all([a, b]);
+		expect(events).toEqual(["a start", "c start", "a end", "b start"]);
+		expect(queue.depth("playstore")).toBe(0);
+	});
+
+	it("keeps the queue moving when a job fails", async () => {
+		const queue = new StoreRunQueue();
+		const failed = queue.run("playstore", async () => {
+			throw new Error("boom");
+		});
+		await expect(failed).rejects.toThrow("boom");
+		expect(await queue.run("playstore", async () => 7)).toBe(7);
+	});
+});
+
+describe("orderLeastRecentlyMeasured", () => {
+	it("puts never-measured keywords first, then the oldest, stable on ties", () => {
+		const keywords = [
+			{ country: "us", keyword: "fresh" },
+			{ country: "us", keyword: "new one" },
+			{ country: "us", keyword: "old" },
+			{ country: "pl", keyword: "new two" },
+		];
+		const last = new Map([
+			[measurementKey("us", "fresh"), 3_000],
+			[measurementKey("us", "old"), 1_000],
+		]);
+		expect(
+			orderLeastRecentlyMeasured(keywords, last).map((k) => k.keyword),
+		).toEqual(["new one", "new two", "old", "fresh"]);
 	});
 });

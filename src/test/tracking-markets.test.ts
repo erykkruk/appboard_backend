@@ -203,7 +203,7 @@ describe("Rank check job + failed lookups", () => {
 		const spy = spyOn(ResearchService, "positionFor").mockImplementation(
 			async (_store, keyword, _id, country) => {
 				if (country !== "us") return 30;
-				if (keyword === "trivia") throw throttled(403);
+				if (keyword === "trivia") throw throttled(503);
 				return positions[keyword] ?? null;
 			},
 		);
@@ -236,7 +236,7 @@ describe("Rank check job + failed lookups", () => {
 					attempts: RANK_LOOKUP_MAX_ATTEMPTS,
 					country: "us",
 					keyword: "trivia",
-					status: 403,
+					status: 503,
 				}),
 			]);
 

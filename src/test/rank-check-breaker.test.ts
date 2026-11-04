@@ -7,6 +7,7 @@ import {
 	describeStoreError,
 	RANK_LOOKUP_MAX_ATTEMPTS,
 	STORE_BREAKER_MAX_CONSECUTIVE_FAILURES,
+	STORE_THROTTLE_MAX_EVENTS,
 	STORE_THROTTLED_CODE,
 } from "@/modules/tracking/rank-lookup";
 import {
@@ -113,8 +114,10 @@ describe("rank check circuit breaker", () => {
 		const appId = await appWithKeywords();
 		const time = fakeTime();
 		configureRankLookup({
+			// A store that hangs for 11 min per request and then errors.
 			fetchPosition: async () => {
-				throw storeError(403);
+				await time.sleep(11 * 60_000);
+				throw storeError(503);
 			},
 			now: time.now,
 			sleep: time.sleep,
@@ -126,10 +129,109 @@ describe("rank check circuit breaker", () => {
 		const run = await RankCheckJobs.latest(appId, getTestWorkspaceId());
 		expect(run?.status).toBe("failed");
 		expect(run?.error).toContain("no answer from the store for 30 min");
-		// Each 403 pauses the store 5 min, so only the first keyword or two
-		// are tried before the stall limit, not all twelve.
 		expect(run?.checked).toBeLessThan(3);
 		expect(await snapshotCount(appId)).toBe(0);
+	});
+
+	it("stops cleanly after 3 throttle answers in 30 minutes", async () => {
+		const appId = await appWithKeywords();
+		const time = fakeTime();
+		let calls = 0;
+		configureRankLookup({
+			fetchPosition: async () => {
+				calls++;
+				throw storeError(429);
+			},
+			now: time.now,
+			sleep: time.sleep,
+		});
+
+		await RankCheckJobs.start(appId, getTestWorkspaceId(), "manual");
+		await RankCheckJobs.waitFor(appId);
+
+		const run = await RankCheckJobs.latest(appId, getTestWorkspaceId());
+		expect(run?.status).toBe("failed");
+		expect(run?.error).toContain(
+			`${STORE_THROTTLE_MAX_EVENTS} throttle answers in 30 min`,
+		);
+		expect(run?.error).toContain("next scheduled check");
+		// Three requests drew a throttle, the fourth was never sent.
+		expect(calls).toBe(STORE_THROTTLE_MAX_EVENTS);
+		// The blocked keyword is not a measurement: no snapshot, no "not ranked".
+		expect(await snapshotCount(appId)).toBe(0);
+		expect(RankCheckJobs.isRunning(appId)).toBe(false);
+	});
+
+	it("measures the least recently measured keywords first", async () => {
+		const appId = await appWithKeywords(3);
+		const looked: string[] = [];
+		configureRankLookup({
+			fetchPosition: async (_store, keyword) => {
+				looked.push(keyword);
+				return 4;
+			},
+			sleep: async () => {},
+			spacingMs: { appstore: 0, playstore: 0 },
+		});
+		// kw 00 measured recently, kw 01 long ago, kw 02 never.
+		await db.insert(rankSnapshots).values([
+			{
+				appId,
+				country: COUNTRY,
+				createdAt: new Date(Date.now() - 60_000),
+				keyword: "kw 00",
+				platform: "android",
+				position: 1,
+			},
+			{
+				appId,
+				country: COUNTRY,
+				createdAt: new Date(Date.now() - 86_400_000),
+				keyword: "kw 01",
+				platform: "android",
+				position: 2,
+			},
+		]);
+
+		await RankCheckJobs.start(appId, getTestWorkspaceId(), "manual");
+		await RankCheckJobs.waitFor(appId);
+
+		expect(looked).toEqual(["kw 02", "kw 01", "kw 00"]);
+	});
+
+	it("queues two runs on the same store instead of interleaving them", async () => {
+		const first = (await seedTestApp(storeId)).id;
+		const second = (await seedTestApp(storeId)).id;
+		await TrackingService.addKeywords(first, COUNTRY, ["a 1", "a 2", "a 3"]);
+		await TrackingService.addKeywords(second, COUNTRY, ["b 1", "b 2", "b 3"]);
+		const order: string[] = [];
+		configureRankLookup({
+			fetchPosition: async (_store, keyword) => {
+				order.push(keyword.slice(0, 1));
+				await new Promise((resolve) => setTimeout(resolve, 1));
+				return 4;
+			},
+			sleep: async () => {},
+			spacingMs: { appstore: 0, playstore: 0 },
+		});
+
+		await RankCheckJobs.start(first, getTestWorkspaceId(), "manual");
+		await RankCheckJobs.start(second, getTestWorkspaceId(), "manual");
+		await Promise.all([
+			RankCheckJobs.waitFor(first),
+			RankCheckJobs.waitFor(second),
+		]);
+
+		expect(order).toHaveLength(6);
+		// One app's lookups all come before the other's.
+		expect(new Set(order.slice(0, 3)).size).toBe(1);
+		expect(new Set(order.slice(3)).size).toBe(1);
+		expect(order[0]).not.toBe(order[3]);
+		const runs = await Promise.all([
+			RankCheckJobs.latest(first, getTestWorkspaceId()),
+			RankCheckJobs.latest(second, getTestWorkspaceId()),
+		]);
+		expect(runs.map((r) => r?.status)).toEqual(["completed", "completed"]);
 	});
 
 	it("ends a slow but healthy run at the run time limit, keeping what it measured", async () => {

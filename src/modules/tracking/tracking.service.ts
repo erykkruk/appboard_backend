@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { HistoryService } from "@/modules/history/history.service";
+import type { ResearchStore } from "@/modules/research/research.types";
 import { db } from "@/utils/db";
 import {
 	appAsoProfiles,
@@ -38,6 +39,28 @@ import {
 } from "./tracking.types";
 
 const log = createLogger("tracking");
+
+/**
+ * Keywords never measured first, then the ones measured longest ago. A run the
+ * store cuts short then leaves a different tail every time, so over a few
+ * slots every keyword gets measured instead of the same alphabetical end
+ * staying "not measured" forever.
+ */
+export function orderLeastRecentlyMeasured<
+	T extends { country: string; keyword: string },
+>(keywords: T[], lastMeasuredAt: Map<string, number>): T[] {
+	const at = (k: T) =>
+		lastMeasuredAt.get(measurementKey(k.country, k.keyword)) ??
+		Number.NEGATIVE_INFINITY;
+	return keywords
+		.map((k, index) => ({ index, k }))
+		.sort((a, b) => at(a.k) - at(b.k) || a.index - b.index)
+		.map(({ k }) => k);
+}
+
+export function measurementKey(country: string, keyword: string): string {
+	return `${country.toLowerCase()}\u0000${keyword.toLowerCase()}`;
+}
 
 /**
  * A first check that measured nothing (store refused, server restarted) is
@@ -141,6 +164,25 @@ export class TrackingService {
 			.from(trackedKeywords)
 			.where(eq(trackedKeywords.appId, appId))
 			.orderBy(asc(trackedKeywords.country), asc(trackedKeywords.keyword));
+	}
+
+	/** Newest snapshot time per (country, keyword) of an app. */
+	static async lastMeasuredAt(appId: string): Promise<Map<string, number>> {
+		const rows = await db
+			.select({
+				at: sql<Date>`max(${rankSnapshots.createdAt})`,
+				country: rankSnapshots.country,
+				keyword: rankSnapshots.keyword,
+			})
+			.from(rankSnapshots)
+			.where(eq(rankSnapshots.appId, appId))
+			.groupBy(rankSnapshots.country, rankSnapshots.keyword);
+		return new Map(
+			rows.map((r) => [
+				measurementKey(r.country, r.keyword),
+				new Date(r.at).getTime(),
+			]),
+		);
 	}
 
 	/**
@@ -496,8 +538,39 @@ export class TrackingService {
 			});
 		}
 		const store = support.store;
-		const keywords = await TrackingService.getKeywords(appId);
 		const runtime = options.runtime ?? getRankLookupRuntime();
+		if (runtime.runs.depth(store) > 0) {
+			log.info(
+				{ appId, queuedAhead: runtime.runs.depth(store), store },
+				"Rank check waiting for another run on the same store",
+			);
+		}
+		// One run per store at a time: the breaker and the keyword list are
+		// built once it is our turn, so waiting does not count against the run.
+		return runtime.runs.run(store, () =>
+			TrackingService.measureKeywords(
+				app,
+				appId,
+				store,
+				kind,
+				runtime,
+				options,
+			),
+		);
+	}
+
+	private static async measureKeywords(
+		app: { externalId: string },
+		appId: string,
+		store: ResearchStore,
+		kind: RankCheckKind,
+		runtime: RankLookupRuntime,
+		options: RankCheckOptions,
+	): Promise<RankCheckResult> {
+		const keywords = orderLeastRecentlyMeasured(
+			await TrackingService.getKeywords(appId),
+			await TrackingService.lastMeasuredAt(appId),
+		);
 
 		const progress: RankCheckProgress = {
 			checked: 0,
@@ -528,6 +601,10 @@ export class TrackingService {
 				runtime,
 				breaker.deadlineAt(),
 			);
+			if (!outcome.ok && outcome.storeBlocked) {
+				breaker.recordStoreBlocked(outcome.storeBlocked);
+				stopIfTripped();
+			}
 			if (!outcome.ok && outcome.deadlineHit) {
 				breaker.recordDeadline();
 				stopIfTripped();
