@@ -17,12 +17,14 @@ const log = createLogger("rank-lookup");
 /**
  * Minimum gap between two search lookups against one store, shared by every
  * rank check running in this process. iTunes Search answers 403 after roughly
- * 20 requests a minute per IP; Play web search tolerates more. Same spacing as
- * the standalone Python ASO tool that measured these limits.
+ * 20 requests a minute per IP. Play web search answered 429 after ~1,190
+ * lookups at 1.5 s (00:00 slot of 2026-11-05, ~2,050 keywords), so Play runs
+ * at 3 s: one night of a large app still fits between the 00:00 and 03:00
+ * slots, and the catch-up slot measures whatever the first one did not reach.
  */
 export const RANK_LOOKUP_SPACING_MS: Record<ResearchStore, number> = {
 	appstore: 3_500,
-	playstore: 1_500,
+	playstore: 3_000,
 };
 
 /** Attempts per keyword (first try + retries) before it counts as failed. */

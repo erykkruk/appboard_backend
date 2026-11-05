@@ -25,7 +25,10 @@ export const RANK_CHECK_HOURS_BY_STORE: Record<
 	readonly number[]
 > = {
 	appstore: [0, 12],
-	playstore: [0],
+	// 03:00 = catch-up: a scheduled Play run skips keywords measured in the last
+	// RANK_CHECK_FRESH_MS_BY_STORE.playstore, so it only measures what the 00:00
+	// run did not reach (store throttle) and costs nothing when that run finished.
+	playstore: [0, 3],
 };
 
 export function rankCheckHoursFor(store: ResearchStore): readonly number[] {

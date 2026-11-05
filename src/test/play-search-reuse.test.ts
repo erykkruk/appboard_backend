@@ -347,7 +347,7 @@ describe("a Play app queued behind a throttled one", () => {
 });
 
 describe("an interrupted check resumes with the keywords it missed", () => {
-	it("measures the unmeasured keywords first on the next run", async () => {
+	it("the next scheduled run measures only the keywords it missed", async () => {
 		const keywords = keywordList(10);
 		const appId = await playApp(PHONE_ID, keywords);
 		const time = fakeTime();
@@ -380,8 +380,8 @@ describe("an interrupted check resumes with the keywords it missed", () => {
 		await RankCheckJobs.start(appId, getTestWorkspaceId(), "scheduled");
 		await RankCheckJobs.waitFor(appId);
 
-		expect(looked.slice(0, 6)).toEqual(keywords.slice(4));
-		expect([...looked.slice(6)].sort()).toEqual(keywords.slice(0, 4));
+		// The 4 keywords measured minutes ago are inside the Play fresh window.
+		expect(looked).toEqual(keywords.slice(4));
 	});
 });
 
@@ -392,8 +392,8 @@ describe("tracking schedule per store", () => {
 		lastAutoResearchAt: null,
 	};
 
-	it("shows one slot for Google Play and two for the App Store", () => {
-		expect(trackingSchedule(cfg, "playstore").rankCheckHours).toEqual([0]);
+	it("shows 00:00 + the 03:00 catch-up for Google Play, two slots for the App Store", () => {
+		expect(trackingSchedule(cfg, "playstore").rankCheckHours).toEqual([0, 3]);
 		expect(trackingSchedule(cfg, "appstore").rankCheckHours).toEqual([0, 12]);
 	});
 });

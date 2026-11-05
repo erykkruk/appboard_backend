@@ -60,10 +60,26 @@ describe("isRankCheckDue", () => {
 		);
 	});
 
-	it("fires only at 00:00 for Google Play", () => {
+	it("fires at 00:00 and the 03:00 catch-up slot for Google Play", () => {
 		expect(
 			isRankCheckDue(playstore(null), at("2026-07-10T00:00:00Z"), TZ),
 		).toBe(true);
+		// The 00:00 run the store stopped never set lastRankCheckAt: 03:00 runs.
+		expect(
+			isRankCheckDue(
+				playstore(at("2026-07-09T01:40:00Z")),
+				at("2026-07-10T03:00:00Z"),
+				TZ,
+			),
+		).toBe(true);
+		// A 00:00 run that finished at 01:45 is inside the 2 h guard.
+		expect(
+			isRankCheckDue(
+				playstore(at("2026-07-10T01:45:00Z")),
+				at("2026-07-10T03:00:00Z"),
+				TZ,
+			),
+		).toBe(false);
 		expect(
 			isRankCheckDue(playstore(null), at("2026-07-10T12:00:00Z"), TZ),
 		).toBe(false);
@@ -111,7 +127,7 @@ describe("isRankCheckDue", () => {
 
 	it("keeps the slots in one named table", () => {
 		expect(RANK_CHECK_HOURS_BY_STORE.appstore).toEqual([0, 12]);
-		expect(RANK_CHECK_HOURS_BY_STORE.playstore).toEqual([0]);
+		expect(RANK_CHECK_HOURS_BY_STORE.playstore).toEqual([0, 3]);
 	});
 
 	it("does not fire off-slot", () => {

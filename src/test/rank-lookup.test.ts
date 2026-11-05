@@ -20,7 +20,10 @@ import {
 import { rankTrackingSupport } from "@/modules/tracking/rank-support";
 import {
 	measurementKey,
+	orderForRankCheck,
 	orderLeastRecentlyMeasured,
+	RANK_CHECK_FRESH_MS_BY_STORE,
+	skipRecentlyMeasured,
 } from "@/modules/tracking/tracking.service";
 import { parseRetryAfterMs } from "@/utils/backoff";
 import { buildError } from "@/utils/errors";
@@ -172,7 +175,7 @@ describe("StoreThrottle", () => {
 
 	it("uses the documented per-store spacing", () => {
 		expect(RANK_LOOKUP_SPACING_MS.appstore).toBe(3_500);
-		expect(RANK_LOOKUP_SPACING_MS.playstore).toBe(1_500);
+		expect(RANK_LOOKUP_SPACING_MS.playstore).toBe(3_000);
 	});
 });
 
@@ -453,5 +456,69 @@ describe("orderLeastRecentlyMeasured", () => {
 		expect(
 			orderLeastRecentlyMeasured(keywords, last).map((k) => k.keyword),
 		).toEqual(["new one", "new two", "old", "fresh"]);
+	});
+});
+
+describe("orderForRankCheck", () => {
+	it("measures brand and starred keywords first, each group oldest first", () => {
+		const keywords = [
+			{ country: "us", keyword: "quiz", starred: false },
+			{ country: "pl", keyword: "buzzin", starred: false },
+			{ country: "us", keyword: "mafia", starred: true },
+			{ country: "us", keyword: "buzzin tv", starred: false },
+			{ country: "de", keyword: "werwolf", starred: false },
+		];
+		const last = new Map([
+			[measurementKey("us", "quiz"), 1_000],
+			[measurementKey("pl", "buzzin"), 5_000],
+			[measurementKey("us", "buzzin tv"), 2_000],
+			[measurementKey("us", "mafia"), 9_000],
+		]);
+		expect(
+			orderForRankCheck(keywords, last, "Buzzin: Quiz & party games").map(
+				(k) => `${k.country}:${k.keyword}`,
+			),
+		).toEqual([
+			"us:buzzin tv",
+			"pl:buzzin",
+			"us:mafia",
+			"de:werwolf",
+			"us:quiz",
+		]);
+	});
+
+	it("keeps the plain oldest-first order without a brand or stars", () => {
+		const keywords = [
+			{ country: "us", keyword: "b" },
+			{ country: "us", keyword: "a" },
+		];
+		const last = new Map([[measurementKey("us", "b"), 1_000]]);
+		expect(orderForRankCheck(keywords, last, "").map((k) => k.keyword)).toEqual(
+			["a", "b"],
+		);
+	});
+});
+
+describe("skipRecentlyMeasured", () => {
+	it("keeps only keywords not measured inside the fresh window", () => {
+		const hour = 60 * 60_000;
+		const now = 10 * hour;
+		const keywords = [
+			{ country: "us", keyword: "never" },
+			{ country: "us", keyword: "tonight" },
+			{ country: "us", keyword: "yesterday" },
+		];
+		const last = new Map([
+			[measurementKey("us", "tonight"), now - 2 * hour],
+			[measurementKey("us", "yesterday"), now - 21 * hour],
+		]);
+		expect(
+			skipRecentlyMeasured(keywords, last, now, 6 * hour).map((k) => k.keyword),
+		).toEqual(["never", "yesterday"]);
+	});
+
+	it("applies to Google Play only", () => {
+		expect(RANK_CHECK_FRESH_MS_BY_STORE.appstore).toBeNull();
+		expect(RANK_CHECK_FRESH_MS_BY_STORE.playstore).toBe(6 * 60 * 60_000);
 	});
 });
