@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import { AppsService } from "@/modules/apps/apps.service";
 import { HistoryService } from "@/modules/history/history.service";
+import { isBrandKeyword } from "@/modules/research/listing-audit";
 import type { ResearchStore } from "@/modules/research/research.types";
 import { db } from "@/utils/db";
 import {
@@ -63,6 +64,48 @@ export function orderLeastRecentlyMeasured<
 		.map((k, index) => ({ index, k }))
 		.sort((a, b) => at(a.k) - at(b.k) || a.index - b.index)
 		.map(({ k }) => k);
+}
+
+/**
+ * Brand keywords (the app's own name) and starred keywords go first, each
+ * group least recently measured first. A run the store cuts short then still
+ * measures the phrases the owner watches, instead of leaving "buzzin" out on
+ * the night it happened to sit in the tail.
+ */
+export function orderForRankCheck<
+	T extends { country: string; keyword: string; starred?: boolean | null },
+>(keywords: T[], lastMeasuredAt: Map<string, number>, appName: string): T[] {
+	const ordered = orderLeastRecentlyMeasured(keywords, lastMeasuredAt);
+	const first = (k: T) => !!k.starred || isBrandKeyword(k.keyword, appName);
+	return [...ordered.filter(first), ...ordered.filter((k) => !first(k))];
+}
+
+/**
+ * Scheduled runs of a store with a catch-up slot skip keywords measured in
+ * the last `freshMs`, so the second slot of the night only asks the store for
+ * what the first one missed. Null = measure everything (App Store slots are
+ * 12 h apart, manual checks always measure everything).
+ */
+export const RANK_CHECK_FRESH_MS_BY_STORE: Record<
+	ResearchStore,
+	number | null
+> = {
+	appstore: null,
+	playstore: 6 * 60 * 60_000,
+};
+
+export function skipRecentlyMeasured<
+	T extends { country: string; keyword: string },
+>(
+	keywords: T[],
+	lastMeasuredAt: Map<string, number>,
+	now: number,
+	freshMs: number,
+): T[] {
+	return keywords.filter((k) => {
+		const at = lastMeasuredAt.get(measurementKey(k.country, k.keyword));
+		return at === undefined || now - at >= freshMs;
+	});
 }
 
 export function measurementKey(country: string, keyword: string): string {
@@ -574,17 +617,28 @@ export class TrackingService {
 	}
 
 	private static async measureKeywords(
-		app: ListingVersionApp,
+		app: ListingVersionApp & { name?: string | null },
 		appId: string,
 		store: ResearchStore,
 		kind: RankCheckKind,
 		runtime: RankLookupRuntime,
 		options: RankCheckOptions,
 	): Promise<RankCheckResult> {
-		const keywords = orderLeastRecentlyMeasured(
-			await TrackingService.getKeywords(appId),
-			await TrackingService.lastMeasuredAt(appId),
-		);
+		const lastMeasured = await TrackingService.lastMeasuredAt(appId);
+		const freshMs =
+			kind === "scheduled" ? RANK_CHECK_FRESH_MS_BY_STORE[store] : null;
+		const tracked = await TrackingService.getKeywords(appId);
+		const due =
+			freshMs === null
+				? tracked
+				: skipRecentlyMeasured(tracked, lastMeasured, runtime.now(), freshMs);
+		const keywords = orderForRankCheck(due, lastMeasured, app.name ?? "");
+		if (due.length < tracked.length) {
+			log.info(
+				{ appId, due: due.length, fresh: tracked.length - due.length, store },
+				"Rank check skips keywords measured in this night's earlier slot",
+			);
+		}
 
 		const progress: RankCheckProgress = {
 			checked: 0,
@@ -597,19 +651,25 @@ export class TrackingService {
 		// Which store version and listing text each measurement was taken
 		// against. Attributing the snapshots from before this existed comes
 		// first, so it can tell old snapshots from this run's.
+		// A catch-up slot with nothing left to measure asks the store nothing.
 		const countries = keywords.map((k) => k.country);
-		await ListingVersionService.backfill(
-			app,
-			store,
-			countries[0] ?? DEFAULT_TRACKING_COUNTRY,
-			runtime,
-		);
-		const listingVersionByCountry = await ListingVersionService.recordForRun(
-			app,
-			store,
-			countries,
-			runtime,
-		);
+		if (keywords.length > 0) {
+			await ListingVersionService.backfill(
+				app,
+				store,
+				countries[0] ?? DEFAULT_TRACKING_COUNTRY,
+				runtime,
+			);
+		}
+		const listingVersionByCountry =
+			keywords.length > 0
+				? await ListingVersionService.recordForRun(
+						app,
+						store,
+						countries,
+						runtime,
+					)
+				: new Map<string, string | null>();
 		const breaker = new StoreBreaker(runtime.now, options.breakerLimits);
 		// Scheduled slots share Play searches between apps; a manual check
 		// always asks the store, so "Check now" is a fresh measurement.

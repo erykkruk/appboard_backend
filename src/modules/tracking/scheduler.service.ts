@@ -58,9 +58,12 @@ const HOUR_MS = 60 * 60 * 1000;
  * A slot is skipped when the app's last rank check finished less than this
  * long ago: guards a slot re-firing (restart, overlapping tick) and skips a
  * slot right after a manual check. With two App Store slots 12 h apart, 6 h
- * is half the interval. Google Play has one slot a day, so the gap is short:
- * with 6 h a manual Play check in the evening skipped the 00:00 slot and the
- * next scheduled measurement came 48 h after the previous one.
+ * is half the interval. Google Play has a 00:00 slot and a 03:00 catch-up
+ * slot, so the gap is short: with 6 h a manual Play check in the evening
+ * skipped the 00:00 slot and the next scheduled measurement came 48 h after
+ * the previous one. A 00:00 run the store stopped never sets lastRankCheckAt,
+ * so the 03:00 slot fires; one that finished before 01:00 is caught by the
+ * fresh-keyword skip instead (nothing left to measure).
  */
 export const RANK_CHECK_MIN_GAP_MS_BY_STORE: Record<ResearchStore, number> = {
 	appstore: 6 * HOUR_MS,
@@ -389,7 +392,10 @@ export async function runScheduledRankCheck(cfg: {
 		cfg.workspaceId,
 		"scheduled",
 		{
-			onComplete: async () => {
+			onComplete: async (result) => {
+				// The Play catch-up slot after a finished night measures nothing:
+				// no second digest about the same numbers.
+				if (result.checked === 0) return;
 				await sendRankDigest(cfg);
 			},
 		},

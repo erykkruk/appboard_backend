@@ -268,8 +268,8 @@ describe("rank check circuit breaker", () => {
 		const code = (thrown as { response?: { data?: { code?: string } } })
 			.response?.data?.code;
 		expect(code).toBe(STORE_THROTTLED_CODE);
-		// Play spacing 1.5 s: lookups at 0, 1.5 ... 9 s fit in 10 s.
-		expect(await snapshotCount(appId)).toBe(7);
+		// Play spacing 3 s: lookups at 0, 3, 6 and 9 s fit in 10 s.
+		expect(await snapshotCount(appId)).toBe(4);
 	});
 
 	it("a success resets the failure streak, so scattered failures finish the run", async () => {
