@@ -133,7 +133,7 @@ Workspace-scoped toggles for 12 modules. Reuses the `settings` table with `FEATU
 
 Market research for ANY store app (not just connected ones) — port of the standalone aso-tool. `src/modules/research/`, all endpoints `POST /api/research/*` (search, scrape, analyze, keywords, markets, visual, competitors, compare), gated by the `RESEARCH` feature flag.
 
-- **Scraping**: iTunes API via raw fetch (`appstore.client.ts`); Google Play via `google-play-scraper` (`playstore.client.ts`, sort NEWEST = raw `2`).
+- **Scraping**: iTunes API via raw fetch (`appstore.client.ts`); Google Play via `google-play-scraper` (`playstore.client.ts`, sort NEWEST = raw `2`). Keep `google-play-scraper` >= 10.1.4: older versions drop the exact-match featured card (Play shows the app whose name matches the query as a large first card in its own section), so a brand keyword read "not ranked" in PL/DE while the app was #1 (0.30.2).
 - **IMPORTANT — Apple reviews RSS is dead** (returns 0 entries for every app since mid-2026). `appstoreReviews()` tries RSS first, then falls back to parsing `"$kind":"Review"` objects server-rendered into `https://apps.apple.com/{cc}/app/id{id}?see-all=reviews` (~50 reviews). The amp-api requires a token that is no longer embedded in the page/JS — don't waste time hunting for it.
 - **AI** (`research.ai.ts`): OpenRouter with workspace `OPENROUTER_API_KEY` setting (same as ai module); model override via `RESEARCH_MODEL` setting or request body; Polish prompts; responses validated with ArkType; deep mode = map-reduce (chunks of 150, 3 parallel).
 - **Heuristics** (`research.heuristics.ts`): keyword-bucket categorization (EN+PL) of negative reviews — works without an AI key, returned with every scrape.
