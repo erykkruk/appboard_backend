@@ -32,6 +32,8 @@ const log = createLogger("listing-versions");
 
 /** Rows per UPDATE when attributing old snapshots. */
 const BACKFILL_UPDATE_CHUNK = 1000;
+/** Storefronts asked for the live version before a run records it as unknown. */
+const VERSION_LOOKUP_COUNTRIES = 3;
 /** Marks an app whose old snapshots were attributed (see `backfill`). */
 export const BACKFILL_EVENT_TYPE = "listing_versions_backfilled";
 
@@ -156,6 +158,17 @@ export function marketListingLanguage(
 	return null;
 }
 
+/** Orders "1.7.10" after "1.7.9": numeric parts compared one by one. */
+export function compareVersionStrings(a: string, b: string): number {
+	const pa = a.split(".").map((p) => Number.parseInt(p, 10) || 0);
+	const pb = b.split(".").map((p) => Number.parseInt(p, 10) || 0);
+	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+		const diff = (pa[i] ?? 0) - (pb[i] ?? 0);
+		if (diff !== 0) return diff;
+	}
+	return 0;
+}
+
 /** For each snapshot time, the release live then (latest released at or before it). */
 export function releaseAt(
 	releases: StoreRelease[],
@@ -201,6 +214,11 @@ export class ListingVersionService {
 	): Promise<Map<string, ListingText>> {
 		const texts = new Map<string, ListingText>();
 		if (app.platform === "ios" && versionString) {
+			const synced = await ListingVersionService.syncedVersionAtOrBefore(
+				app.id,
+				versionString,
+				options.versionKeywordsOnly === true,
+			);
 			const rows = await db
 				.select({
 					keywords: versionLocalizations.keywords,
@@ -216,7 +234,7 @@ export class ListingVersionService {
 				.where(
 					and(
 						eq(appVersions.appId, app.id),
-						eq(appVersions.versionString, versionString),
+						eq(appVersions.versionString, synced ?? versionString),
 						eq(versionLocalizations.source, "remote"),
 					),
 				)
@@ -249,6 +267,44 @@ export class ListingVersionService {
 			});
 		}
 		return texts;
+	}
+
+	/**
+	 * Which synced version holds the text of `versionString`: itself when
+	 * AppBoard synced it, else (live reads only) the newest synced version
+	 * below it. Versions are synced when someone opens publishing, so a
+	 * release shipped since then has no rows yet; the version before it is
+	 * far closer to what the store shows than the listing table, which keeps
+	 * whatever the last listing sync wrote. Never a newer version: that one
+	 * is a draft or in review. NULL = nothing synced at or below it.
+	 */
+	private static async syncedVersionAtOrBefore(
+		appId: string,
+		versionString: string,
+		exactOnly: boolean,
+	): Promise<string | null> {
+		const rows = await db
+			.selectDistinct({ versionString: appVersions.versionString })
+			.from(appVersions)
+			.innerJoin(
+				versionLocalizations,
+				eq(versionLocalizations.versionId, appVersions.id),
+			)
+			.where(
+				and(
+					eq(appVersions.appId, appId),
+					eq(versionLocalizations.source, "remote"),
+				),
+			);
+		const synced = rows.map((r) => r.versionString);
+		if (synced.includes(versionString)) return versionString;
+		if (exactOnly) return null;
+		return (
+			synced
+				.filter((v) => compareVersionStrings(v, versionString) < 0)
+				.sort(compareVersionStrings)
+				.at(-1) ?? null
+		);
 	}
 
 	/**
@@ -325,20 +381,12 @@ export class ListingVersionService {
 		const unique = [...new Set(countries.map((c) => c.toLowerCase()))];
 		if (!unique.length) return byCountry;
 		try {
-			let release: StoreRelease | null = null;
-			try {
-				release = await runtime.versions.live(
-					store,
-					app.externalId,
-					unique[0],
-					storePacer(store, runtime),
-				);
-			} catch (err) {
-				log.warn(
-					{ appId: app.id, err, store },
-					"Live store version unavailable - recorded as unknown",
-				);
-			}
+			const release = await ListingVersionService.liveRelease(
+				app,
+				store,
+				unique,
+				runtime,
+			);
 			const versionString = release?.versionString ?? null;
 			const texts = await ListingVersionService.readTexts(app, versionString);
 			const languages = [...texts.keys()];
@@ -373,6 +421,48 @@ export class ListingVersionService {
 			byCountry.clear();
 		}
 		return byCountry;
+	}
+
+	/**
+	 * The version live in the store, asked in up to VERSION_LOOKUP_COUNTRIES
+	 * storefronts of the run (the default country first). The version is the
+	 * same everywhere, but a storefront that does not carry the app answers
+	 * "not found" (App Store Andorra), and the run's countries come sorted, so
+	 * the first one alone left every measurement of such an app unknown.
+	 */
+	private static async liveRelease(
+		app: ListingVersionApp,
+		store: ResearchStore,
+		countries: string[],
+		runtime: RankLookupRuntime,
+	): Promise<StoreRelease | null> {
+		const ordered = countries.includes(DEFAULT_TRACKING_COUNTRY)
+			? [
+					DEFAULT_TRACKING_COUNTRY,
+					...countries.filter((c) => c !== DEFAULT_TRACKING_COUNTRY),
+				]
+			: countries;
+		for (const country of ordered.slice(0, VERSION_LOOKUP_COUNTRIES)) {
+			try {
+				const release = await runtime.versions.live(
+					store,
+					app.externalId,
+					country,
+					storePacer(store, runtime),
+				);
+				if (release) return release;
+			} catch (err) {
+				log.warn(
+					{ appId: app.id, country, err, store },
+					"Live store version unavailable in this storefront",
+				);
+			}
+		}
+		log.warn(
+			{ appId: app.id, store },
+			"Live store version unavailable - recorded as unknown",
+		);
+		return null;
 	}
 
 	/**

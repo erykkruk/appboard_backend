@@ -657,7 +657,11 @@ export class TrackingService {
 			await ListingVersionService.backfill(
 				app,
 				store,
-				countries[0] ?? DEFAULT_TRACKING_COUNTRY,
+				// The default storefront carries every app; the first country
+				// of a sorted run may not (App Store Andorra).
+				countries.some((c) => c.toLowerCase() === DEFAULT_TRACKING_COUNTRY)
+					? DEFAULT_TRACKING_COUNTRY
+					: (countries[0] ?? DEFAULT_TRACKING_COUNTRY),
 				runtime,
 			);
 		}
