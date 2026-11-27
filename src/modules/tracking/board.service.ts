@@ -1,6 +1,5 @@
 import { and, asc, eq, gte, inArray } from "drizzle-orm";
 import { HistoryService } from "@/modules/history/history.service";
-import { langFor } from "@/modules/research/playstore.client";
 import type {
 	KeywordClassification,
 	KeywordScore,
@@ -9,6 +8,7 @@ import { db } from "@/utils/db";
 import {
 	keywordScoreSnapshots,
 	listings,
+	listingVersions,
 	rankSnapshots,
 	trackedKeywords,
 } from "@/utils/db/schema";
@@ -29,11 +29,14 @@ import {
 	PICK_CLASSIFICATIONS,
 	type TrackingBoard,
 } from "./board.types";
+import { marketListingLanguage } from "./listing-versions.service";
 import { TrackingService } from "./tracking.service";
 import { DEFAULT_TRACKING_COUNTRY } from "./tracking.types";
 
 /** How far back the board reads. Older rows stay queryable per keyword. */
 const BOARD_HISTORY_DAYS = 180;
+/** Shown when the app has no listing at all. */
+const DEFAULT_BOARD_LANGUAGE = "en";
 /** Top of the search results is where taps happen. */
 const VISIBLE_RANK = 10;
 
@@ -94,9 +97,8 @@ export class TrackingBoardService {
 		const trackedByKeyword = new Map(trackedHere.map((k) => [k.keyword, k]));
 
 		const config = await TrackingService.getConfig(appId, workspaceId);
-		const language = langFor(country);
 
-		const [snapshots, scores, metadata, changes] = await Promise.all([
+		const [snapshots, scores, changes] = await Promise.all([
 			db
 				.select()
 				.from(rankSnapshots)
@@ -109,9 +111,16 @@ export class TrackingBoardService {
 				)
 				.orderBy(asc(rankSnapshots.createdAt)),
 			TrackingBoardService.readScores(workspaceId, country, keywords),
-			TrackingBoardService.readMetadata(appId, language),
 			TrackingBoardService.readChanges(appId),
 		]);
+		const recordedListing = snapshots.findLast(
+			(s) => s.listingVersionId !== null,
+		)?.listingVersionId;
+		const metadata = await TrackingBoardService.readMetadata(
+			appId,
+			country,
+			recordedListing ?? null,
+		);
 
 		// ── Rank history per keyword, one point per measurement day ──────
 		const rankByKeyword = new Map<string, Map<string, number | null>>();
@@ -211,7 +220,7 @@ export class TrackingBoardService {
 			countries: countries.length ? countries : [country],
 			country,
 			keywords: rows,
-			language,
+			language: metadata.language,
 			metadataGap,
 			metadataUntracked,
 			movement: TrackingBoardService.movement(rows, orderedDays, scores),
@@ -299,11 +308,51 @@ export class TrackingBoardService {
 	}
 
 	/**
-	 * The indexed text of the market's listing. Live text first: what the store
-	 * serves is what ranks, and scoring a draft nobody can search for would
-	 * report a gap the store has never seen.
+	 * The indexed text of the market's listing. First the text recorded with
+	 * the market's newest measurement: what the store showed in that country
+	 * (the live version's localization, in the language the country gets).
+	 * Without one, the synced listing in the country's language. Live text
+	 * only: scoring a draft nobody can search for would report a gap the
+	 * store has never seen.
 	 */
-	private static async readMetadata(appId: string, language: string) {
+	private static async readMetadata(
+		appId: string,
+		country: string,
+		listingVersionId: string | null,
+	): Promise<{
+		keywords: string | null;
+		language: string;
+		shortDesc: string | null;
+		title: string | null;
+	}> {
+		if (listingVersionId) {
+			const [recorded] = await db
+				.select({
+					keywords: listingVersions.keywords,
+					language: listingVersions.language,
+					subtitle: listingVersions.subtitle,
+					title: listingVersions.title,
+				})
+				.from(listingVersions)
+				.where(
+					and(
+						eq(listingVersions.id, listingVersionId),
+						eq(listingVersions.appId, appId),
+					),
+				);
+			if (
+				recorded?.language &&
+				(recorded.title || recorded.subtitle || recorded.keywords)
+			) {
+				return {
+					keywords: recorded.keywords,
+					language: recorded.language,
+					shortDesc: recorded.subtitle,
+					title: recorded.title,
+				};
+			}
+		}
+
 		const rows = await db
 			.select({
 				keywords: listings.keywords,
@@ -315,19 +364,18 @@ export class TrackingBoardService {
 			.from(listings)
 			.where(eq(listings.appId, appId));
 
-		const matches = rows.filter(
-			(r) =>
-				r.language.toLowerCase() === language.toLowerCase() ||
-				r.language.toLowerCase().startsWith(`${language.toLowerCase()}-`),
+		const language = marketListingLanguage(
+			country,
+			rows.map((r) => r.language),
 		);
+		const matches = rows.filter((r) => r.language === language);
 		const pool = matches.length ? matches : rows;
 		return (
 			pool.find((r) => r.source === "remote") ??
 			pool[0] ?? {
 				keywords: null,
-				language,
+				language: language ?? DEFAULT_BOARD_LANGUAGE,
 				shortDesc: null,
-				source: "remote",
 				title: null,
 			}
 		);

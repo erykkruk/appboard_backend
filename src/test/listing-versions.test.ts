@@ -345,6 +345,37 @@ describe("Rank check records the live listing version", () => {
 		).toBe(6);
 	});
 
+	it("reads the version in another storefront when the first lacks the app", async () => {
+		// Arrange: "ad" sorts first and the App Store has no Andorra listing.
+		const appId = await seedTrackedApp();
+		await db
+			.insert(trackedKeywords)
+			.values({ appId, country: "ad", keyword: "todo" });
+		const asked: string[] = [];
+		configureRankLookup({
+			sleep: async () => {},
+			spacingMs: { appstore: 0, playstore: 0 },
+			versions: {
+				history: async () => [],
+				live: async (_store, _id, country) => {
+					asked.push(country);
+					if (country === "ad") throw new Error("App not found");
+					return { releasedAt: null, versionString: "3.1" };
+				},
+			},
+		});
+
+		// Act
+		await runCheck(appId, 4);
+
+		// Assert: the default storefront is asked first, every market gets it.
+		expect(asked[0]).toBe("us");
+		for (const country of ["ad", "us", "pl"]) {
+			const market = await byVersion(appId, country);
+			expect(market.versions.map((v) => v.key)).toEqual(["3.1"]);
+		}
+	});
+
 	it("still measures when the store version cannot be read", async () => {
 		const appId = await seedTrackedApp();
 		configureRankLookup({
@@ -556,6 +587,15 @@ describe("iOS listing text per version", () => {
 			versionKeywordsOnly: true,
 		});
 		const unsynced = await ListingVersionService.readTexts(target, "2.0");
+		const unsyncedHistory = await ListingVersionService.readTexts(
+			target,
+			"2.0",
+			{ versionKeywordsOnly: true },
+		);
+		const olderThanSynced = await ListingVersionService.readTexts(
+			target,
+			"0.9",
+		);
 
 		// Assert
 		expect(live.get("en-US")).toEqual({
@@ -568,8 +608,13 @@ describe("iOS listing text per version", () => {
 			subtitle: null,
 			title: null,
 		});
-		// A version AppBoard has not synced yet falls back to the synced listing.
-		expect(unsynced.get("en-US")?.title).toBe("Old title");
+		// A release shipped after the last version sync reads the newest synced
+		// version below it, not the listing table (which keeps old text).
+		expect(unsynced.get("en-US")?.title).toBe("Task Master");
+		// Rebuilding history never borrows another version's keywords.
+		expect(unsyncedHistory.size).toBe(0);
+		// Nothing synced at or below it: the listing is all there is.
+		expect(olderThanSynced.get("en-US")?.title).toBe("Old title");
 	});
 });
 
@@ -588,5 +633,44 @@ describe("Workspace isolation", () => {
 			authRequest(`${BASE}/apps/${appB.id}/tracking/by-version`),
 		);
 		expect(res.status).toBe(404);
+	});
+});
+
+describe("Board metadata per market", () => {
+	it("reads the text recorded for the market, in the language it gets", async () => {
+		// Arrange: a Czech listing next to the English one, tracked in cz.
+		const appId = await seedTrackedApp();
+		await db.insert(listings).values({
+			appId,
+			keywords: "kviz,hra",
+			language: "cs",
+			shortDesc: "Vedomostni kviz",
+			source: "remote",
+			title: "Kviz na TV",
+		});
+		await db
+			.insert(trackedKeywords)
+			.values({ appId, country: "cz", keyword: "kviz" });
+		configureRankLookup({
+			sleep: async () => {},
+			spacingMs: { appstore: 0, playstore: 0 },
+			versions: fakeVersions({ releasedAt: null, versionString: "1.0" }).source,
+		});
+		await runCheck(appId, 30);
+
+		// Act
+		const res = await server.handle(
+			authRequest(`${BASE}/apps/${appId}/tracking/board?country=cz`),
+		);
+		const board = (await res.json()) as {
+			keywords: Array<{ keyword: string; metadataFields: string[] }>;
+			language: string;
+		};
+
+		// Assert: Czech, not the English fallback of the Play scraper map.
+		expect(board.language).toBe("cs");
+		expect(
+			board.keywords.find((k) => k.keyword === "kviz")?.metadataFields,
+		).toEqual(["title", "subtitle", "keywords"]);
 	});
 });
